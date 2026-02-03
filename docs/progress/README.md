@@ -71,3 +71,18 @@ This sets up a clear pipeline: feature extraction → dataset → training → p
   python -c "from sentinelti.ml.features import extract_features; print(extract_features('http://example.com/login?user=1'))"
 
 ![alt text](<Screenshot 2026-02-03 125702.png>)
+
+- Build dummy dataset in dataset.py for demo
+turning the feature dicts into a numeric matrix X and label vector y,
+![alt text](<Screenshot 2026-02-03 132228.png>)
+
+- Implement the train_url_model
+    train_test_split gives a small test set to evaluate the model.
+
+    classification_report prints precision/recall/F1 for each class so we can see how well the dummy model does.
+
+    We save both the model and feature_names so prediction uses the same feature order later.
+![alt text](<Screenshot 2026-02-03 133338.png>)
+
+- Implement the predict_url
+![alt text](<Screenshot 2026-02-03 133957.png>)
