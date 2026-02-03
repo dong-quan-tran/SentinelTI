@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+# SQLite DB
+sentinelti.db
+
+# VS Code
+.vscode/
