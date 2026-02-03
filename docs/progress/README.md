@@ -38,4 +38,36 @@ This document tracks the step-by-step progress of building SentinelTI, a small t
 
 ![alt text](<Screenshot 2026-02-02 235331.png>)
 
-Hello Hello
+# Day 3 – Threat Intel + ML URL Classifier
+
+
+### ML Module Layout
+
+- Created new package: `sentinelti/ml/`
+  - `__init__.py`
+  - `features.py`
+  - `dataset.py`
+  - `train.py`
+  - `predict.py`
+
+This sets up a clear pipeline: feature extraction → dataset → training → prediction.
+
+---
+
+### URL Feature Extraction
+
+- Implemented `extract_features(url: str)` in `sentinelti/ml/features.py`.
+- Extracted lexical features commonly used in malicious URL detection:
+  - URL/domain/path/query lengths
+  - Counts of digits, letters, special characters
+  - Ratios (digits/letters per URL length)
+  - Structural features (IP-like host, dot and hyphen counts, path segments, query params)
+  - Suspicious keyword hits (`login`, `verify`, `update`, `secure`, `account`, etc.)
+  - Raw TLD captured for future encoding
+
+- Verified behavior by running:
+
+  ```bash
+  python -c "from sentinelti.ml.features import extract_features; print(extract_features('http://example.com/login?user=1'))"
+
+![alt text](<Screenshot 2026-02-03 125702.png>)
