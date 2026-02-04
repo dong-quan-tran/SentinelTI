@@ -86,3 +86,9 @@ turning the feature dicts into a numeric matrix X and label vector y,
 
 - Implement the predict_url
 ![alt text](<Screenshot 2026-02-03 133957.png>)
+
+---Day 3: Get real dataset + training -> real TI URL classifier
+
+- Added "Malicious and Benign URLS" dataset from Kaggle
+![alt text](<Screenshot 2026-02-04 132347.png>)
+
