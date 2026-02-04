@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 import numpy as np
-
+import pandas as pd
 from sentinelti.ml.features import extract_features
 
 
@@ -51,8 +51,6 @@ def build_dummy_dataset() -> Tuple[np.ndarray, np.ndarray, List[str]]:
 
     return X, y, numeric_keys
 
-import pandas as pd  # add at the top with other imports
-
 
 def build_real_dataset(
     csv_path: str,
@@ -64,17 +62,17 @@ def build_real_dataset(
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     """
     Build a dataset from a labeled CSV of URLs.
-
-    Assumes the CSV has at least:
-        - a URL column (default: 'url')
-        - a label column (default: 'label') where
-          benign_label_value = benign, malicious_label_value = malicious.
     """
 
     df = pd.read_csv(csv_path)
 
     # Filter to only benign and malicious labels we care about.
     df = df[df[label_column].isin([benign_label_value, malicious_label_value])]
+
+    if df.empty:
+        raise ValueError(
+            f"No rows found matching labels {benign_label_value} / {malicious_label_value} in column '{label_column}'"
+        )
 
     if max_samples is not None and len(df) > max_samples:
         df = df.sample(n=max_samples, random_state=42)
@@ -89,6 +87,9 @@ def build_real_dataset(
 
     X = np.array([[fd[k] for k in numeric_keys] for fd in feature_dicts], dtype=float)
     y = np.array(labels, dtype=int)
+
+    print(f"Loaded {len(df)} rows from {csv_path}")
+    print(df[label_column].value_counts())
 
     return X, y, numeric_keys
 

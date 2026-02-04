@@ -18,10 +18,13 @@ def load_model():
     return artifact["model"], artifact["feature_names"]
 
 
+MALICIOUS_THRESHOLD = 0.9  # or start with 0.85–0.9
+
+
 def predict_url(url: str) -> Tuple[int, float]:
     """
     Return (predicted_label, probability_of_malicious).
-    label: 1 = malicious, 0 = benign (based on training labels).
+    label: 1 = malicious, 0 = benign.
     """
     model, feature_names = load_model()
 
@@ -29,5 +32,6 @@ def predict_url(url: str) -> Tuple[int, float]:
     x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
 
     prob_malicious = float(model.predict_proba(x)[0][1])
-    label = int(prob_malicious >= 0.5)
+    label = int(prob_malicious >= MALICIOUS_THRESHOLD)
     return label, prob_malicious
+
