@@ -975,3 +975,41 @@ Updated /score-url and /score-urls to return data that conforms to these models 
 Added schema_version = "1.0" and a meta block (e.g. model name/source) to make the API response contract explicit and versionable going forward.
 
 ![alt text](<Screenshot 2026-02-15 182906.png>)
+
+--- Progress Log (2026-02-15)
+
+Today I focused on hardening the SentinelTI FastAPI service for safer multi-tenant use and smoother integration with a future frontend.
+
+Added per-IP rate limiting with X-RateLimit headers
+
+Implemented an in-memory rate limiter that tracks request timestamps per client IP and enforces a limit of 60 requests per 60 seconds for scoring endpoints.
+
+When the limit is exceeded, the API now returns 429 Too Many Requests along with a Retry-After header to signal when the client can retry.
+
+On allowed requests, the service sets X-RateLimit-Limit, X-RateLimit-Remaining, and X-RateLimit-Reset headers to make the rate limit behavior observable for clients.
+
+This helps prevent abuse and gives consumers clear feedback on how close they are to the limit.
+
+![alt text](<Screenshot 2026-02-15 224129.png>)
+
+Added request logging middleware with timing
+
+Introduced a custom middleware that logs each request’s HTTP method, path, client IP, response status code, and total handling time in milliseconds.
+
+The logs now follow a consistent format, for example:
+2026-02-15 21:30:00 - INFO - Request: POST /score-url from 127.0.0.1
+2026-02-15 21:30:00 - INFO - Response: POST /score-url -> 200 to 127.0.0.1 in 45ms
+
+This provides better observability for performance and debugging, especially useful when monitoring latency for the scoring endpoints over time.
+
+![alt text](<Screenshot 2026-02-15 224208.png>)
+
+Added CORS middleware to allow frontend access from localhost origins
+
+Configured CORSMiddleware so that a local frontend (e.g., React at http://localhost:3000) can call the SentinelTI API at http://localhost:8000 without browser CORS errors.
+
+Allowed origins currently include http://localhost and http://localhost:3000, with all methods and headers enabled so the frontend can send the X-API-KEY and any required JSON requests.
+
+This change keeps existing local tools (curl, Swagger UI) working as before while making the service ready to plug into a browser-based UI.
+
+![alt text](<Screenshot 2026-02-15 224417.png>)
