@@ -941,3 +941,37 @@ Updated metrics filenames to include model and source, e.g.:
 url_model_xgb_kaggle_<timestamp>.json.
 
 ![alt text](<Screenshot 2026-02-13 234726.png>)
+
+--- progress log (Feb 14, 2026)
+Enriched URLHaus dataset and verified training
+Commit: enrich URLHaus dataset + verification
+
+Wired URLHaus into the training pipeline so malicious URLs from URLHaus are ingested, stored, and used alongside the existing benign Kaggle dataset.
+
+Verified that the combined URLHaus + Kaggle dataset trains cleanly and produces sensible metrics, confirming the end‑to‑end data and model plumbing works.
+
+Ran manual checks on example URLs to confirm the model’s behavior matches expectations (e.g., clear phishing patterns are flagged as malicious or suspicious).
+
+![alt text](<Screenshot 2026-02-15 182641.png>)
+
+Added header‑based API key auth to scoring endpoints
+Commit: Add header-based API key auth to scoring endpoints
+
+Introduced a simple API key mechanism using the X-API-KEY header and an environment variable SENTINELTI_API_KEY for the secret.
+
+Protected /score-url and /score-urls behind this API key dependency, while keeping /health open for unauthenticated checks.
+
+Manually tested the endpoints with and without the header to confirm that unauthorized requests receive 401 and valid requests go through as expected.
+
+![alt text](<Screenshot 2026-02-15 182805.png>)
+
+Added typed response models for scoring
+Commit: Add typed response model for scoring endpoints
+
+Defined Pydantic models (HeuristicResult, ScoreResponse, and ScoreUrlsResponse) to describe the exact structure of the scoring responses, including url, label, prob_malicious, heuristic, final_label, risk, reasons, schema_version, and meta.
+
+Updated /score-url and /score-urls to return data that conforms to these models and declared them via response_model=..., so FastAPI now validates outgoing responses and generates accurate OpenAPI docs.
+
+Added schema_version = "1.0" and a meta block (e.g. model name/source) to make the API response contract explicit and versionable going forward.
+
+![alt text](<Screenshot 2026-02-15 182906.png>)
