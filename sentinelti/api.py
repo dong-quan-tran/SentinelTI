@@ -1,12 +1,54 @@
 import os
+import time
 from typing import List, Literal, Dict, Any
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from .scoring import enrich_score  # adjust import if needed
 
+
+# -------- Rate limiting (simple in-memory, per IP) --------
+
+RATE_LIMIT_REQUESTS = 60   # allowed requests
+RATE_LIMIT_WINDOW = 60     # window in seconds
+_rate_limit_store: dict[str, list[float]] = {}
+
+
+async def check_rate_limit(request: Request, response: Response):
+    client_ip = request.client.host or "unknown"
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW
+
+    timestamps = _rate_limit_store.get(client_ip, [])
+    # Keep only timestamps in the current window
+    timestamps = [t for t in timestamps if t > window_start]
+
+    used = len(timestamps)
+    remaining = max(RATE_LIMIT_REQUESTS - used, 0)
+
+    if used >= RATE_LIMIT_REQUESTS:
+        # Over limit: set headers and raise
+        response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["Retry-After"] = str(RATE_LIMIT_WINDOW)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Try again later.",
+        )
+
+    # Allow request: record this call and set headers
+    timestamps.append(now)
+    _rate_limit_store[client_ip] = timestamps
+
+    response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
+    response.headers["X-RateLimit-Remaining"] = str(remaining - 1 if remaining > 0 else 0)
+    # Optional: when the window resets (approx seconds until window end)
+    response.headers["X-RateLimit-Reset"] = str(int(window_start + RATE_LIMIT_WINDOW - now))
+
+
+# -------- Response models --------
 
 class HeuristicResult(BaseModel):
     score: float
@@ -25,6 +67,20 @@ class ScoreResponse(BaseModel):
     meta: Dict[str, Any] | None = None
 
 
+class ScoreUrlRequest(BaseModel):
+    url: str
+
+
+class ScoreUrlsRequest(BaseModel):
+    urls: List[str]
+
+
+class ScoreUrlsResponse(BaseModel):
+    results: List[ScoreResponse]
+
+
+# -------- API key auth --------
+
 API_KEY_NAME = "X-API-KEY"
 API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
 
@@ -39,15 +95,9 @@ async def require_api_key(api_key: str | None = Depends(api_key_header)):
         )
 
 
+# -------- FastAPI app & routes --------
+
 app = FastAPI(title="SentinelTI", version="0.1.0")
-
-
-class ScoreUrlRequest(BaseModel):
-    url: str
-
-
-class ScoreUrlsRequest(BaseModel):
-    urls: List[str]
 
 
 @app.get("/health")
@@ -55,7 +105,11 @@ async def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-@app.post("/score-url", response_model=ScoreResponse, dependencies=[Depends(require_api_key)])
+@app.post(
+    "/score-url",
+    response_model=ScoreResponse,
+    dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
+)
 async def score_url(body: ScoreUrlRequest):
     result = enrich_score(body.url)
     result["schema_version"] = "1.0"
@@ -63,11 +117,11 @@ async def score_url(body: ScoreUrlRequest):
     return result
 
 
-class ScoreUrlsResponse(BaseModel):
-    results: List[ScoreResponse]
-
-
-@app.post("/score-urls", response_model=ScoreUrlsResponse, dependencies=[Depends(require_api_key)])
+@app.post(
+    "/score-urls",
+    response_model=ScoreUrlsResponse,
+    dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
+)
 async def score_urls(body: ScoreUrlsRequest):
     results: List[Dict[str, Any]] = []
     for url in body.urls:
