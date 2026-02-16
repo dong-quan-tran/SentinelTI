@@ -2,12 +2,22 @@ import os
 import time
 from typing import List, Literal, Dict, Any
 
+import logging
+import time
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from .scoring import enrich_score  # adjust import if needed
 
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("sentinelti.api")
 
 # -------- Rate limiting (simple in-memory, per IP) --------
 
@@ -95,10 +105,33 @@ async def require_api_key(api_key: str | None = Depends(api_key_header)):
         )
 
 
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.time()
+        client_ip = request.client.host or "unknown"
+        method = request.method
+        path = request.url.path
+
+        logger.info(f"Request: {method} {path} from {client_ip}")
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(f"Error handling request: {method} {path} from {client_ip}")
+            raise
+
+        duration_ms = int((time.time() - start) * 1000)
+        logger.info(
+            f"Response: {method} {path} -> {response.status_code} "
+            f"to {client_ip} in {duration_ms}ms"
+        )
+        return response
+
 # -------- FastAPI app & routes --------
 
 app = FastAPI(title="SentinelTI", version="0.1.0")
 
+app.add_middleware(RequestLoggingMiddleware)
 
 @app.get("/health")
 async def health():
