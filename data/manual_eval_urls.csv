@@ -51,3 +51,58 @@ http://login.example.com,benign,Generic but plausible login subdomain
 http://example.com/login?redirect=/dashboard,benign,Normal login redirect pattern
 http://example.org/accounts/profile/view,benign,User profile page
 http://example.net/blog/2025/01/security-tips,benign,Blog article URL
+http://localhost/admin,benign,Local admin panel on localhost
+http://127.0.0.1/dashboard,benign,Local service dashboard
+http://[::1]/login,benign,IPv6 localhost login
+
+http://192.0.2.10/,malicious,Test IP range used as external-looking host
+http://198.51.100.23/secure/login,malicious,Test IP with secure login path
+http://203.0.113.5/update/credentials,malicious,Test IP with update credentials path
+
+http://example.com/login.php?user=admin&password=admin,malicious,Clearly insecure login pattern with creds in URL
+http://example.com/%2elogin/verify,malicious,Encoded dot plus login verify
+http://login.example.com/@secure-check,malicious,Login subdomain with @ in path
+http://verify.example.com/login?token=abc123&redirect=http://evil.com,malicious,Verify page with redirect to evil.com
+http://example.com/login#https://evil.com,malicious,Login page with evil URL in fragment
+
+http://paypal.com.secure.example.co,malicious,Brand name before secure in subdomain
+http://secure.paypal.com.example.ru/login,malicious,Brand in deep subdomain on foreign TLD
+http://update-appleid.example.info/?session=reset,malicious,Apple ID reset lure on info TLD
+http://login-google-account.example.work/verify,malicious,Google account login lure on work TLD
+http://confirm-amazon-order.example.site,malicious,Amazon order confirmation lure on site TLD
+
+http://examp1e.com/login,malicious,Homoglyph/typo domain with login
+http://paypa1-secure.com/signin,malicious,PayPal typo with secure keyword
+http://micr0soft-account.com/recover,malicious,Microsoft typo domain for account recovery
+http://faceboo-k.com/security-check,malicious,Facebook-like domain with security-check
+
+http://example.com/login?redirect=https://example.com@evil.com,malicious,Redirect parameter with @ to hide real host
+http://example.com/login?next=http://evil.phish.xyz,malicious,Next parameter pointing to phishy domain
+http://cdn.example.com/script.js?callback=http://evil.com/hook,malicious,Callback parameter containing remote URL
+http://example.com/open-redirect?url=http%3A%2F%2Fevil.com,malicious,Open-redirect style parameter with encoded URL
+
+https://xn--pple-43d.com/login,malicious,IDN/punycode domain visually similar to apple.com
+https://xn--googe-qmc.com/accounts,malicious,IDN/punycode domain similar to google.com
+http://xn--paypl-3ve.com/checkout,malicious,IDN/punycode domain similar to paypal
+
+http://very-long-subdomain-with-many-levels.login.secure.update.example.com/path,malicious,Deep subdomains with login/secure/update
+http://example.reallylongtldthatisweirdlysuspicious/login,malicious,Unusually long TLD with login
+http://example.click.click/login,malicious,Repeated suspicious TLD segments
+
+https://login-admin.example.com,benign,Could be a legitimate admin login
+https://secure.portal.example.org/account/login,benign,Legitimate-looking secure portal login
+https://intranet.mycorp.local/login,benign,Internal corporate intranet login
+https://sso.myuniversity.edu/idp/profile/SAML2/Redirect/SSO,benign,Complex but legitimate SSO URL
+https://auth.example.com/oauth2/authorize?client_id=abc&redirect_uri=https://example.com/callback,benign,Standard OAuth2 authorize endpoint
+
+http://ftp.example.com/pub/files,benign,FTP-style host but benign
+http://api.example.com/v1/users?limit=100&offset=0,benign,API endpoint with pagination
+http://status.example.com/history/incident-2025-01-01,benign,Status page history URL
+http://img.example.com/avatars/user_12345.png,benign,Static image resource
+http://example.com/downloads/setup.exe,gray,Executable download that might be benign or risky
+
+http://malware-drop.example.com/payload.exe,malicious,Explicit malware dropper path
+http://example.com/drive-by-install/update.exe,malicious,Drive-by style installer path
+http://free-gift-card.example.biz/claim,malicious,Gift card lure on biz TLD
+http://crypto-giveaway.example.cc/wallet/connect,malicious,Crypto giveaway scam on cc TLD
+http://support-example.com.remote-help-session.ru,malicious,Support remote help impersonation on Russian TLD
