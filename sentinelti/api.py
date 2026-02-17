@@ -1,5 +1,4 @@
 import os
-import time
 from typing import List, Literal, Dict, Any
 
 import logging
@@ -9,7 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 
 from .scoring import enrich_score  # adjust import if needed
 
@@ -84,11 +83,44 @@ class ScoreResponse(BaseModel):
 
 
 class ScoreUrlRequest(BaseModel):
-    url: str
+    url: str = Field(
+        ...,
+        example="https://example.com",
+        description="URL to score",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"url": "https://example.com"},
+                {"url": "https://phishy.example/login"},
+            ]
+        }
+    )
 
 
 class ScoreUrlsRequest(BaseModel):
-    urls: List[str]
+    urls: List[str] = Field(
+        ...,
+        example=[
+            "https://example.com",
+            "https://phishy.example/login",
+        ],
+        description="List of URLs to score",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "urls": [
+                        "https://example.com",
+                        "https://phishy.example/login",
+                    ]
+                }
+            ]
+        }
+    )
 
 
 class ScoreUrlsResponse(BaseModel):
