@@ -106,3 +106,7 @@ http://example.com/drive-by-install/update.exe,malicious,Drive-by style installe
 http://free-gift-card.example.biz/claim,malicious,Gift card lure on biz TLD
 http://crypto-giveaway.example.cc/wallet/connect,malicious,Crypto giveaway scam on cc TLD
 http://support-example.com.remote-help-session.ru,malicious,Support remote help impersonation on Russian TLD
+
+http://paypa1-secure.com/login,suspicious,Typosquatted PayPal-like domain with login path; expected to be flagged by brand/typo heuristics
+http://xn--pple-43d.com/verify,suspicious,IDN/Punycode Apple lookalike with verify path; expected to be flagged by Punycode + phishing keyword heuristics
+http://paypal.com/login,benign,Legitimate PayPal domain used as a control; should remain low-risk/benign
