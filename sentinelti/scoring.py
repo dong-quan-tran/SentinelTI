@@ -91,11 +91,38 @@ def enrich_score(url: str) -> Dict[str, Any]:
             risk = "low"
 
 
-    reasons = list(heur.reasons)
-    if final_label == "benign" and not reasons:
-        reasons.append("No strong malicious indicators detected by model or heuristics.")
-    elif not reasons:
-        reasons.append("Flagged primarily by the ML classifier score.")
+        # Build human-readable reasons
+    reasons: list[str] = []
+
+    # 1) Always include model confidence
+    label = int(ml_result["label"])
+    if label == 1:
+        reasons.append(
+            f"Model predicts malicious with probability {p:.2f}."
+        )
+    else:
+        reasons.append(
+            f"Model predicts benign with probability {1 - p:.2f} "
+            f"(malicious probability {p:.2f})."
+        )
+
+    # 2) Add heuristic reasons, if any
+    heuristic_reasons = list(heur.reasons)
+    if heuristic_reasons:
+        reasons.append(
+            "Heuristic analysis flagged the following indicators: "
+            + "; ".join(heuristic_reasons)
+        )
+
+    # 3) Fallback messages based on final_label
+    if not heuristic_reasons and final_label == "benign":
+        reasons.append(
+            "No strong malicious indicators detected by model or heuristics."
+        )
+    elif not heuristic_reasons and final_label != "benign":
+        reasons.append(
+            "Flagged primarily by the ML classifier score."
+        )
 
     return {
         **ml_result,
@@ -104,3 +131,4 @@ def enrich_score(url: str) -> Dict[str, Any]:
         "risk": risk,
         "reasons": reasons,
     }
+
