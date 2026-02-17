@@ -16,12 +16,6 @@ These heuristics are intentionally simple and conservative. They are useful
 for enriching the ML model output but are NOT a full phishing/malware
 detection engine. Known limitations include:
 
-1. Typosquatting and IDN lookalikes
-   - Domains like examp1e.com, paypa1-secure.com, micr0soft-account.com or
-     IDN/punycode forms (e.g. xn--pple-43d.com) are only weakly detected
-     via generic tokens (e.g. "login") and not via true brand-similarity
-     logic. Many such domains may still score as benign.
-
 2. Open-redirect patterns and embedded evil URLs
    - URLs that contain another URL in query parameters or fragments
      (e.g. redirect=http://evil.com, url=http%3A%2F%2Fevil.com, or
