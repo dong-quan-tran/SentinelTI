@@ -256,6 +256,19 @@ Response:
 
 Each item in `results` has the same shape as the `/score-url` response.
 
+## Concepts
+
+SentinelTi responses use a few core fields consistently:
+
+- `label` – raw ML prediction (`0` = benign, `1` = malicious).
+- `prob_malicious` – model probability that the URL is malicious (between 0 and 1).
+- `heuristic.score` – numeric score from rule-based checks (IP host, suspicious tokens, TLDs, etc.); higher means more suspicious.
+- `heuristic.reasons` – short text fragments describing which heuristic rules fired.
+- `final_label` – combined decision from ML + heuristics: `"benign"`, `"suspicious"`, or `"malicious"`.
+- `risk` – human-friendly risk bucket derived from `final_label` and scores: `"low"`, `"medium"`, or `"high"`.
+- `reasons` – high-level explanation list summarizing why the URL was classified that way (model confidence + key heuristic indicators).
+
+
 ## How it works (high level)
 
 SentinelTi combines a trained ML classifier with rule-based heuristics to decide whether a URL is benign, suspicious, or malicious.
