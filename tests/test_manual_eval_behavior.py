@@ -61,3 +61,18 @@ def test_typosquatted_and_idn_domains_are_suspicious(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://malware-drop.example.com/payload.exe",
+        "http://example.com/drive-by-install/update.exe",
+    ],
+)
+def test_executable_malware_downloads_are_not_benign(url: str) -> None:
+    """
+    URLs that clearly look like executable malware downloads should not be plain benign.
+    They should be at least 'suspicious' or 'malicious'.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
