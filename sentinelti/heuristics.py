@@ -51,6 +51,7 @@ context (e.g. threat intel, reputation), and future rules that address
 the above gaps.
 """
 
+from urllib.parse import parse_qsl, unquote
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 from urllib.parse import urlparse
@@ -156,6 +157,30 @@ def analyze_url(url: str) -> HeuristicResult:
             "Hostname contains Punycode (xn--), which is often used for IDN lookalike domains."
         )
 
+
+    # Open-redirect / embedded URL detection in query parameters
+    lower_query = (query or "").lower()
+    nested_url_found = False
+
+    # Common redirect-style parameter names to check
+    redirect_param_names = {"redirect", "redir", "url", "next", "dest", "destination", "return", "returnurl"}
+
+    for key, value in parse_qsl(query, keep_blank_values=True):
+        key_l = (key or "").lower()
+        if key_l not in redirect_param_names:
+            continue
+
+        decoded_value = unquote(value or "")
+        if "http://" in decoded_value.lower() or "https://" in decoded_value.lower():
+            nested_url_found = True
+            break
+
+    if nested_url_found:
+        score += 1.0
+        reasons.append(
+            "Query parameters contain a nested URL (open-redirect style), "
+            "which can be abused to hide redirects to malicious sites."
+        )
 
     # Raw IP host (very rough check)
     if host.replace(".", "").isdigit():
