@@ -114,3 +114,8 @@ http://paypal.com/login,benign,Legitimate PayPal domain used as a control; shoul
 http://example.com/downloads/setup.exe
 http://malware-drop.example.com/payload.exe
 http://example.com/drive-by-install/update.exe
+
+http://127.0.0.1/admin, gray, Localhost address; should be flagged as private/internal
+http://192.168.0.100/login, gray, Internal IP; should be flagged as private/internal
+http://10.0.0.1/dashboard, gray, Private IP; should be flagged as suspicious
+http://172.20.5.4/portal, gray, Internal subnet; should be flagged as suspicious

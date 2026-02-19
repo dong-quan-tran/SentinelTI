@@ -93,3 +93,21 @@ def test_open_redirect_style_urls_are_not_benign(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/admin",
+        "http://192.168.1.10/login",
+        "http://10.0.0.5/test",
+        "http://172.20.10.5/portal",
+        "http://localhost/dashboard",
+    ],
+)
+def test_private_or_local_ip_urls_are_not_benign(url: str) -> None:
+    """
+    URLs pointing to private or local IPs should not be plain benign.
+    They should be at least 'suspicious' due to potential internal exposure.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
