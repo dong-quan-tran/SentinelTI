@@ -141,6 +141,16 @@ def analyze_url(url: str) -> HeuristicResult:
     lower_path = path.lower()
     lower_query = query.lower()
 
+    #fragment handling for nested URL detection (e.g. http://example.com/#http://evil.com)
+    fragment = parsed.fragment or ""
+
+    if "http://" in fragment.lower() or "https://" in fragment.lower():
+        score += 1.0
+        reasons.append(
+            "URL fragment contains a nested URL, which can be used to hide redirects or tracking."
+        )
+
+
     # Punycode / IDN lookalike detection
     if "xn--" in lower_host:
         score += 1.5
@@ -169,7 +179,7 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
     # Common redirect-style parameter names to check
-    redirect_param_names = {"redirect", "redir", "url", "next", "dest", "destination", "return", "returnurl"}
+    redirect_param_names = {"redirect", "redir", "url", "next", "dest", "destination", "return", "returnurl","target","goto"}
 
     def _contains_http_url(s: str) -> bool:
         s_l = s.lower()

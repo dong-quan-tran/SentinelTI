@@ -83,7 +83,7 @@ def test_executable_malware_downloads_are_not_benign(url: str) -> None:
         "http://verify.example.com/login?token=abc123&redirect=http://evil.com",
         "http://example.com/login?next=http://evil.phish.xyz",
         "http://example.com/open-redirect?url=http%3A%2F%2Fevil.com",
-        #"http://example.com/redirect?target=https://evil.com",
+        "http://example.com/redirect?target=https://evil.com",
     ],
 )
 def test_open_redirect_style_urls_are_not_benign(url: str) -> None:
