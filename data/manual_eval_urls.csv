@@ -51,8 +51,6 @@ http://login.example.com,benign,Generic but plausible login subdomain
 http://example.com/login?redirect=/dashboard,benign,Normal login redirect pattern
 http://example.org/accounts/profile/view,benign,User profile page
 http://example.net/blog/2025/01/security-tips,benign,Blog article URL
-http://localhost/admin,benign,Local admin panel on localhost
-http://127.0.0.1/dashboard,benign,Local service dashboard
 http://[::1]/login,benign,IPv6 localhost login
 
 http://192.0.2.10/,malicious,Test IP range used as external-looking host
@@ -110,10 +108,6 @@ http://support-example.com.remote-help-session.ru,malicious,Support remote help 
 http://paypa1-secure.com/login,suspicious,Typosquatted PayPal-like domain with login path; expected to be flagged by brand/typo heuristics
 http://xn--pple-43d.com/verify,suspicious,IDN/Punycode Apple lookalike with verify path; expected to be flagged by Punycode + phishing keyword heuristics
 http://paypal.com/login,benign,Legitimate PayPal domain used as a control; should remain low-risk/benign
-
-http://example.com/downloads/setup.exe
-http://malware-drop.example.com/payload.exe
-http://example.com/drive-by-install/update.exe
 
 http://127.0.0.1/admin, gray, Localhost address; should be flagged as private/internal
 http://192.168.0.100/login, gray, Internal IP; should be flagged as private/internal

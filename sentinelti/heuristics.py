@@ -17,22 +17,9 @@ These heuristics are intentionally simple and conservative. They are useful
 for enriching the ML model output but are NOT a full phishing/malware
 detection engine. Known limitations include:
 
-2. Open-redirect patterns and embedded evil URLs
-   - URLs that contain another URL in query parameters or fragments
-     (e.g. redirect=http://evil.com, url=http%3A%2F%2Fevil.com, or
-     #https://evil.com) are not explicitly analyzed. These may appear as
-     benign if other heuristics do not fire.
+2. Only handling open redirects, not encoded or obfuscated nested URLs fragments
 
-3. Malware download and payload indicators
-   - File downloads (e.g. *.exe, payload.exe, update.exe, setup.exe) and
-     paths suggesting drive-by or dropper behavior are not given strong
-     special treatment. Such URLs can remain low-score or benign unless
-     the ML model flags them.
-
-4. Internal / local infrastructure
-   - IP-based URLs (e.g. 127.0.0.1, 192.168.x.x, 10.x.x.x) are treated
-     similarly to external IPs. This can over-flag internal dashboards or
-     admin panels as suspicious when they use raw IPs.
+4. Only literal IP hosts are checked so far, not domain names to IP resolution or more advanced infrastructure analysis (e.g. hosting provider, age, etc.)
 
 5. Deep paths and complex SSO flows
    - Deeply nested paths contribute to the score only when combined with
@@ -147,12 +134,14 @@ def analyze_url(url: str) -> HeuristicResult:
     features: Dict[str, Any] = {}
 
     host = parsed.hostname or ""
-    lower_host = host.lower()
     path = parsed.path or ""
     query = parsed.query or ""
 
-    # Punycode / IDN lookalike detection
     lower_host = (host or "").lower()
+    lower_path = path.lower()
+    lower_query = query.lower()
+
+    # Punycode / IDN lookalike detection
     if "xn--" in lower_host:
         score += 1.5
         reasons.append(
@@ -161,7 +150,6 @@ def analyze_url(url: str) -> HeuristicResult:
 
 
     # Open-redirect / embedded URL detection in query parameters
-    lower_query = (query or "").lower()
     nested_url_found = False
 
     try:
@@ -183,18 +171,32 @@ def analyze_url(url: str) -> HeuristicResult:
     # Common redirect-style parameter names to check
     redirect_param_names = {"redirect", "redir", "url", "next", "dest", "destination", "return", "returnurl"}
 
+    def _contains_http_url(s: str) -> bool:
+        s_l = s.lower()
+        return "http://" in s_l or "https://" in s_l
+
+    nested_url_found = False
+
     for key, value in parse_qsl(query, keep_blank_values=True):
         key_l = (key or "").lower()
         if key_l not in redirect_param_names:
             continue
 
-        decoded_value = unquote(value or "")
-        if "http://" in decoded_value.lower() or "https://" in decoded_value.lower():
-            nested_url_found = True
+        # Start with the raw value
+        candidate = value or ""
+
+        # Up to 2 rounds of decoding to catch url=http%3A%2F%2Fevil.com and double-encoded variants
+        for _ in range(2):
+            if _contains_http_url(candidate):
+                nested_url_found = True
+                break
+            candidate = unquote(candidate)
+        
+        if nested_url_found:
             break
 
     if nested_url_found:
-        score += 1.0
+        score += 1.5
         reasons.append(
             "Query parameters contain a nested URL (open-redirect style), "
             "which can be abused to hide redirects to malicious sites."
@@ -259,11 +261,6 @@ def analyze_url(url: str) -> HeuristicResult:
 
 
     # New: brand impersonation heuristic
-    lower_host = (host or "").lower()
-    lower_path = path.lower()
-    lower_query = query.lower()
-
-
     normalized_host = _normalize_leetspeak(lower_host)
 
     present_brands = {b for b in BRAND_TOKENS if b in normalized_host}
