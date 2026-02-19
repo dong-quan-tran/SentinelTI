@@ -1,5 +1,6 @@
 
 from __future__ import annotations
+
 """
 Heuristic URL analysis for SentinelTi.
 
@@ -54,6 +55,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any
 from urllib.parse import urlparse
 
+import os
 import tldextract
 
 
@@ -175,6 +177,29 @@ def analyze_url(url: str) -> HeuristicResult:
             f"Contains suspicious tokens often seen in phishing URLs: {', '.join(matched_tokens)}."
         )
 
+    # Executable / malware-style download detection
+    filename = os.path.basename(path.lower())
+    EXECUTABLE_EXTS = (".exe", ".scr", ".bat", ".cmd", ".ps1")
+
+    # Optionally compute base_domain once here, since we’ll need it later anyway
+    host_labels = (host or "").split(".")
+    base_domain = ".".join(host_labels[-2:]) if len(host_labels) >= 2 else host
+
+    if filename and any(filename.endswith(ext) for ext in EXECUTABLE_EXTS):
+        # Be slightly conservative: don't penalize obviously trusted domains as hard
+        if base_domain in TRUSTED_DOMAINS:
+            score += 0.5
+            reasons.append(
+                "URL points to an executable or script download on a trusted domain; "
+                "may still be risky depending on context."
+            )
+        else:
+            score += 1.5
+            reasons.append(
+                "URL path appears to point to an executable or script download, "
+                "which is common in malware delivery."
+            )
+
     # Unusual TLD
     tld = (ext.suffix or "").lower()
     features["tld"] = tld
@@ -189,12 +214,12 @@ def analyze_url(url: str) -> HeuristicResult:
         score += LONG_DOMAIN_SCORE
         reasons.append("Domain part is unusually long, which can indicate obfuscation.")
 
-        # New: brand impersonation heuristic
-    host_labels = (host or "").split(".")
-    base_domain = ".".join(host_labels[-2:]) if len(host_labels) >= 2 else host
+
+    # New: brand impersonation heuristic
     lower_host = (host or "").lower()
     lower_path = path.lower()
     lower_query = query.lower()
+
 
     normalized_host = _normalize_leetspeak(lower_host)
 
