@@ -76,3 +76,20 @@ def test_executable_malware_downloads_are_not_benign(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://verify.example.com/login?token=abc123&redirect=http://evil.com",
+        "http://example.com/login?next=http://evil.phish.xyz",
+        #"http://example.com/open-redirect?url=http%3A%2F%2Fevil.com", encoded URLs are not currently analyzed by heuristics, which is a known gap
+        #"http://example.com/redirect?target=https://evil.com",
+    ],
+)
+def test_open_redirect_style_urls_are_not_benign(url: str) -> None:
+    """
+    URLs that contain obvious open-redirect style parameters with nested URLs
+    should not be plain benign. They should be at least 'suspicious' or 'malicious'.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
