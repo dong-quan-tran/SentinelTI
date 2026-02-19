@@ -58,6 +58,7 @@ from urllib.parse import urlparse
 
 import os
 import tldextract
+import ipaddress
 
 
 SUSPICIOUS_TOKENS = {
@@ -146,6 +147,7 @@ def analyze_url(url: str) -> HeuristicResult:
     features: Dict[str, Any] = {}
 
     host = parsed.hostname or ""
+    lower_host = host.lower()
     path = parsed.path or ""
     query = parsed.query or ""
 
@@ -161,6 +163,22 @@ def analyze_url(url: str) -> HeuristicResult:
     # Open-redirect / embedded URL detection in query parameters
     lower_query = (query or "").lower()
     nested_url_found = False
+
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        if ip_obj.is_private or ip_obj.is_loopback:
+            score += 1.5
+            reasons.append(
+                "URL host resolves to a private or local IP address "
+                "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
+            )
+    except ValueError:
+        # Host is not a raw IP (normal domains pass through)
+        if lower_host in {"localhost", "local"}:
+            score += 1.5
+            reasons.append(
+                "Hostname appears to reference a local or internal service (localhost/local)."
+            )
 
     # Common redirect-style parameter names to check
     redirect_param_names = {"redirect", "redir", "url", "next", "dest", "destination", "return", "returnurl"}
