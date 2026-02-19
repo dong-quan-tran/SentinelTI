@@ -1115,3 +1115,29 @@ Regression runs were executed successfully with all new heuristics passing.
 - Cleaned up imports, reused `base_domain` computation across sections, and improved inline comments for clarity.  
 
 ![alt text](<Screenshot 2026-02-19 093017.png>)
+
+**SentinelTi – Work Session Log (2026‑02‑19)**  
+
+1) **Private / local IP heuristics (heuristics.py & tests)**  
+- Added detection for literal private and local IP hosts using `ipaddress` (e.g. `127.0.0.1`, `192.168.x.x`, `10.x.x.x`, `172.16–31.x.x`, `localhost`).  
+- Bumped heuristic score for these hosts so they are at least classified as suspicious in scoring.  
+- Added `test_private_or_local_ip_urls_are_not_benign` to ensure private/local IP URLs never regress to plain benign.  
+- Updated `manual_eval_urls.csv` with gray‑labeled private IP examples for manual verification.  
+
+![alt text](<Screenshot 2026-02-19 112355.png>)
+
+2) **Improved open‑redirect detection (encoded and additional params)**  
+- Extended open‑redirect heuristic to repeatedly decode parameter values (up to two rounds) and detect nested `http://` or `https://` URLs even when URL‑encoded (e.g. `url=http%3A%2F%2Fevil.com`).  
+- Expanded the list of redirect‑style parameters to include `target=`, catching URLs like `?target=https://evil.com`.  
+- Increased the heuristic score for detected nested URLs so such URLs are always at least suspicious under current scoring rules.  
+- Re‑enabled and passed the encoded and `target=` cases in `test_open_redirect_style_urls_are_not_benign`.  
+
+![alt text](<Screenshot 2026-02-19 112506.png>)
+
+3) **Fragment‑based nested URL detection**  
+- Added logic to inspect the URL fragment (`#...`) and flag cases where it contains a nested `http://` or `https://` URL (e.g. `login#https://evil.com`).  
+- Ensured fragment‑based nested URLs contribute to the heuristic score with a clear reason string.  
+- Verified behavior against existing manual eval examples that include nested URLs in fragments.  
+Screenshots: [fragment heuristic snippet ____], [manual_eval example with fragment ____].  
+
+![alt text](<Screenshot 2026-02-19 112610.png>)

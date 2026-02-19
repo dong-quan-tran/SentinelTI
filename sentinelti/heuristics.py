@@ -17,7 +17,7 @@ These heuristics are intentionally simple and conservative. They are useful
 for enriching the ML model output but are NOT a full phishing/malware
 detection engine. Known limitations include:
 
-2. Only handling open redirects, not encoded or obfuscated nested URLs fragments
+2. Only handling open redirects, not obfuscated nested URLs
 
 4. Only literal IP hosts are checked so far, not domain names to IP resolution or more advanced infrastructure analysis (e.g. hosting provider, age, etc.)
 
