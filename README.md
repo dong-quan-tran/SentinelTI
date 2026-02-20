@@ -1,6 +1,6 @@
-# SentinelTi
+# SentinelTI
 
-SentinelTi is a Python-based URL threat scoring tool. It ingests threat intelligence feeds (currently URLhaus), stores indicators in SQLite, and scores URLs using a trained ML model plus heuristic rules. You can interact with SentinelTi via a CLI or a FastAPI HTTP API to classify URLs as benign, suspicious, or malicious with human-readable explanations.
+SentinelTI is a Python-based URL threat scoring tool. It ingests threat intelligence feeds (currently URLhaus), stores indicators in SQLite, and scores URLs using a trained ML model plus heuristic rules. You can interact with SentinelTi via a CLI or a FastAPI HTTP API to classify URLs as benign, suspicious, or malicious with human-readable explanations.
 
 ## Quick start
 
@@ -14,8 +14,8 @@ SentinelTi is a Python-based URL threat scoring tool. It ingests threat intellig
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/dong-quan-tran/SentinelTi.git
-cd SentinelTi
+git clone https://github.com/dong-quan-tran/SentinelTI.git
+cd SentinelTI
 ```
 
 ### 2. Create and activate a virtual environment
