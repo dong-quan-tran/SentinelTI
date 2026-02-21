@@ -158,10 +158,7 @@ def analyze_url(url: str) -> HeuristicResult:
             "Hostname contains Punycode (xn--), which is often used for IDN lookalike domains."
         )
 
-
     # Open-redirect / embedded URL detection in query parameters
-    nested_url_found = False
-
     try:
         ip_obj = ipaddress.ip_address(host)
         if ip_obj.is_private or ip_obj.is_loopback:
@@ -179,38 +176,64 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
     # Common redirect-style parameter names to check
-    redirect_param_names = {"redirect", "redir", "url", "next", "dest", "destination", "return", "returnurl","target","goto"}
+    redirect_param_names = {
+        "redirect", "redir", "url", "next", "dest", "destination",
+        "return", "returnurl", "target", "goto",
+    }
 
     def _contains_http_url(s: str) -> bool:
         s_l = s.lower()
         return "http://" in s_l or "https://" in s_l
 
-    nested_url_found = False
+    redirect_param_nested = False
 
+    # First pass: redirect-style params only
     for key, value in parse_qsl(query, keep_blank_values=True):
         key_l = (key or "").lower()
         if key_l not in redirect_param_names:
             continue
 
-        # Start with the raw value
         candidate = value or ""
 
         # Up to 2 rounds of decoding to catch url=http%3A%2F%2Fevil.com and double-encoded variants
         for _ in range(2):
             if _contains_http_url(candidate):
-                nested_url_found = True
+                redirect_param_nested = True
                 break
             candidate = unquote(candidate)
-        
-        if nested_url_found:
+
+        if redirect_param_nested:
             break
 
-    if nested_url_found:
+    # Second pass: any param value (weaker signal)
+    any_param_nested = redirect_param_nested
+
+    if not any_param_nested:
+        for _, value in parse_qsl(query, keep_blank_values=True):
+            candidate = value or ""
+
+            for _ in range(2):
+                if _contains_http_url(candidate):
+                    any_param_nested = True
+                    break
+                candidate = unquote(candidate)
+
+            if any_param_nested:
+                break
+
+    if redirect_param_nested:
         score += 1.5
         reasons.append(
-            "Query parameters contain a nested URL (open-redirect style), "
+            "Query parameters contain a nested URL in a redirect-style parameter, "
             "which can be abused to hide redirects to malicious sites."
         )
+    elif any_param_nested:
+        score += 1.0
+        reasons.append(
+            "Query parameters contain a nested URL, which can be abused to hide redirects to malicious sites."
+        )
+
+
 
     # Raw IP host (very rough check)
     if host.replace(".", "").isdigit():
