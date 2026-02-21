@@ -17,8 +17,6 @@ These heuristics are intentionally simple and conservative. They are useful
 for enriching the ML model output but are NOT a full phishing/malware
 detection engine. Known limitations include:
 
-2. Only handling open redirects, not obfuscated nested URLs
-
 4. Only literal IP hosts are checked so far, not domain names to IP resolution or more advanced infrastructure analysis (e.g. hosting provider, age, etc.)
 
 5. Deep paths and complex SSO flows
@@ -92,6 +90,21 @@ PHISHING_KEYWORDS = {
     "update", "confirm",
 }
 
+SSO_HOST_HINTS = {
+    "sso.",
+    "login.microsoftonline.com",
+    "accounts.google.com",
+}
+
+SSO_PATH_HINTS = {
+    "/saml2/",
+    "/saml/",
+    "/oauth2/",
+    "/oauth/",
+    "/idp/",
+    "/authorize",
+}
+
 RAW_IP_SCORE = 2.0
 AT_AUTHORITY_SCORE = 1.5
 SUSPICIOUS_TOKEN_SCORE = 0.75
@@ -140,6 +153,15 @@ def analyze_url(url: str) -> HeuristicResult:
     lower_host = (host or "").lower()
     lower_path = path.lower()
     lower_query = query.lower()
+
+    is_sso_like = False
+
+    host_l = lower_host
+    path_l = lower_path
+
+    if any(hint in host_l for hint in SSO_HOST_HINTS) or any(hint in path_l for hint in SSO_PATH_HINTS):
+        is_sso_like = True
+
 
     #fragment handling for nested URL detection (e.g. http://example.com/#http://evil.com)
     fragment = parsed.fragment or ""
@@ -250,10 +272,13 @@ def analyze_url(url: str) -> HeuristicResult:
     matched_tokens = sorted({t for t in SUSPICIOUS_TOKENS if t in lower_path_query})
     if matched_tokens:
         token_score = SUSPICIOUS_TOKEN_SCORE * len(matched_tokens)
+        if is_sso_like:
+            token_score *= 0.5  # halve the impact for SSO-like endpoints
         score += token_score
         reasons.append(
             f"Contains suspicious tokens often seen in phishing URLs: {', '.join(matched_tokens)}."
         )
+
 
     # Executable / malware-style download detection
     filename = os.path.basename(path.lower())
@@ -313,8 +338,12 @@ def analyze_url(url: str) -> HeuristicResult:
     depth = len([p for p in path.split("/") if p])
     features["path_depth"] = depth
     if depth >= 4:
-        score += DEEP_PATH_SCORE
-        reasons.append("URL path is deeply nested, often used to hide payloads or phishing pages.")
+        if is_sso_like:
+            # maybe no bump or a tiny one
+            score += 0.0
+        else:
+            score += DEEP_PATH_SCORE
+            reasons.append("URL path is deeply nested, often used to hide payloads or phishing pages.")
 
     features["raw_score"] = score
 
