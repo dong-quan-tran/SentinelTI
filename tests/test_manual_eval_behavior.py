@@ -111,3 +111,19 @@ def test_private_or_local_ip_urls_are_not_benign(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://sso.myuniversity.edu/idp/profile/SAML2/Redirect/SSO",
+        "https://auth.example.com/oauth2/authorize?client_id=abc&redirect_uri=https://example.com/callback",
+    ],
+)
+def test_legit_sso_like_urls_stay_benign(url: str) -> None:
+    """
+    Complex but legitimate SSO/OAuth URLs should normally stay benign/low-risk
+    despite deep paths and tokens like 'login' or 'secure'.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] == "benign"
+    assert result["risk"] == "low"
