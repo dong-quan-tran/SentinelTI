@@ -113,3 +113,19 @@ http://127.0.0.1/admin, gray, Localhost address; should be flagged as private/in
 http://192.168.0.100/login, gray, Internal IP; should be flagged as private/internal
 http://10.0.0.1/dashboard, gray, Private IP; should be flagged as suspicious
 http://172.20.5.4/portal, gray, Internal subnet; should be flagged as suspicious
+
+https://login.mycorp.com/oauth2/authorize?client_id=abc&response_type=code&redirect_uri=https://app.mycorp.com/callback,benign,Corporate OAuth2 authorize endpoint
+https://sso.partner-example.com/auth/realms/main/protocol/openid-connect/auth?client_id=portal&redirect_uri=https://portal.partner-example.com/login/callback,benign,OIDC SSO flow via partner IdP
+https://id.example.edu/adfs/ls/?SAMLRequest=abc123&RelayState=/student/portal,benign,University ADFS SAML login
+https://secure.examplebank.com/auth/login?returnUrl=/accounts/overview,benign,Legitimate online banking login with returnUrl
+
+http://45.67.89.10/login/secure-update,malicious,Public IP with login and secure-update tokens
+http://203.0.113.50/paypal/verify-account,malicious,Public IP host impersonating PayPal with verify token
+http://example.com/login?redirect=http://malicious.com,malicious,Login page with open redirect to malicious domain
+
+http://cdn.example.com/script.js?callback=https://evil.com/hook,malicious,Callback parameter containing nested remote URL
+http://example.com/api/share?link=https%3A%2F%2Fevil.com%2Fpromo,malicious,Share link API with encoded nested URL
+http://example.com/tracker?u=http://evil.phish.xyz/landing,malicious,Tracking parameter with nested phishing URL
+
+https://docs.example.com/products/platform/v2/guide/getting-started/installation,benign,Deep documentation URL
+https://blog.example.com/2026/01/20/security/incident-response-playbook,benign,Deep blog path for security article
