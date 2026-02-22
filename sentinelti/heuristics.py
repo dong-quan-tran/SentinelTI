@@ -90,6 +90,23 @@ PHISHING_KEYWORDS = {
     "update", "confirm",
 }
 
+GIVEAWAY_TOKENS = {
+    "free-gift-card",
+    "gift-card",
+    "giftcard",
+    "giveaway",
+    "crypto-giveaway",
+    "free-gift",
+    "freegift",
+    "lottery",
+    "prize",
+    "jackpot",
+    "airdrop",
+    "remote-help",
+    "remote-help-session",
+}
+
+
 SSO_HOST_HINTS = {
     "sso.",
     "login.microsoftonline.com",
@@ -158,6 +175,27 @@ def analyze_url(url: str) -> HeuristicResult:
 
     host_l = lower_host
     path_l = lower_path
+
+    cred_keys = {"user", "username", "login"}
+    pass_keys = {"password", "pass", "pwd"}
+
+    # Check for presence of credential-like parameters in the query string
+    seen_cred_key = False
+    seen_pass_key = False
+
+    for key, value in parse_qsl(query, keep_blank_values=True):
+        k = (key or "").lower()
+        if k in cred_keys:
+            seen_cred_key = True
+        if k in pass_keys:
+            seen_pass_key = True
+
+    if seen_cred_key and seen_pass_key:
+        score += 1.5
+        reasons.append(
+            "URL query contains both username- and password-style parameters, "
+            "which is typical of insecure or phishing login forms."
+        )
 
     if any(hint in host_l for hint in SSO_HOST_HINTS) or any(hint in path_l for hint in SSO_PATH_HINTS):
         is_sso_like = True
@@ -269,6 +307,8 @@ def analyze_url(url: str) -> HeuristicResult:
 
     # Suspicious tokens in path/query
     lower_path_query = (path + "?" + query).lower()
+    full_url_surface = (host + path + "?" + query).lower()
+
     matched_tokens = sorted({t for t in SUSPICIOUS_TOKENS if t in lower_path_query})
     if matched_tokens:
         token_score = SUSPICIOUS_TOKEN_SCORE * len(matched_tokens)
@@ -277,6 +317,15 @@ def analyze_url(url: str) -> HeuristicResult:
         score += token_score
         reasons.append(
             f"Contains suspicious tokens often seen in phishing URLs: {', '.join(matched_tokens)}."
+        )
+
+    # Giveaway/lottery-style tokens
+    giveaway_hits = sorted({t for t in GIVEAWAY_TOKENS if t in full_url_surface})
+    if giveaway_hits:
+        score += 1.5
+        reasons.append(
+            "URL contains giveaway/lottery-style tokens often used in scam and phishing campaigns: "
+            f"{', '.join(giveaway_hits)}."
         )
 
 
