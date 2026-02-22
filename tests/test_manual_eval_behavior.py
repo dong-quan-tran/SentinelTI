@@ -127,3 +127,21 @@ def test_legit_sso_like_urls_stay_benign(url: str) -> None:
     result = enrich_score(url)
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://free-gift-card.example.biz/claim",
+        "http://crypto-giveaway.example.cc/wallet/connect",
+        "http://support-example.com.remote-help-session.ru",
+        "http://example.com/login.php?user=admin&password=admin",
+    ],
+)
+def test_social_engineering_and_cleartext_cred_urls_are_not_benign(url: str) -> None:
+    """
+    URLs with giveaway/crypto/remote-help lures or cleartext credentials in the query
+    should not be plain benign.
+    They should be at least 'suspicious' or 'malicious'.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
