@@ -145,3 +145,18 @@ def test_social_engineering_and_cleartext_cred_urls_are_not_benign(url: str) -> 
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.net/blog/2025/01/security-tips",
+        "https://docs.example.com/products/platform/v2/guide/getting-started/installation",
+    ],
+)
+def test_benign_deep_content_urls_stay_benign(url: str) -> None:
+    """
+    Deep but clearly benign content URLs (blog/docs) should normally stay benign/low-risk.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] == "benign"
+    assert result["risk"] == "low"
