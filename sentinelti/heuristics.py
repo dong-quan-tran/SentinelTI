@@ -221,21 +221,50 @@ def analyze_url(url: str) -> HeuristicResult:
         )
 
     # Open-redirect / embedded URL detection in query parameters
+    ip_obj = None
+    try:
+        ip_obj = ipaddress.ip_address(host)
+    except ValueError:
+        ip_obj = None
+
+    if ip_obj is not None:
+        if ip_obj.is_private or ip_obj.is_loopback:
+            score += 1.0
+            reasons.append(
+                "URL host resolves to a private or local IP address "
+                "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
+            )
+        else:
+            score += RAW_IP_SCORE
+            reasons.append("URL uses a raw IP address as host (common in malicious infrastructure).")
+    else:
+        if lower_host in {"localhost", "local"}:
+            score += 1.0
+            reasons.append(
+                "Hostname appears to reference a local or internal service (localhost/local)."
+            )
+
+    is_internal = False
     try:
         ip_obj = ipaddress.ip_address(host)
         if ip_obj.is_private or ip_obj.is_loopback:
-            score += 1.5
+            is_internal = True
+            score += 1.0
             reasons.append(
                 "URL host resolves to a private or local IP address "
                 "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
             )
     except ValueError:
-        # Host is not a raw IP (normal domains pass through)
+        ip_obj = None
         if lower_host in {"localhost", "local"}:
-            score += 1.5
+            is_internal = True
+            score += 1.0
             reasons.append(
                 "Hostname appears to reference a local or internal service (localhost/local)."
             )
+
+    features["is_internal"] = is_internal
+        
 
     # Common redirect-style parameter names to check
     redirect_param_names = {
@@ -296,12 +325,6 @@ def analyze_url(url: str) -> HeuristicResult:
         )
 
 
-
-    # Raw IP host (very rough check)
-    if host.replace(".", "").isdigit():
-        score += RAW_IP_SCORE
-        reasons.append("URL uses a raw IP address as host (common in malicious infrastructure).")
-
     # '@' in authority part
     if "@" in parsed.netloc:
         score += AT_AUTHORITY_SCORE
@@ -324,7 +347,7 @@ def analyze_url(url: str) -> HeuristicResult:
     # Giveaway/lottery-style tokens
     giveaway_hits = sorted({t for t in GIVEAWAY_TOKENS if t in full_url_surface})
     if giveaway_hits:
-        score += 1.5
+        score += 2.0
         reasons.append(
             "URL contains giveaway/lottery-style tokens often used in scam and phishing campaigns: "
             f"{', '.join(giveaway_hits)}."
