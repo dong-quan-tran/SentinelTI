@@ -179,6 +179,8 @@ def analyze_url(url: str) -> HeuristicResult:
     cred_keys = {"user", "username", "login"}
     pass_keys = {"password", "pass", "pwd"}
 
+    is_docs_or_blog = lower_host.startswith("docs.") or lower_host.startswith("blog.")
+
     # Check for presence of credential-like parameters in the query string
     seen_cred_key = False
     seen_pass_key = False
@@ -386,8 +388,8 @@ def analyze_url(url: str) -> HeuristicResult:
     # Deep path
     depth = len([p for p in path.split("/") if p])
     features["path_depth"] = depth
-    if depth >= 4:
-        if is_sso_like:
+    if depth >= 5:
+        if is_sso_like or is_docs_or_blog:
             # maybe no bump or a tiny one
             score += 0.0
         else:
