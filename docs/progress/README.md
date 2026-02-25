@@ -1141,3 +1141,122 @@ Regression runs were executed successfully with all new heuristics passing.
 Screenshots: [fragment heuristic snippet ____], [manual_eval example with fragment ____].  
 
 ![alt text](<Screenshot 2026-02-19 112610.png>)
+
+***
+
+## SentinelTI URL Heuristics – Progress Log 02/24/2026
+
+### 1) IP Handling Unification and Scoring
+
+**What changed**
+
+- Replaced duplicate IP detection blocks with a single unified IP-handling section using Python’s standard IP address utilities.  
+- Classified IP hosts into:
+  - Private/loopback (treated as internal-looking, with risk).  
+  - Reserved/documentation ranges (treated as unusual but external-looking).  
+  - Public raw IPs (treated as potentially malicious infrastructure).  
+- Added consistent handling for `localhost` / `local` as internal-looking hosts.  
+- Increased the score for private/loopback/localhost so that internal-looking URLs are at least “suspicious,” even without other strong indicators.
+
+**Intended effect**
+
+- Internal/private URLs (e.g., `127.0.0.1`, `10.x.x.x`, `192.168.x.x`, `localhost`) now reliably avoid a benign label due to internal exposure/SSRF risk.  
+- Reserved ranges (e.g., `192.0.2.x`, `203.0.113.x`) and public raw IPs now clearly contribute to risk without being misidentified as private.  
+
+![alt text](<Screenshot 2026-02-24 222204.png>)
+
+***
+
+### 2) Strong Brand Impersonation Rule (Prefix-Only)
+
+**What changed**
+
+- Updated the strong brand impersonation heuristic so it only fires when brand tokens appear in the **subdomain prefix** before the base domain.  
+- The rule still requires:
+  - Brand-like tokens present.  
+  - Phishing-related keywords present.  
+  - Base domain not in the trusted whitelist.  
+- The reason text now explicitly refers to “subdomain contains brand-like tokens … combined with phishing keywords.”
+
+**Intended effect**
+
+- Keeps strong hits for URLs like `paypal.com.verify-update.info`, `update-appleid.example.info`, `confirm-amazon-order.example.site`.  
+- Reduces false positives where a brand word appears in the registered domain or TLD but is not used as an impersonated subdomain.
+
+![alt text](<Screenshot 2026-02-24 222305.png>)
+
+***
+
+### 3) Brand Fallback + Recovery and Microsoft-Typo Special Case
+
+**What changed**
+
+- Extended the “brand + login/security fallback” rule to also treat **recovery-like** actions as risky:
+  - Now looks for `login`, `signin`, `sign-in`, `secure`, `security`, `security-check`, `recover`, `recovery`, `reset`.  
+- Added a targeted heuristic for Microsoft-typo recovery domains:
+  - Detects host tokens resembling `micr0soft` / `micros0ft`.  
+  - Requires recovery-like tokens in host or path.  
+  - Applies only on non-trusted domains.  
+- In both cases, adds a moderate score bump and a reason explaining account recovery impersonation.
+
+**Intended effect**
+
+- URLs such as `http://micr0soft-account.com/recover` no longer end up benign; they are at least **suspicious**.  
+- Other brand recovery/ reset flows on non-trusted, suspicious-looking domains get a small but meaningful risk bump.
+
+![alt text](<Screenshot 2026-02-24 222338.png>)
+
+***
+
+### 4) Nested URL Heuristics vs Legit SSO/OAuth
+
+**What changed**
+
+- Adjusted nested-URL scoring so that **SSO/OAuth-like endpoints** are treated more gently:
+  - Introduced an `is_sso_like` check using existing SSO host/path hints.  
+  - For redirect-style parameters on SSO-like URLs, reduced the added score to a small bump (or near-zero), while still adding a descriptive reason.  
+  - For other nested URL params on SSO-like URLs, either added a tiny score or no score, but kept a light “may be normal but can be abused” reason.  
+
+**Intended effect**
+
+- Legitimate SSO/OAuth URLs such as `https://auth.example.com/oauth2/authorize?...redirect_uri=...` now remain **benign** under normal conditions.  
+- Non-SSO pages with nested URLs (e.g., open redirects, tracker/callback links) remain clearly **suspicious**.
+
+![alt text](<Screenshot 2026-02-24 222510.png>)
+
+***
+
+### 5) Evaluation Runs and Current Metrics
+
+**What you ran**
+
+- Manual evaluation script:  
+  - Command: `python -m sentinelti.manual_eval`  
+- Automated tests:  
+  - Command: `python -m pytest`
+
+**Observed behavior (today’s session)**
+
+- Brand impersonation, nested URL, and IP handling tests in `tests/test_manual_eval_behavior.py` now pass after adjustments.  
+- Internal/private IP URLs, reserved IP URLs, legit SSO URLs, and Microsoft-typo recovery URLs now align with their expected labels in tests.
+
+![alt text](<Screenshot 2026-02-24 222604.png>)
+
+***
+
+### 6) Notes and Remaining Gaps
+
+**Still known gaps**
+
+- `login-office365.com` still benign due to the earlier leetspeak / normalization bug not yet addressed.  
+- No dedicated heuristic yet for:
+  - `examp1e.com/login` (generic typo + login).  
+  - Very long / weird TLD login URLs, e.g.  
+    - `very-long-subdomain-with-many-levels.login.secure.update.example.com/path`  
+    - `example.reallylongtldthatisweirdlysuspicious/login`
+
+**Planned future work**
+
+- Add a **“login + weird/very long domain/TLD”** heuristic.  
+- Introduce a conservative, generic typo/homoglyph detector for non-brand words plus login paths.  
+- Fix or replace the leetspeak normalization bug impacting Office365-like domains.

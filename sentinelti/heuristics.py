@@ -13,18 +13,14 @@ ML classifier output.
 """
 Current limitations of heuristic-based URL analysis (v1)
 
-4. Only literal IP hosts are checked so far, not domain names to IP resolution or more advanced infrastructure analysis (e.g. hosting provider, age, etc.)
+4. IP and infrastructure scope  
+   - The heuristics classify literal IP hosts as private, loopback, reserved, or public and adjust risk accordingly, but they still do not resolve domain names to IPs or use external infrastructure signals (e.g., hosting provider, age, or reputation).
 
-5. Deep paths and complex SSO flows
-   - Deeply nested paths contribute to the score only when combined with
-     suspicious tokens, but complex yet legitimate SSO or application
-     URLs can still be flagged as suspicious in some cases.
+5. Deep paths and complex SSO flows  
+   - Deep paths and nested URLs contribute to the score, with lighter treatment for SSO/OAuth-style endpoints. However, complex but legitimate SSO or application URLs can still be flagged as suspicious in some cases.
 
-6. Brand impersonation scope
-   - Brand impersonation logic focuses on obvious brand tokens
-     (paypal, apple, google, microsoft, netflix, etc.) outside a small
-     whitelist of trusted domains. It does not yet consider more subtle
-     forms of impersonation or full certificate/WHOIS/host reputation.
+6. Brand impersonation scope  
+   - Brand impersonation logic focuses on obvious brand tokens (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.) outside a small whitelist of trusted domains. It does not yet cover more subtle impersonation patterns or use certificate/WHOIS/host reputation.
 
 These heuristics should be viewed as a lightweight signal layer. Any
 strong security decision should consider the ML model output, additional
