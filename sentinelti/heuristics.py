@@ -231,7 +231,7 @@ def analyze_url(url: str) -> HeuristicResult:
         # Private or loopback: internal-looking
         if ip_obj.is_private or ip_obj.is_loopback:
             is_internal = True
-            score += 1.0
+            score += RAW_IP_SCORE
             reasons.append(
                 "URL host resolves to a private or local IP address "
                 "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
@@ -252,7 +252,7 @@ def analyze_url(url: str) -> HeuristicResult:
     else:
         if lower_host in {"localhost", "local"}:
             is_internal = True
-            score += 1.0
+            score += RAW_IP_SCORE
             reasons.append(
                 "Hostname appears to reference a local or internal service (localhost/local)."
             )
@@ -311,24 +311,43 @@ def analyze_url(url: str) -> HeuristicResult:
 
     SPECIAL_NESTED_PARAMS = {"callback", "share", "tracker", "u", "link"}
 
+    is_sso_like = any(hint in lower_host for hint in SSO_HOST_HINTS) or any(
+        hint in lower_path for hint in SSO_PATH_HINTS
+    )
+
     if redirect_param_nested:
-        score += 1.5
-        reasons.append(
-            "Query parameters contain a nested URL in a redirect-style parameter, "
-            "which can be abused to hide redirects to malicious sites."
-        )
-    elif any_param_nested:
-        score += 1.5  # was 1.0
-        if nested_param_key in SPECIAL_NESTED_PARAMS:
-            score += 0.5
+        # Soften for clearly SSO-like flows
+        if is_sso_like:
+            score += 0.25
             reasons.append(
-                "Nested URL appears in a callback/share/tracker-style parameter, "
-                "which is often used to pull remote scripts or tracking beacons."
+                "Nested redirect URL present in an SSO/OAuth-style endpoint; "
+                "may be normal but can be abused if misconfigured."
             )
         else:
+            score += 1.5
             reasons.append(
-                "Query parameters contain a nested URL, which can be abused to hide redirects to malicious sites."
+                "Query parameters contain a nested URL in a redirect-style parameter, "
+                "which can be abused to hide redirects to malicious sites."
             )
+    elif any_param_nested:
+        if is_sso_like:
+            # Optional: either no score, or very small score
+            score += 0.1
+            reasons.append(
+                "Nested URL present in SSO-like query parameters; typically benign but worth light scrutiny."
+            )
+        else:
+            score += 1.5
+            if nested_param_key in SPECIAL_NESTED_PARAMS:
+                score += 0.5
+                reasons.append(
+                    "Nested URL appears in a callback/share/tracker-style parameter, "
+                    "which is often used to pull remote scripts or tracking beacons."
+                )
+            else:
+                reasons.append(
+                    "Query parameters contain a nested URL, which can be abused to hide redirects to malicious sites."
+                )
 
 
     # '@' in authority part
@@ -432,24 +451,37 @@ def analyze_url(url: str) -> HeuristicResult:
                 f"({', '.join(sorted(phishing_hits))}); likely brand impersonation."
             )
 
-
-
     # Extra: brand-like host plus login/security anywhere (even without explicit phishing_hits)
+    host_tokens = lower_host.replace(".", "-").split("-")
+    path_tokens = [p for p in lower_path.split("/") if p]
+    all_tokens = host_tokens + path_tokens
+
     if present_brands and base_domain not in TRUSTED_DOMAINS:
-        host_tokens = lower_host.replace(".", "-").split("-")
-        path_tokens = [p for p in lower_path.split("/") if p]
+        has_login_like = any(t in {"login", "signin", "sign-in"} for t in all_tokens)
+        has_security_like = any(t in {"secure", "security", "security-check"} for t in all_tokens)
+        has_recovery_like = any(t in {"recover", "recovery", "reset"} for t in all_tokens)
 
-        has_login_like = any(t in {"login", "signin", "sign-in"} for t in host_tokens + path_tokens)
-        has_security_like = any(t in {"secure", "security", "security-check"} for t in host_tokens + path_tokens)
-
-        if has_login_like or has_security_like:
-            score += 1.0  # or 1.0, but only one of these blocks, not two
+        if has_login_like or has_security_like or has_recovery_like:
+            score += 1.0
             reasons.append(
-                "Brand-like tokens appear with login/security terms on a non-trusted domain; "
+                "Brand-like tokens appear with login/security/recovery terms on a non-trusted domain; "
                 "this pattern is common in phishing and impersonation attacks."
             )
 
+    # Conservative special case: microsoft-typo domains with recovery paths
+    looks_like_microsoft_typo = any(
+        t.startswith("micr0soft") or t.startswith("micros0ft") or t == "micr0soft"
+        for t in host_tokens
+    )
 
+    has_recovery_like = any(t in {"recover", "recovery", "reset"} for t in all_tokens)
+
+    if looks_like_microsoft_typo and has_recovery_like and base_domain not in TRUSTED_DOMAINS:
+        score += 1.0
+        reasons.append(
+            "Domain resembles a Microsoft account recovery page on a non-trusted domain; "
+            "this pattern is common in account takeover phishing."
+        )
 
 
     # Deep path
