@@ -436,7 +436,7 @@ def analyze_url(url: str) -> HeuristicResult:
         has_security_like = any(t in {"secure", "security", "security-check"} for t in host_tokens + path_tokens)
 
         if has_login_like or has_security_like:
-            score += 0.75  # or 1.0, but only one of these blocks, not two
+            score += 1.0  # or 1.0, but only one of these blocks, not two
             reasons.append(
                 "Brand-like tokens appear with login/security terms on a non-trusted domain; "
                 "this pattern is common in phishing and impersonation attacks."
