@@ -413,12 +413,25 @@ def analyze_url(url: str) -> HeuristicResult:
 
     # Only apply impersonation bump if NOT a trusted brand domain
     if present_brands and phishing_hits and base_domain not in TRUSTED_DOMAINS:
-        score += BRAND_IMPERSONATION_SCORE
-        reasons.append(
-            "Hostname contains brand-like tokens "
-            f"({', '.join(sorted(present_brands))}) combined with phishing keywords "
-            f"({', '.join(sorted(phishing_hits))}); likely brand impersonation."
-        )
+        # Identify the part of the host before the base domain
+        host_labels = (lower_host or "").split(".")
+        base_labels = (base_domain or "").split(".") if base_domain else []
+        if base_labels and len(host_labels) > len(base_labels):
+            prefix_labels = host_labels[:-len(base_labels)]
+        else:
+            prefix_labels = []
+
+        prefix_host = ".".join(prefix_labels)
+
+        # Only treat as strong impersonation if the brand appears in the prefix
+        if any(b in prefix_host for b in present_brands):
+            score += BRAND_IMPERSONATION_SCORE
+            reasons.append(
+                "Subdomain contains brand-like tokens "
+                f"({', '.join(sorted(present_brands))}) combined with phishing keywords "
+                f"({', '.join(sorted(phishing_hits))}); likely brand impersonation."
+            )
+
 
 
     # Extra: brand-like host plus login/security anywhere (even without explicit phishing_hits)
