@@ -13,9 +13,6 @@ ML classifier output.
 """
 Current limitations of heuristic-based URL analysis (v1)
 
-These heuristics are intentionally simple and conservative. They are useful
-for enriching the ML model output but are NOT a full phishing/malware
-detection engine. Known limitations include:
 
 4. Only literal IP hosts are checked so far, not domain names to IP resolution or more advanced infrastructure analysis (e.g. hosting provider, age, etc.)
 
@@ -80,6 +77,9 @@ BRAND_TOKENS = {
     "faceb0ok",
     "bankofamerica",
     "amazon",
+     "teams",
+    "onedrive",
+    "github",
 }
 
 PHISHING_KEYWORDS = {
@@ -325,6 +325,8 @@ def analyze_url(url: str) -> HeuristicResult:
             if any_param_nested:
                 break
 
+    SPECIAL_NESTED_PARAMS = {"callback", "share", "tracker", "u", "link"}
+
     if redirect_param_nested:
         score += 1.5
         reasons.append(
@@ -332,9 +334,9 @@ def analyze_url(url: str) -> HeuristicResult:
             "which can be abused to hide redirects to malicious sites."
         )
     elif any_param_nested:
-        score += 1.25  # was 1.0
-        if nested_param_key in {"callback", "share", "tracker", "u"}:
-            score += 0.25
+        score += 1.5  # was 1.0
+        if nested_param_key in SPECIAL_NESTED_PARAMS:
+            score += 0.5
             reasons.append(
                 "Nested URL appears in a callback/share/tracker-style parameter, "
                 "which is often used to pull remote scripts or tracking beacons."
@@ -414,9 +416,16 @@ def analyze_url(url: str) -> HeuristicResult:
 
     # New: brand impersonation heuristic
     normalized_host = _normalize_leetspeak(lower_host)
+    host_flat = normalized_host.replace(".", "").replace("-", "")
 
-    present_brands = {b for b in BRAND_TOKENS if b in normalized_host}
+    present_brands = {b for b in BRAND_TOKENS if b in host_flat}
     phishing_hits = {k for k in PHISHING_KEYWORDS if k in lower_host or k in lower_path or k in lower_query}
+
+    # Identify the part of the host before the base domain
+    host_labels = (lower_host or "").split(".")
+    base_labels = (base_domain or "").split(".")
+    prefix_labels = host_labels[:-len(base_labels)] if len(host_labels) > len(base_labels) else []
+    prefix_host = ".".join(prefix_labels)
 
     # Only apply impersonation bump if NOT a trusted brand domain
     if present_brands and phishing_hits and base_domain not in TRUSTED_DOMAINS:
@@ -426,6 +435,7 @@ def analyze_url(url: str) -> HeuristicResult:
             f"({', '.join(sorted(present_brands))}) combined with phishing keywords "
             f"({', '.join(sorted(phishing_hits))}); likely brand impersonation."
         )
+
 
     # Extra: brand-like host plus login/security anywhere (even without explicit phishing_hits)
     if present_brands and base_domain not in TRUSTED_DOMAINS:
