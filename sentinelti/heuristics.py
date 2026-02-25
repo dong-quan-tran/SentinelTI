@@ -13,7 +13,6 @@ ML classifier output.
 """
 Current limitations of heuristic-based URL analysis (v1)
 
-
 4. Only literal IP hosts are checked so far, not domain names to IP resolution or more advanced infrastructure analysis (e.g. hosting provider, age, etc.)
 
 5. Deep paths and complex SSO flows
@@ -220,30 +219,8 @@ def analyze_url(url: str) -> HeuristicResult:
             "Hostname contains Punycode (xn--), which is often used for IDN lookalike domains."
         )
 
-    # Open-redirect / embedded URL detection in query parameters
-    ip_obj = None
-    try:
-        ip_obj = ipaddress.ip_address(host)
-    except ValueError:
-        ip_obj = None
-
-    if ip_obj is not None:
-        if ip_obj.is_private or ip_obj.is_loopback:
-            score += 1.0
-            reasons.append(
-                "URL host resolves to a private or local IP address "
-                "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
-            )
-        else:
-            score += RAW_IP_SCORE
-            reasons.append("URL uses a raw IP address as host (common in malicious infrastructure).")
-    else:
-        if lower_host in {"localhost", "local"}:
-            score += 1.0
-            reasons.append(
-                "Hostname appears to reference a local or internal service (localhost/local)."
-            )
     is_internal = False
+    ip_obj = None
 
     try:
         ip_obj = ipaddress.ip_address(host)
@@ -251,6 +228,7 @@ def analyze_url(url: str) -> HeuristicResult:
         ip_obj = None
 
     if ip_obj is not None:
+        # Private or loopback: internal-looking
         if ip_obj.is_private or ip_obj.is_loopback:
             is_internal = True
             score += 1.0
@@ -258,8 +236,15 @@ def analyze_url(url: str) -> HeuristicResult:
                 "URL host resolves to a private or local IP address "
                 "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
             )
+        # Reserved / documentation ranges (e.g., 192.0.2.x, 198.51.100.x, 203.0.113.x)
+        elif ip_obj.is_reserved:
+            score += RAW_IP_SCORE
+            reasons.append(
+                "URL uses a raw IP address from a reserved/documentation range, "
+                "which is uncommon in normal browsing."
+            )
         else:
-            # Public (including 192.0.2.x, 198.51.100.x, 203.0.113.x)
+            # Public raw IP
             score += RAW_IP_SCORE
             reasons.append(
                 "URL uses a raw IP address as host (common in malicious infrastructure)."
@@ -273,8 +258,7 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
     features["is_internal"] = is_internal
-
-        
+            
 
     # Common redirect-style parameter names to check
     redirect_param_names = {
