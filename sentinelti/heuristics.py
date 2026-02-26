@@ -365,6 +365,33 @@ def analyze_url(url: str) -> HeuristicResult:
             f"Contains suspicious tokens often seen in phishing URLs: {', '.join(matched_tokens)}."
         )
 
+    #login + weird/very long domain/TLD
+    host_labels = (lower_host or "").split(".")
+    tld = host_labels[-1] if host_labels else ""
+    path_segments = [p for p in (lower_path or "").split("/") if p]
+    has_login_hint = any(seg in {"login", "signin", "sign-in"} for seg in path_segments)
+
+    host_tokens = (lower_host or "").replace(".", "-").split("-")
+    has_login_in_host = any(tok == "login" for tok in host_tokens)
+
+    has_login_like = has_login_hint or has_login_in_host
+
+
+    is_sso_like = any(h in (lower_host or "") for h in SSO_HOST_HINTS) or any(
+        h in (lower_path or "") for h in SSO_PATH_HINTS
+    )
+
+    hostname_long = len(lower_host or "") > 45
+    label_depth_high = len(host_labels) >= 5
+    tld_weird = tld in UNUSUAL_TLDS or len(tld) > 8
+
+    if has_login_like and not is_sso_like and (hostname_long or label_depth_high or tld_weird):
+        score += 0.75
+        reasons.append(
+            "Login path appears on a very long or unusual domain/TLD, "
+            "which is a common pattern in credential phishing infrastructure."
+        )
+
     # Giveaway/lottery-style tokens
     giveaway_hits = sorted({t for t in GIVEAWAY_TOKENS if t in full_url_surface})
     if giveaway_hits:
