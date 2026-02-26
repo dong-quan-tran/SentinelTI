@@ -508,6 +508,27 @@ def analyze_url(url: str) -> HeuristicResult:
                 f"({', '.join(sorted(phishing_hits))}); likely brand impersonation."
             )
 
+    # Mild rule: brand-like tokens anywhere in host plus login in host or path, on non-trusted domain
+    if present_brands and base_domain not in TRUSTED_DOMAINS:
+        path_segments = [p for p in (lower_path or "").split("/") if p]
+        has_login_in_path = any(seg in {"login", "signin", "sign-in"} for seg in path_segments)
+
+        host_tokens = (lower_host or "").replace(".", "-").split("-")
+        has_login_in_host = any(tok in {"login", "signin", "sign-in"} for tok in host_tokens)
+
+        has_login_like = has_login_in_path or has_login_in_host
+
+        normalized_host = _normalize_leetspeak(lower_host or "")
+        has_brand_anywhere = any(b in normalized_host for b in present_brands)
+
+        if has_login_like and has_brand_anywhere:
+            score += 1.5  # smaller than BRAND_IMPERSONATION_SCORE
+            reasons.append(
+                "Hostname appears brand-like and is combined with a login indicator on a non-trusted domain; "
+                "this pattern is common in phishing and impersonation attacks."
+            )
+
+
     # Extra: brand-like host plus login/security anywhere (even without explicit phishing_hits)
     host_tokens = lower_host.replace(".", "-").split("-")
     path_tokens = [p for p in lower_path.split("/") if p]
@@ -560,6 +581,19 @@ def analyze_url(url: str) -> HeuristicResult:
             "Domain resembles a Microsoft account recovery page on a non-trusted domain; "
             "this pattern is common in account takeover phishing."
         )
+
+    # Targeted special case: login-office365-style hosts
+    if base_domain not in TRUSTED_DOMAINS:
+        host_tokens = (lower_host or "").replace(".", "-").split("-")
+        has_login_token = any(tok in {"login", "signin", "sign-in"} for tok in host_tokens)
+        has_office365_token = any(tok == "office365" for tok in host_tokens)
+
+        if has_login_token and has_office365_token:
+            score += 1.5
+            reasons.append(
+                "Hostname combines login and Office365 tokens on a non-trusted domain; "
+                "this pattern is common in Microsoft 365 phishing pages."
+            )
 
 
     # Deep path
