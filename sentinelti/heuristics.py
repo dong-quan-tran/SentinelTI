@@ -386,6 +386,28 @@ def analyze_url(url: str) -> HeuristicResult:
         score += AT_AUTHORITY_SCORE
         reasons.append("URL contains '@' in the authority part (possible obfuscation).")
 
+    # '@' in path near login/security
+    if "@" in lower_path:
+        host_tokens = (lower_host or "").replace(".", "-").split("-")
+        path_tokens = [p for p in (lower_path or "").split("/") if p]
+        all_tokens = host_tokens + path_tokens
+
+        has_login_like = any(t in {"login", "signin", "sign-in"} for t in all_tokens)
+        has_security_like = any(t in {"secure", "security", "security-check"} for t in all_tokens)
+        has_account_like = any(t in {"account", "accounts"} for t in all_tokens)
+
+        # Soften for clearly SSO-like flows
+        is_sso_like = any(h in (lower_host or "") for h in SSO_HOST_HINTS) or any(
+            h in (lower_path or "") for h in SSO_PATH_HINTS
+        )
+
+        if (has_login_like or has_security_like or has_account_like) and not is_sso_like:
+            score += 0.75
+            reasons.append(
+                "URL path contains '@' near login or security-related terms, "
+                "which can be used to obfuscate or mimic email-based phishing flows."
+            )
+
     # Suspicious tokens in path/query
     lower_path_query = (path + "?" + query).lower()
     full_url_surface = (host + path + "?" + query).lower()
