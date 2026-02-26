@@ -117,6 +117,9 @@ SSO_PATH_HINTS = {
     "/authorize",
 }
 
+COMMON_GENERIC_WORDS = {"example", "examp1e"}
+
+
 RAW_IP_SCORE = 2.0
 AT_AUTHORITY_SCORE = 1.5
 SUSPICIOUS_TOKEN_SCORE = 0.75
@@ -145,6 +148,27 @@ def _normalize_leetspeak(s: str) -> str:
         "@": "a",
     })
     return s.translate(table)
+
+def _simple_token(s: str) -> str:
+    """Strip to letters only, for simple typo checks."""
+    return "".join(ch for ch in s if ch.isalpha())
+
+
+def _one_char_digit_swap(a: str, b: str) -> bool:
+    """
+    Return True if a and b are same length and differ in exactly one position
+    where one side is a digit and the other is a letter.
+    """
+    if len(a) != len(b):
+        return False
+
+    diffs = [(x, y) for x, y in zip(a, b) if x != y]
+    if len(diffs) != 1:
+        return False
+
+    x, y = diffs[0]
+    return (x.isdigit() and y.isalpha()) or (y.isdigit() and x.isalpha())
+
 
 def analyze_url(url: str) -> HeuristicResult:
     """
@@ -490,6 +514,27 @@ def analyze_url(url: str) -> HeuristicResult:
                 "Brand-like tokens appear with login/security/recovery terms on a non-trusted domain; "
                 "this pattern is common in phishing and impersonation attacks."
             )
+
+    # Conservative typo-domain + login heuristic (e.g., examp1e.com/login)
+    base_labels = (base_domain or "").split(".")
+    sld = base_labels[0] if base_labels else ""
+    sld_simple = _simple_token(sld)
+
+    path_segments = [p for p in (lower_path or "").split("/") if p]
+    has_login_hint = any(seg in {"login", "signin", "sign-in"} for seg in path_segments)
+
+    sld_raw = sld
+    looks_like_generic_typo = any(
+        _one_char_digit_swap(sld_raw, word) for word in COMMON_GENERIC_WORDS
+    )
+
+    if looks_like_generic_typo and has_login_hint and base_domain not in TRUSTED_DOMAINS:
+        score += 1.25
+        reasons.append(
+            "Domain name appears to be a near-typo of a generic example site "
+            "combined with a login path; possible phishing typo-domain."
+        )
+
 
     # Conservative special case: microsoft-typo domains with recovery paths
     looks_like_microsoft_typo = any(
