@@ -70,6 +70,9 @@ TRUSTED_DOMAINS = {
     "amazon.com",
 }
 
+PORTAL_HOST_HINTS = {"portal", "intranet", "dashboard", "myaccount", "accounts", "workspace"}
+COMMON_SAFE_TLDS = {"com", "org", "net", "edu", "gov"}
+
 BRAND_TOKENS = {
     "paypal",
     "appleid",
@@ -615,6 +618,31 @@ def analyze_url(url: str) -> HeuristicResult:
             reasons.append(
                 "Hostname combines login and Office365 tokens on a non-trusted domain; "
                 "this pattern is common in Microsoft 365 phishing pages."
+            )
+
+    # Mild portal-like heuristic to reduce over-flagging obviously internal/portal sites
+    host_tokens = (lower_host or "").replace(".", "-").split("-")
+    is_portal_like = any(tok in PORTAL_HOST_HINTS for tok in host_tokens)
+
+    # Re-use tld and domain_length we already computed
+    tld = features.get("tld", "")
+    domain_length = features.get("domain_length", 0)
+
+    # Only consider softening if not already clearly malicious
+    no_brand_impersonation = not present_brands
+    no_giveaway_tokens = not giveaway_hits
+    no_punycode = "xn--" not in lower_host
+
+    looks_infra_normal = (tld in COMMON_SAFE_TLDS or tld == "") and domain_length < 30
+
+    if is_portal_like and looks_infra_normal and no_brand_impersonation and no_giveaway_tokens and no_punycode:
+        # Slightly reduce generic heuristic noise, but never go below zero
+        if score > 0.0:
+            reduction = min(0.5, score)
+            score -= reduction
+            reasons.append(
+                "Hostname appears to be a normal portal/dashboard on a common TLD; "
+                "slightly reducing heuristic risk to avoid over-flagging."
             )
 
 
