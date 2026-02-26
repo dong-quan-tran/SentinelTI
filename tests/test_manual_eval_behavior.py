@@ -185,3 +185,37 @@ def test_example_typo_login_is_not_benign() -> None:
     url = "http://examp1e.com/login"
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+def test_login_office365_is_not_benign() -> None:
+    """
+    Fake Office 365 login domains like login-office365.com
+    should not be plain benign.
+    """
+    url = "http://login-office365.com"
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+def test_at_symbol_in_login_path_is_not_benign() -> None:
+    """
+    Login/security URLs with '@' in the path should not be plain benign.
+    """
+    url = "http://login.example.com/@secure-check"
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+def test_at_symbol_in_generic_path_can_be_benign() -> None:
+    """
+    Generic paths with '@' but no login/security context may remain benign.
+    """
+    url = "http://example.com/path@id"
+    result = enrich_score(url)
+    assert result["final_label"] == "benign"
+
+def test_portal_like_login_is_not_escalated_to_malicious() -> None:
+    """
+    Legitimate-looking portal logins should not be escalated to 'malicious'
+    purely by heuristics.
+    """
+    url = "https://secure.portal.example.org/account/login"
+    result = enrich_score(url)
+    assert result["final_label"] in {"benign", "suspicious"}
