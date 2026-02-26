@@ -400,7 +400,6 @@ def analyze_url(url: str) -> HeuristicResult:
 
     has_login_like = has_login_hint or has_login_in_host
 
-
     is_sso_like = any(h in (lower_host or "") for h in SSO_HOST_HINTS) or any(
         h in (lower_path or "") for h in SSO_PATH_HINTS
     )
@@ -410,7 +409,7 @@ def analyze_url(url: str) -> HeuristicResult:
     tld_weird = tld in UNUSUAL_TLDS or len(tld) > 8
 
     if has_login_like and not is_sso_like and (hostname_long or label_depth_high or tld_weird):
-        score += 0.75
+        score += 1.5
         reasons.append(
             "Login path appears on a very long or unusual domain/TLD, "
             "which is a common pattern in credential phishing infrastructure."

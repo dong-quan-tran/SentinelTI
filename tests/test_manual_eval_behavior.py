@@ -160,3 +160,28 @@ def test_benign_deep_content_urls_stay_benign(url: str) -> None:
     result = enrich_score(url)
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://very-long-subdomain-with-many-levels.login.secure.update.example.com/path",
+        "http://example.reallylongtldthatisweirdlysuspicious/login",
+        "http://example.click.click/login",
+    ],
+)
+def test_weird_or_long_domain_logins_are_not_benign(url: str) -> None:
+    """
+    Login flows on very long or unusual domains/TLDs should not be plain benign.
+    They should be at least 'suspicious' due to phishing-like infrastructure.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+def test_example_typo_login_is_not_benign() -> None:
+    """
+    A typo/homoglyph of 'example.com' combined with a login path
+    should not be plain benign.
+    """
+    url = "http://examp1e.com/login"
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
