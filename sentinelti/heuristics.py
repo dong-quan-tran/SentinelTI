@@ -13,19 +13,30 @@ ML classifier output.
 """
 Current limitations of heuristic-based URL analysis (v1)
 
-4. IP and infrastructure scope  
-   - The heuristics classify literal IP hosts as private, loopback, reserved, or public and adjust risk accordingly, but they still do not resolve domain names to IPs or use external infrastructure signals (e.g., hosting provider, age, or reputation).
+4. IP and infrastructure scope
+   - The heuristics classify literal IP hosts as private, loopback, reserved, or public and adjust risk accordingly,
+     but they still do not resolve domain names to IPs or use external infrastructure signals
+     (e.g. hosting provider, age, or reputation services).
 
-5. Deep paths and complex SSO flows  
-   - Deep paths and nested URLs contribute to the score, with lighter treatment for SSO/OAuth-style endpoints. However, complex but legitimate SSO or application URLs can still be flagged as suspicious in some cases.
+5. Deep paths and complex SSO flows
+   - Deep paths and nested URLs contribute to the score, with lighter treatment for SSO/OAuth-style endpoints.
+     However, complex but legitimate SSO or application URLs can still be flagged as suspicious in some cases.
 
-6. Brand impersonation scope  
-   - Brand impersonation logic focuses on obvious brand tokens (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.) outside a small whitelist of trusted domains. It does not yet cover more subtle impersonation patterns or use certificate/WHOIS/host reputation.
+6. Brand impersonation and typo scope
+   - Brand impersonation logic focuses on obvious brand tokens
+     (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.)
+     outside a small whitelist of trusted domains. It does not yet cover more subtle impersonation patterns
+     or use certificate/WHOIS/host reputation.
+   - Additional heuristics exist for some typo/IDN domains and for generic example-like typo domains with login paths,
+     but homograph coverage is not exhaustive.
 
-These heuristics should be viewed as a lightweight signal layer. Any
-strong security decision should consider the ML model output, additional
-context (e.g. threat intel, reputation), and future rules that address
-the above gaps.
+     New heuristics (recent additions)
+   - Login on very long or unusual domains/TLDs (especially when combined with uncommon TLDs or deep subdomains).
+   - Conservative typo-domain + login detection for example-like domains (e.g. examp1e.com/login).
+   - Softer scoring for nested URLs on clearly SSO/OAuth-like endpoints to avoid over-flagging legitimate flows.
+   - Targeted handling for Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
+
+
 """
 
 from urllib.parse import parse_qsl, unquote
