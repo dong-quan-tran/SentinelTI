@@ -657,6 +657,14 @@ def analyze_url(url: str) -> HeuristicResult:
             score += DEEP_PATH_SCORE
             reasons.append("URL path is deeply nested, often used to hide payloads or phishing pages.")
 
+    # Deduplicate reasons while preserving order
+    seen = set()
+    deduped_reasons: list[str] = []
+    for r in reasons:
+        if r not in seen:
+            seen.add(r)
+            deduped_reasons.append(r)
+
     features["raw_score"] = score
 
-    return HeuristicResult(score=score, reasons=reasons, features=features)
+    return HeuristicResult(score=score, reasons=deduped_reasons, features=features)
