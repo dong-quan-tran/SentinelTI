@@ -248,3 +248,17 @@ def test_github_oauth_authorize_stays_benign_low_risk() -> None:
 
     reasons = " ".join(result.get("reasons", []))
     assert "Recognized as a standard GitHub OAuth authorization endpoint" in reasons
+
+def test_office365_like_login_domains_are_not_benign() -> None:
+    """
+    Office 365/Microsoft-themed login domains on non-trusted hosts
+    should not be plain benign.
+    """
+    urls = [
+        "http://login-office365-secure.com",
+        "http://office365-login.example.net",
+        "http://secure-microsoftonline-login.xyz",
+    ]
+    for url in urls:
+        result = enrich_score(url)
+        assert result["final_label"] in {"suspicious", "malicious"}
