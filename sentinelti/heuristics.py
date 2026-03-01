@@ -606,18 +606,22 @@ def analyze_url(url: str) -> HeuristicResult:
             "this pattern is common in account takeover phishing."
         )
 
-    # Targeted special case: login-office365-style hosts
+    # Targeted special case: Office 365 / Microsoft login-style hosts
     if base_domain not in TRUSTED_DOMAINS:
         host_tokens = (lower_host or "").replace(".", "-").split("-")
+
         has_login_token = any(tok in {"login", "signin", "sign-in"} for tok in host_tokens)
-        has_office365_token = any(tok == "office365" for tok in host_tokens)
+        has_office365_token = any(
+            tok in {"office365", "microsoftonline", "o365"} for tok in host_tokens
+        )
 
         if has_login_token and has_office365_token:
             score += 1.5
             reasons.append(
-                "Hostname combines login and Office365 tokens on a non-trusted domain; "
-                "this pattern is common in Microsoft 365 phishing pages."
+                "Hostname combines login and Office 365/Microsoft tokens on a non-trusted domain; "
+                "this pattern is common in Microsoft 365 credential phishing pages."
             )
+
 
     # Targeted special case: login-github-style hosts
     if base_domain not in TRUSTED_DOMAINS:
