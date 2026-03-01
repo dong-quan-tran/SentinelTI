@@ -205,7 +205,7 @@ def analyze_url(url: str) -> HeuristicResult:
     lower_query = query.lower()
 
     is_sso_like = False
-
+    
     host_l = lower_host
     path_l = lower_path
 
@@ -534,7 +534,7 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
     # Mild rule: brand-like tokens anywhere in host plus login in host or path, on non-trusted domain
-    if present_brands and base_domain not in TRUSTED_DOMAINS:
+    if present_brands and base_domain not in TRUSTED_DOMAINS and base_domain != "github.com":
         path_segments = [p for p in (lower_path or "").split("/") if p]
         has_login_in_path = any(seg in {"login", "signin", "sign-in"} for seg in path_segments)
 
@@ -619,6 +619,24 @@ def analyze_url(url: str) -> HeuristicResult:
                 "this pattern is common in Microsoft 365 phishing pages."
             )
 
+    # Targeted special case: login-github-style hosts
+    if base_domain not in TRUSTED_DOMAINS:
+        host_tokens = (lower_host or "").replace(".", "-").split("-")
+        has_login_token = any(tok in {"login", "signin", "sign-in"} for tok in host_tokens)
+        has_github_token = any(tok == "github" for tok in host_tokens)
+
+        if has_login_token and has_github_token:
+            score += 1.0
+            reasons.append(
+                "Hostname combines login and GitHub tokens on a non-trusted domain; "
+                "this pattern is common in GitHub credential phishing pages."
+            )
+
+    is_github_oauth = (
+        base_domain == "github.com"
+        and (lower_path or "").startswith("/login/oauth")
+    )
+
     # Mild portal-like heuristic to reduce over-flagging obviously internal/portal sites
     host_tokens = (lower_host or "").replace(".", "-").split("-")
     is_portal_like = any(tok in PORTAL_HOST_HINTS for tok in host_tokens)
@@ -643,6 +661,12 @@ def analyze_url(url: str) -> HeuristicResult:
                 "Hostname appears to be a normal portal/dashboard on a common TLD; "
                 "slightly reducing heuristic risk to avoid over-flagging."
             )
+
+    if is_github_oauth:
+        score -= 0.5
+        reasons.append(
+            "Recognized as a standard GitHub OAuth authorization endpoint; reduced risk."
+        )
 
 
     # Deep path
