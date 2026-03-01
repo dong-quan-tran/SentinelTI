@@ -131,7 +131,7 @@ SSO_PATH_HINTS = {
     "/authorize",
 }
 
-COMMON_GENERIC_WORDS = {"example", "examp1e"}
+COMMON_GENERIC_WORDS = {"example"}
 
 
 RAW_IP_SCORE = 2.0
@@ -574,15 +574,14 @@ def analyze_url(url: str) -> HeuristicResult:
     # Conservative typo-domain + login heuristic (e.g., examp1e.com/login)
     base_labels = (base_domain or "").split(".")
     sld = base_labels[0] if base_labels else ""
-    sld_simple = _simple_token(sld)
 
     path_segments = [p for p in (lower_path or "").split("/") if p]
     has_login_hint = any(seg in {"login", "signin", "sign-in"} for seg in path_segments)
 
-    sld_raw = sld
-    looks_like_generic_typo = any(
-        _one_char_digit_swap(sld_raw, word) for word in COMMON_GENERIC_WORDS
-    )
+    looks_like_generic_typo = False
+    if len(sld) == 7:  # exact length of "example"
+        looks_like_generic_typo = _one_char_digit_swap(sld, "example")
+
 
     if looks_like_generic_typo and has_login_hint and base_domain not in TRUSTED_DOMAINS:
         score += 1.25
