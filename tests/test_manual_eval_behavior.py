@@ -234,3 +234,17 @@ def test_login_github_com_is_malicious_and_high_risk() -> None:
 
     reasons = " ".join(result.get("reasons", []))
     assert "GitHub credential phishing pages" in reasons
+
+def test_github_oauth_authorize_stays_benign_low_risk() -> None:
+    """
+    Legitimate GitHub OAuth authorize endpoint should remain benign/low-risk
+    even though it contains login-related tokens.
+    """
+    url = "https://github.com/login/oauth/authorize"
+    result = enrich_score(url)
+
+    assert result["final_label"] == "benign"
+    assert result["risk"] == "low"
+
+    reasons = " ".join(result.get("reasons", []))
+    assert "Recognized as a standard GitHub OAuth authorization endpoint" in reasons
