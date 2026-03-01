@@ -15,6 +15,7 @@ from sentinelti.scoring import enrich_score
         "http://example.xyz/login",
     ],
 )
+
 def test_obvious_phish_are_not_benign(url: str) -> None:
     """
     Obvious phishing-style URLs should never be classified as plain benign.
@@ -219,3 +220,17 @@ def test_portal_like_login_is_not_escalated_to_malicious() -> None:
     url = "https://secure.portal.example.org/account/login"
     result = enrich_score(url)
     assert result["final_label"] in {"benign", "suspicious"}
+
+def test_login_github_com_is_malicious_and_high_risk() -> None:
+    """
+    Obvious fake GitHub login domains like login-github.com
+    should be treated as malicious/high-risk phishing.
+    """
+    url = "http://login-github.com"
+    result = enrich_score(url)
+
+    assert result["final_label"] == "malicious"
+    assert result["risk"] == "high"
+
+    reasons = " ".join(result.get("reasons", []))
+    assert "GitHub credential phishing pages" in reasons
