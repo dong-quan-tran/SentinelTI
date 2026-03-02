@@ -1260,3 +1260,60 @@ Screenshots: [fragment heuristic snippet ____], [manual_eval example with fragme
 - Add a **“login + weird/very long domain/TLD”** heuristic.  
 - Introduce a conservative, generic typo/homoglyph detector for non-brand words plus login paths.  
 - Fix or replace the leetspeak normalization bug impacting Office365-like domains.
+
+Here’s a concise, human-style progress log for today, with placeholders where you can drop screenshots as proof.
+
+***
+
+## Progress Log – 2026‑03‑01
+
+### 1) Tightened Office 365/Microsoft login phishing heuristic  
+**Commit:** `Tighten Office 365/Microsoft login phishing heuristic`  
+**Summary:**  
+- Expanded the Office 365/Microsoft heuristic to look for `office365`, `microsoftonline`, and `o365` tokens in hostnames combined with login-related tokens (`login`, `signin`, `sign-in`).  
+- Limited the rule to non‑trusted base domains so legit Microsoft infrastructure is not penalized.  
+- Improved the reason text to clearly call out Microsoft 365 credential phishing patterns.
+
+![alt text](<Screenshot 2026-03-01 232357.png>)
+
+***
+
+### 2) Refined literal IP host classification and reasons  
+**Commit:** `Refine literal IP host classification and reasons`  
+**Summary:**  
+- Split IP handling into clearer categories: loopback, private RFC1918, reserved/documentation, and public raw IP.  
+- Marked loopback and private IPs as internal, with explicit reasons about internal exposure and local-only services.  
+- Added more precise wording for reserved/documentation ranges and public raw IPs, aligning behavior with your documented limitations around IP/infrastructure scope.
+
+![alt text](<Screenshot 2026-03-01 232435.png>)
+
+***
+
+### 3) Added manual eval tests for loopback, private, and documentation IP hosts  
+**Commit:** `Add manual eval tests for loopback, private, and documentation IP hosts`  
+**Summary:**  
+- Introduced parameterized tests to ensure:  
+  - Loopback and private IP URLs are never classified as plain benign.  
+  - Documentation-only IP ranges (RFC 5737) get some heuristic signal instead of being treated as obviously safe.  
+- Strengthened confidence that internal-looking and test-net IPs are handled consistently going forward.
+
+![alt text](<Screenshot 2026-03-01 232530.png>)
+
+***
+
+### 5) Added test for raw public IP  
+**Commit:** `Add test for raw public IP`  
+**Summary:**  
+- Added a focused test that sends a URL with a bare public IP host and asserts that a raw-IP-related heuristic reason is attached.  
+- Ensured that using a direct public IP is always visible in the explanation layer, reflecting how bare IP infrastructure is often used in malicious hosting.
+
+![alt text](<Screenshot 2026-03-01 232610.png>)
+
+***
+
+### 6) Expanded manual eval tests for legitimate SSO/OAuth URLs  
+**Commit:** `Expand manual eval tests for legitimate SSO/OAuth URLs`  
+**Summary:**  
+- Broadened the SSO/OAuth test set with additional realistic IdP and OAuth authorize URLs (e.g., Google, Microsoft, generic `auth.example.com`).  
+- Guarded against over-aggressive heuristics on deep, token-heavy SSO flows, helping keep legitimate login/SSO pages benign and low-risk.
+
