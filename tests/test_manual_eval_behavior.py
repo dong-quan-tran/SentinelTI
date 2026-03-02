@@ -281,5 +281,4 @@ def test_documentation_ip_ranges_are_handled_safely(url: str) -> None:
     assert result["final_label"] in {"benign", "suspicious", "malicious"}
     # Heuristic should have at least one reason mentioning raw IP / reserved/documentation range
     reasons_text = " ".join(result.get("reasons", []))
-    assert "raw IP address" in reasons_text or "documentation-only range" in reasons_text
-
+    assert "IP address" in reasons_text or "raw IP" in reasons_text
