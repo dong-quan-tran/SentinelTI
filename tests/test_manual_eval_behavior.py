@@ -282,3 +282,14 @@ def test_documentation_ip_ranges_are_handled_safely(url: str) -> None:
     # Heuristic should have at least one reason mentioning raw IP / reserved/documentation range
     reasons_text = " ".join(result.get("reasons", []))
     assert "IP address" in reasons_text or "raw IP" in reasons_text
+
+def test_public_raw_ip_is_flagged_by_heuristics() -> None:
+    """
+    URLs that use a bare public IP as host should receive some heuristic signal,
+    since bare-IP infrastructure is common in malicious hosting.
+    """
+    url = "http://93.184.216.34/login"  # example.org's IP in many docs
+    result = enrich_score(url)
+
+    reasons_text = " ".join(result.get("reasons", []))
+    assert "raw public IP address" in reasons_text or "raw IP address as host" in reasons_text
