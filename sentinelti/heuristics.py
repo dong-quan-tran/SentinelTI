@@ -623,6 +623,7 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
 
+
     # Targeted special case: login-github-style hosts
     if base_domain not in TRUSTED_DOMAINS:
         host_tokens = (lower_host or "").replace(".", "-").split("-")
