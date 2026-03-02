@@ -262,26 +262,32 @@ def analyze_url(url: str) -> HeuristicResult:
         ip_obj = None
 
     if ip_obj is not None:
-        # Private or loopback: internal-looking
-        if ip_obj.is_private or ip_obj.is_loopback:
+        # Loopback: 127.0.0.0/8
+        if ip_obj.is_loopback:
             is_internal = True
             score += RAW_IP_SCORE
             reasons.append(
-                "URL host resolves to a private or local IP address "
-                "(e.g., internal or loopback), which may indicate internal exposure or SSRF risk."
+                "URL host is a loopback IP (127.0.0.0/8), typically used for local-only services."
             )
-        # Reserved / documentation ranges (e.g., 192.0.2.x, 198.51.100.x, 203.0.113.x)
+        # Private RFC1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+        elif ip_obj.is_private:
+            is_internal = True
+            score += RAW_IP_SCORE
+            reasons.append(
+                "URL host is a private RFC1918 IP address, which may indicate internal service exposure."
+            )
+        # Reserved / documentation ranges (includes RFC 5737 example nets)
         elif ip_obj.is_reserved:
             score += RAW_IP_SCORE
             reasons.append(
-                "URL uses a raw IP address from a reserved/documentation range, "
+                "URL uses a raw IP address from a reserved or documentation-only range, "
                 "which is uncommon in normal browsing."
             )
         else:
             # Public raw IP
             score += RAW_IP_SCORE
             reasons.append(
-                "URL uses a raw IP address as host (common in malicious infrastructure)."
+                "URL uses a raw public IP address as host, which is common in malicious infrastructure."
             )
     else:
         if lower_host in {"localhost", "local"}:
@@ -292,6 +298,7 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
     features["is_internal"] = is_internal
+
             
 
     # Common redirect-style parameter names to check
