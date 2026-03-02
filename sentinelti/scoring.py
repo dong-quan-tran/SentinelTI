@@ -124,11 +124,24 @@ def enrich_score(url: str) -> Dict[str, Any]:
             "Flagged primarily by the ML classifier score."
         )
 
+    heuristic_dict = asdict(heur)
+
+    infra = {
+        "ip": None,  # to be filled later when you implement domain->IP resolution
+        "ip_class": None,  # to be filled later when you reuse IP classification for resolved IPs
+        "is_internal": heuristic_dict.get("features", {}).get("is_internal"),
+        "tld": heuristic_dict.get("features", {}).get("tld"),
+        "asn": None,        # placeholder for future ASN/provider mapping
+        "reputation": None, # placeholder for future reputation signals
+    }
+
     return {
         **ml_result,
-        "heuristic": asdict(heur),
+        "heuristic": heuristic_dict,
         "final_label": final_label,
         "risk": risk,
         "reasons": reasons,
+        "infrastructure": infra,
     }
+
 
