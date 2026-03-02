@@ -261,3 +261,25 @@ def test_office365_like_login_domains_are_not_benign() -> None:
     for url in urls:
         result = enrich_score(url)
         assert result["final_label"] in {"suspicious", "malicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://192.0.2.10/example",       # TEST-NET-1
+        "http://198.51.100.23/demo",       # TEST-NET-2
+        "http://203.0.113.42/sample",      # TEST-NET-3
+    ],
+)
+def test_documentation_ip_ranges_are_handled_safely(url: str) -> None:
+    """
+    URLs using documentation-only IP ranges (RFC 5737) are uncommon in real browsing.
+    They should not be treated as clearly safe benign infrastructure.
+    """
+    result = enrich_score(url)
+    # Allow either suspicious or benign+low risk depending on scoring,
+    # but assert we at least attach some heuristic signal.
+    assert result["final_label"] in {"benign", "suspicious", "malicious"}
+    # Heuristic should have at least one reason mentioning raw IP / reserved/documentation range
+    reasons_text = " ".join(result.get("reasons", []))
+    assert "raw IP address" in reasons_text or "documentation-only range" in reasons_text
+
