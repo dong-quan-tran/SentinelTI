@@ -1317,3 +1317,26 @@ Here’s a concise, human-style progress log for today, with placeholders where 
 - Broadened the SSO/OAuth test set with additional realistic IdP and OAuth authorize URLs (e.g., Google, Microsoft, generic `auth.example.com`).  
 - Guarded against over-aggressive heuristics on deep, token-heavy SSO flows, helping keep legitimate login/SSO pages benign and low-risk.
 
+## Progress Log – 2026‑03‑02
+
+### 1) Added infrastructure metadata to enrich_score output  
+- Extended the enriched result to include an `infrastructure` section with fields for `ip`, `ip_class`, `is_internal`, `tld`, `asn`, and `reputation`.  
+- Wired `is_internal` and `tld` through from heuristic features, leaving the other fields as placeholders for future infrastructure work.  
+
+![alt text](<Screenshot 2026-03-02 185051.png>)
+
+***
+
+### 2) Introduced hostname-to-IP resolver helper  
+- Created a small helper function to resolve hostnames to IPv4 addresses in a best‑effort, failure‑tolerant way.  
+- Added tests that monkeypatch the underlying resolution call to verify both success and failure paths without relying on real DNS.  
+
+![alt text](<Screenshot 2026-03-02 185202.png>)
+
+***
+
+### 3) Began wiring domain→IP into enrich_score  
+- Started using the resolver in the scoring/enrichment layer to populate the `infrastructure["ip"]` field for non‑IP hosts, without changing any labeling or scoring logic yet.  
+- Kept tests focused on structure (presence of the `infrastructure` block and keys) while preparing for future IP‑class and reputation integration.  
+
+Screenshot: in commit 1's screenshot
