@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from .heuristics import analyze_url
 from .ml.service import score_url as ml_score_url  # adjust path if needed
+from .resolution import resolve_hostname_to_ip
 
 
 TRUSTED_DOMAINS = {
@@ -90,6 +91,14 @@ def enrich_score(url: str) -> Dict[str, Any]:
             final_label = "benign"
             risk = "low"
 
+    # Best-effort resolution for non-IP hosts; failures are treated as None.
+    resolved_ip: str | None = None
+    try:
+        # If host is already an IP, we can skip resolution.
+        resolved_ip = resolve_hostname_to_ip(host)
+    except Exception:
+        resolved_ip = None
+
 
         # Build human-readable reasons
     reasons: list[str] = []
@@ -127,7 +136,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
     heuristic_dict = asdict(heur)
 
     infra = {
-        "ip": None,  # to be filled later when you implement domain->IP resolution
+        "ip": resolved_ip,  # to be filled later when you implement domain->IP resolution
         "ip_class": None,  # to be filled later when you reuse IP classification for resolved IPs
         "is_internal": heuristic_dict.get("features", {}).get("is_internal"),
         "tld": heuristic_dict.get("features", {}).get("tld"),
