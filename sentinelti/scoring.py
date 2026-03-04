@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Dict
 
+import ipaddress
+
 from urllib.parse import urlparse
 
 from .heuristics import analyze_url
@@ -99,9 +101,9 @@ def enrich_score(url: str) -> Dict[str, Any]:
     except Exception:
         resolved_ip = None
 
-
-        # Build human-readable reasons
+    # Build human-readable reasons
     reasons: list[str] = []
+
 
     # 1) Always include model confidence
     label = int(ml_result["label"])
@@ -133,16 +135,36 @@ def enrich_score(url: str) -> Dict[str, Any]:
             "Flagged primarily by the ML classifier score."
         )
 
+    # Classify resolved IP (if any) using ipaddress
+    ip_class = None
+    if resolved_ip:
+        try:
+            ip_obj = ipaddress.ip_address(resolved_ip)
+        except ValueError:
+            ip_obj = None
+
+        if ip_obj is not None:
+            if ip_obj.is_loopback:
+                ip_class = "loopback"
+            elif ip_obj.is_private:
+                ip_class = "private"
+            elif ip_obj.is_reserved:
+                ip_class = "reserved"
+            else:
+                ip_class = "public"
+
+
     heuristic_dict = asdict(heur)
 
     infra = {
-        "ip": resolved_ip,  # to be filled later when you implement domain->IP resolution
-        "ip_class": None,  # to be filled later when you reuse IP classification for resolved IPs
+        "ip": resolved_ip,
+        "ip_class": ip_class,
         "is_internal": heuristic_dict.get("features", {}).get("is_internal"),
         "tld": heuristic_dict.get("features", {}).get("tld"),
-        "asn": None,        # placeholder for future ASN/provider mapping
-        "reputation": None, # placeholder for future reputation signals
+        "asn": None,
+        "reputation": None,
     }
+
 
     return {
         **ml_result,
