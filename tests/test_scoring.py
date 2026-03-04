@@ -1,5 +1,7 @@
+import socket
 from sentinelti.scoring import enrich_score
-
+from sentinelti import resolution
+from sentinelti import scoring
 
 def test_enrich_score_includes_infrastructure_metadata() -> None:
     result = enrich_score("http://example.com")
@@ -24,6 +26,7 @@ def test_enrich_score_has_expected_keys():
     assert isinstance(result["reasons"], list)
     assert isinstance(result["heuristic"], dict)
 
+
 def test_enrich_score_includes_infrastructure_metadata() -> None:
     result = enrich_score("http://example.com")
 
@@ -36,3 +39,15 @@ def test_enrich_score_includes_infrastructure_metadata() -> None:
     # ip_class may be None or one of the known categories
     if infra["ip_class"] is not None:
         assert infra["ip_class"] in {"loopback", "private", "reserved", "public"}
+
+
+def test_external_hostname_resolving_to_private_ip_adds_infra_note(monkeypatch):
+    def fake_resolve(host: str) -> str:
+        assert host == "example.com"
+        return "10.0.0.42"
+
+    monkeypatch.setattr(scoring, "resolve_hostname_to_ip", fake_resolve)
+
+    result = scoring.enrich_score("http://example.com/login")
+    reasons_text = " ".join(result["reasons"])
+    assert "Hostname resolves to an internal or loopback IP address" in reasons_text
