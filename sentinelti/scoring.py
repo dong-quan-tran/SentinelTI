@@ -30,6 +30,15 @@ TRUSTED_DOMAINS = {
     # Add more as we see fit
 }
 
+# Minimal local IP reputation hook: a small set of known suspicious IPs.
+# This is intentionally tiny and can be expanded or replaced by external feeds later.
+KNOWN_SUSPICIOUS_IPS = {
+    # Example placeholder IPs; replace with any real data you have
+    "203.0.113.66",
+    "198.51.100.200",
+}
+
+
 def enrich_score(url: str) -> Dict[str, Any]:
     """
     Run the ML model and heuristics on a URL and return an enriched result.
@@ -164,9 +173,19 @@ def enrich_score(url: str) -> Dict[str, Any]:
             )
             # Very small bump to avoid over-influencing final_label
             h += 0.25
-            
+
     if infra_note:
         reasons.append(infra_note)
+
+    # Minimal local reputation signal for resolved IPs
+    reputation: str | None = None
+    if resolved_ip and resolved_ip in KNOWN_SUSPICIOUS_IPS:
+        reputation = "suspicious"
+        # Very small bump to avoid over-influencing final_label
+        h += 0.25
+        reasons.append(
+            "Resolved IP is in a locally maintained list of suspicious infrastructure."
+        )
 
 
     heuristic_dict = asdict(heur)
@@ -177,7 +196,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
         "is_internal": heuristic_dict.get("features", {}).get("is_internal"),
         "tld": heuristic_dict.get("features", {}).get("tld"),
         "asn": None,
-        "reputation": None,
+        "reputation": reputation,
     }
 
 
