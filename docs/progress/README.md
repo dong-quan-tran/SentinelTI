@@ -1340,3 +1340,38 @@ Here’s a concise, human-style progress log for today, with placeholders where 
 - Kept tests focused on structure (presence of the `infrastructure` block and keys) while preparing for future IP‑class and reputation integration.  
 
 Screenshot: in commit 1's screenshot
+
+*** Progress Log – 2026‑03‑03
+
+Resolved IP classification and infra metadata
+
+Extended enrich_score to perform best-effort DNS resolution for hostnames.
+
+Classified resolved IPs as loopback, private, reserved, or public using ipaddress, and stored them in infrastructure["ip"] and ["ip_class"].
+
+Updated tests to assert the structure and allowed values of infra metadata.
+
+Infra-based heuristic for internal resolution
+
+Added a mild heuristic when an external-looking hostname resolves to a private or loopback IP, slightly increasing the heuristic score and adding an explanation note.
+
+Wrote a deterministic test by monkeypatching scoring.resolve_hostname_to_ip to ensure the infra note appears when expected.
+
+Updated IP and infrastructure limitation text
+
+Revised the “IP and infrastructure scope” section in heuristics.py to reflect that:
+
+Literal IPs and resolved IPs are classified and scored.
+
+A basic infra-based signal now exists.
+
+External reputation/hosting provider integrations are still not implemented.
+
+Local IP reputation hook
+
+Introduced a small KNOWN_SUSPICIOUS_IPS set in scoring.py as a minimal local reputation source.
+
+When a resolved IP hits this list, infrastructure["reputation"] is set to "suspicious", a tiny heuristic bump is applied, and a clear reason is added.
+
+Added tests to verify that the reputation flag and reason appear when a hostname resolves to a locally marked suspicious IP.
+
