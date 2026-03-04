@@ -14,9 +14,10 @@ ML classifier output.
 Current limitations of heuristic-based URL analysis (v1)
 
 4. IP and infrastructure scope
-   - The heuristics classify literal IP hosts as private, loopback, reserved, or public and adjust risk accordingly,
-     but they still do not resolve domain names to IPs or use external infrastructure signals
-     (e.g. hosting provider, age, or reputation services).
+   - Literal IP hosts are classified as loopback, private, reserved, or public and scored accordingly.
+   - The scoring layer now performs best-effort DNS resolution for hostnames and classifies resolved IPs into the same categories.
+   - A mild infra-based heuristic is applied when an external-looking hostname resolves to an internal or loopback IP.
+   - External infrastructure and reputation services (e.g., hosting provider, age, commercial IP/domain reputation feeds) are still not integrated.
 
 5. Deep paths and complex SSO flows
    - Deep paths and nested URLs contribute to the score, with lighter treatment for SSO/OAuth-style endpoints.
