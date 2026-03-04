@@ -125,6 +125,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
             + "; ".join(heuristic_reasons)
         )
 
+
     # 3) Fallback messages based on final_label
     if not heuristic_reasons and final_label == "benign":
         reasons.append(
@@ -152,6 +153,20 @@ def enrich_score(url: str) -> Dict[str, Any]:
                 ip_class = "reserved"
             else:
                 ip_class = "public"
+
+    # Mild infra-based signal: external-looking host resolving to internal IP
+    infra_note: str | None = None
+    if host and not host.replace(".", "").isdigit():  # rough check: not a bare IPv4 literal
+        if ip_class in {"private", "loopback"}:
+            infra_note = (
+                "Hostname resolves to an internal or loopback IP address; "
+                "this can indicate tunneling, SSRF targets, or misconfigured internal services."
+            )
+            # Very small bump to avoid over-influencing final_label
+            h += 0.25
+            
+    if infra_note:
+        reasons.append(infra_note)
 
 
     heuristic_dict = asdict(heur)
