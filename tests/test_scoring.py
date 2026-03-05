@@ -33,12 +33,15 @@ def test_enrich_score_includes_infrastructure_metadata() -> None:
     assert "infrastructure" in result
     infra = result["infrastructure"]
 
-    for key in ["ip", "ip_class", "is_internal", "tld", "asn", "reputation"]:
+    for key in ["ip", "ip_class", "is_internal", "tld", "asn", "provider", "reputation"]:
         assert key in infra
 
     # ip_class may be None or one of the known categories
     if infra["ip_class"] is not None:
         assert infra["ip_class"] in {"loopback", "private", "reserved", "public"}
+
+    # reputation should be either unknown or suspicious at this stage
+    assert infra["reputation"] in {"unknown", "suspicious"}
 
 
 def test_external_hostname_resolving_to_private_ip_adds_infra_note(monkeypatch):
