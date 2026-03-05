@@ -178,7 +178,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
         reasons.append(infra_note)
 
     # Minimal local reputation signal for resolved IPs
-    reputation: str | None = None
+    reputation: str | None = "unknown"
     if resolved_ip and resolved_ip in KNOWN_SUSPICIOUS_IPS:
         reputation = "suspicious"
         # Very small bump to avoid over-influencing final_label
@@ -187,7 +187,6 @@ def enrich_score(url: str) -> Dict[str, Any]:
             "Resolved IP is in a locally maintained list of suspicious infrastructure."
         )
 
-
     heuristic_dict = asdict(heur)
 
     infra = {
@@ -195,7 +194,8 @@ def enrich_score(url: str) -> Dict[str, Any]:
         "ip_class": ip_class,
         "is_internal": heuristic_dict.get("features", {}).get("is_internal"),
         "tld": heuristic_dict.get("features", {}).get("tld"),
-        "asn": None,
+        "asn": None,       # placeholder for future ASN lookup
+        "provider": None,  # placeholder for future hosting provider mapping
         "reputation": reputation,
     }
 
