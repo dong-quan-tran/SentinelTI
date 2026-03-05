@@ -2,6 +2,7 @@ import socket
 from sentinelti.scoring import enrich_score
 from sentinelti import resolution
 from sentinelti import scoring
+import pytest
 
 
 def test_enrich_score_has_expected_keys():
@@ -59,3 +60,16 @@ def test_local_suspicious_ip_sets_reputation_and_reason(monkeypatch):
     reasons_text = " ".join(result["reasons"])
     assert "locally maintained list of suspicious infrastructure" in reasons_text
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com/login",
+        "http://192.168.0.1/login",
+    ],
+)
+def test_infrastructure_metadata_present_for_domains_and_ips(url: str) -> None:
+    result = enrich_score(url)
+    infra = result["infrastructure"]
+
+    for key in ["ip", "ip_class", "is_internal", "tld", "asn", "provider", "reputation"]:
+        assert key in infra
