@@ -65,6 +65,7 @@ def test_local_suspicious_ip_sets_reputation_and_reason(monkeypatch):
     [
         "http://example.com/login",
         "http://192.168.0.1/login",
+        "http://93.184.216.34/login",
     ],
 )
 def test_infrastructure_metadata_present_for_domains_and_ips(url: str) -> None:
