@@ -19,6 +19,8 @@ from .heuristics import analyze_url
 from .ml.service import score_url as ml_score_url  # adjust path if needed
 from .resolution import resolve_hostname_to_ip
 
+from .reputation import lookup_ip_reputation
+
 
 TRUSTED_DOMAINS = {
     "google.com",
