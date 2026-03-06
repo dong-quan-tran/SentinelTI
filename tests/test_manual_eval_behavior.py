@@ -293,3 +293,18 @@ def test_public_raw_ip_is_flagged_by_heuristics() -> None:
 
     reasons_text = " ".join(result.get("reasons", []))
     assert "raw public IP address" in reasons_text or "raw IP address as host" in reasons_text
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://93.184.216.34/login",
+        "http://203.0.113.42/signin",
+    ],
+)
+def test_login_on_public_ip_is_not_benign(url: str) -> None:
+    """
+    Login flows directly on bare public IPs should not be plain benign.
+    They should be at least suspicious.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
