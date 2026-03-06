@@ -300,7 +300,20 @@ def analyze_url(url: str) -> HeuristicResult:
 
     features["is_internal"] = is_internal
 
-            
+    # Extra: bare public IP combined with login path
+    is_public_ip = ip_obj is not None and not (
+        ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved
+    )
+    if is_public_ip:
+        path_segments = [p for p in (lower_path or "").split("/") if p]
+        has_login_hint = any(seg in {"login", "signin", "sign-in"} for seg in path_segments)
+        if has_login_hint:
+            score += 0.5
+            reasons.append(
+                "Login path is hosted directly on a bare public IP address, "
+                "which is a common pattern in low-reputation phishing infrastructure."
+            )
+
 
     # Common redirect-style parameter names to check
     redirect_param_names = {
