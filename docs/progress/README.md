@@ -1375,3 +1375,17 @@ When a resolved IP hits this list, infrastructure["reputation"] is set to "suspi
 
 Added tests to verify that the reputation flag and reason appear when a hostname resolves to a locally marked suspicious IP.
 
+## Progress Log – 2026‑03‑05
+
+1) Strengthened IP-based phishing heuristics  
+- Added a heuristic in the URL analyzer so that login flows served directly from a bare public IP (e.g., `http://93.184.216.34/login`) receive an additional risk bump and a clear reason about low‑reputation infrastructure.  
+- Ensured the new rule reuses existing IP classification (loopback/private/reserved/public) rather than introducing duplicate logic.
+
+2) Expanded infrastructure metadata coverage  
+- Verified that infrastructure metadata (`ip`, `ip_class`, `is_internal`, `tld`, `asn`, `provider`, `reputation`) is present and correctly shaped for both domain-based URLs and literal IP URLs.  
+- Added tests that run the scoring pipeline on domain hosts, private IPs, and public IPs, asserting that the infra block is always present and structurally consistent.
+
+3) Prepared for future external reputation integration  
+- Refined the infrastructure reputation field so it now defaults to `"unknown"` and is explicitly set to `"suspicious"` when a resolved IP hits the local suspicious-IP list.  
+- Introduced a clean stub interface for future IP reputation lookups, defining how external feeds or services can later plug into the scoring layer without changing its public API.
+
