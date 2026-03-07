@@ -191,14 +191,26 @@ def enrich_score(url: str) -> Dict[str, Any]:
 
     heuristic_dict = asdict(heur)
 
+    infra_flag = "normal"
+    # Internal-looking hosts (literal or resolved) get 'internal'
+    is_internal = heuristic_dict.get("features", {}).get("is_internal")
+    if is_internal:
+        infra_flag = "internal"
+
+    # Clearly suspicious infra signals upgrade the flag
+    if reputation == "suspicious" or ip_class in {"private", "loopback"} and not is_internal:
+        infra_flag = "suspicious_infra"
+
+
     infra = {
         "ip": resolved_ip,
         "ip_class": ip_class,
-        "is_internal": heuristic_dict.get("features", {}).get("is_internal"),
+        "is_internal": is_internal,
         "tld": heuristic_dict.get("features", {}).get("tld"),
-        "asn": None,       # placeholder for future ASN lookup
-        "provider": None,  # placeholder for future hosting provider mapping
+        "asn": None,
+        "provider": None,
         "reputation": reputation,
+        "infra_flag": infra_flag,
     }
 
 
