@@ -308,3 +308,22 @@ def test_login_on_public_ip_is_not_benign(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+import pytest
+from sentinelti.scoring import enrich_score
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://93.184.216.34/payload.exe",
+        "http://203.0.113.42/update.scr",
+    ],
+)
+def test_executable_download_on_public_ip_is_not_benign(url: str) -> None:
+    """
+    Executable downloads served directly from bare public IPs
+    should not be plain benign.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
