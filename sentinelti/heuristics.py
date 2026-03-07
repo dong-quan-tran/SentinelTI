@@ -505,6 +505,18 @@ def analyze_url(url: str) -> HeuristicResult:
                 "which is common in malware delivery."
             )
 
+    # Extra: executable download hosted directly on a bare public IP
+    is_public_ip = ip_obj is not None and not (
+        ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved
+    )
+    if is_public_ip and filename and any(filename.endswith(ext) for ext in EXECUTABLE_EXTS):
+        score += 0.5
+        reasons.append(
+            "Executable or script download is hosted directly on a bare public IP address, "
+            "which is a common pattern in transient malware infrastructure."
+        )
+
+
     # Unusual TLD
     tld = (ext.suffix or "").lower()
     features["tld"] = tld
