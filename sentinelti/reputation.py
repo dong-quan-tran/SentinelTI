@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Iterable, Set
+
+# You can either import this from scoring or define it here and import it there.
+KNOWN_SUSPICIOUS_IPS: Set[str] = {
+    "203.0.113.66",
+    "198.51.100.200",
+}
 
 
 class IPReputationResult:
@@ -9,11 +15,23 @@ class IPReputationResult:
         self.source = source          # e.g. 'local-list', 'external-feed-name'
 
 
-def lookup_ip_reputation(ip: str) -> IPReputationResult:
+def lookup_ip_reputation(
+    ip: str,
+    suspicious_ips: Optional[Iterable[str]] = None,
+) -> IPReputationResult:
     """
     Placeholder for IP reputation lookup.
 
-    Currently returns 'unknown' for all IPs. In future, this can be wired to
-    external feeds or services without changing the scoring logic.
+    Currently uses a small local suspicious-IP list when provided, otherwise
+    returns 'unknown' for all IPs.
     """
-    return IPReputationResult(reputation="unknown", source=None)
+    if not ip:
+        return IPReputationResult(reputation="unknown", source=None)
+
+    ips = set(suspicious_ips) if suspicious_ips is not None else KNOWN_SUSPICIOUS_IPS
+
+    if ips and ip in ips:
+        return IPReputationResult(reputation="suspicious", source="local-list")
+
+    return IPReputationResult(reputation="unknown", source="local-list" if ips else None)
+
