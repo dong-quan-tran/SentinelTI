@@ -180,14 +180,14 @@ def enrich_score(url: str) -> Dict[str, Any]:
         reasons.append(infra_note)
 
     # Minimal local reputation signal for resolved IPs
-    reputation: str | None = "unknown"
-    if resolved_ip and resolved_ip in KNOWN_SUSPICIOUS_IPS:
-        reputation = "suspicious"
-        # Very small bump to avoid over-influencing final_label
+    rep_result = lookup_ip_reputation(resolved_ip) if resolved_ip else None
+    reputation: str | None = rep_result.reputation if rep_result else "unknown"
+    if reputation == "suspicious":
         h += 0.25
         reasons.append(
             "Resolved IP is in a locally maintained list of suspicious infrastructure."
         )
+
 
     heuristic_dict = asdict(heur)
 
@@ -213,6 +213,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
         "provider": None,
         "reputation": reputation,
         "infra_flag": infra_flag,
+        "reputation_source": rep_result.source if rep_result else None,
     }
 
     return {
