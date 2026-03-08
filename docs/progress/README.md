@@ -1389,3 +1389,13 @@ Added tests to verify that the reputation flag and reason appear when a hostname
 - Refined the infrastructure reputation field so it now defaults to `"unknown"` and is explicitly set to `"suspicious"` when a resolved IP hits the local suspicious-IP list.  
 - Introduced a clean stub interface for future IP reputation lookups, defining how external feeds or services can later plug into the scoring layer without changing its public API.
 
+Progress log: 03/07/2026
+
+Added a new heuristic: executable downloads hosted directly on bare public IPs now slightly increase the heuristic score and produce an explicit reason string.
+​
+
+Introduced an infra_flag summary field (normal, internal, suspicious_infra) in the enriched output, derived from internal IP detection, local reputation, and IP class metadata.
+​
+
+Evolved the lookup_ip_reputation stub to use a local KNOWN_SUSPICIOUS_IPS list, wired it into enrich_score, exposed reputation and reputation_source in the infrastructure block, and added tests to verify suspicious IPs affect both reputation and infra metadata.
+
