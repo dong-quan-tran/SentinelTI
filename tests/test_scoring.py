@@ -19,7 +19,16 @@ def test_enrich_score_includes_infrastructure_metadata() -> None:
     result = enrich_score("http://example.com")
     infra = result["infrastructure"]
 
-    for key in ["ip", "ip_class", "is_internal", "tld", "asn", "provider", "reputation", "infra_flag"]:
+    for key in [
+        "ip",
+        "ip_class",
+        "is_internal",
+        "tld",
+        "asn",
+        "provider",
+        "reputation",
+        "infra_flag",
+    ]:
         assert key in infra
 
     if infra["ip_class"] is not None:
