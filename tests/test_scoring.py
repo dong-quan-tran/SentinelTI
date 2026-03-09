@@ -80,3 +80,17 @@ def test_infrastructure_metadata_present_for_domains_and_ips(url: str) -> None:
 
     for key in ["ip", "ip_class", "is_internal", "tld", "asn", "provider", "reputation"]:
         assert key in infra
+
+def test_external_hostname_resolving_to_private_ip_sets_suspicious_infra(monkeypatch) -> None:
+    def fake_resolve(host: str) -> str:
+        assert host == "example.com"
+        return "192.168.1.10"  # private IP
+
+    monkeypatch.setattr(scoring, "resolve_hostname_to_ip", fake_resolve)
+
+    result = scoring.enrich_score("http://example.com/login")
+    infra = result["infrastructure"]
+
+    assert infra["ip"] == "192.168.1.10"
+    assert infra["ip_class"] == "private"
+    assert infra["infra_flag"] == "suspicious_infra"
