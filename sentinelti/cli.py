@@ -160,7 +160,28 @@ def main() -> None:
             print(json.dumps(results, indent=indent))
         else:
             for result in results:
+                infra = result.get("infrastructure", {})
+                infra_flag = infra.get("infra_flag")
+                reputation = infra.get("reputation")
+
+                if infra_flag == "internal":
+                    infra_summary = (
+                        "Infrastructure: internal or loopback IP "
+                        "(possible SSRF or internal service)."
+                    )
+                elif infra_flag == "suspicious_infra":
+                    infra_summary = (
+                        "Infrastructure: suspicious "
+                        "(local bad-IP list or external host resolving internal)."
+                    )
+                else:
+                    infra_summary = "Infrastructure: normal (no strong infra indicators)."
+
+                if reputation and reputation != "unknown":
+                    infra_summary += f" IP reputation: {reputation} (local)."
+
                 print(result)
+                print(infra_summary)
 
     elif args.command == "score-file":
         if not args.input_path.exists():
