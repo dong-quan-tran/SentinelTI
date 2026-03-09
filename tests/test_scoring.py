@@ -94,3 +94,13 @@ def test_external_hostname_resolving_to_private_ip_sets_suspicious_infra(monkeyp
     assert infra["ip"] == "192.168.1.10"
     assert infra["ip_class"] == "private"
     assert infra["infra_flag"] == "suspicious_infra"
+
+def test_literal_internal_ip_host_sets_internal_flag() -> None:
+    # No monkeypatch needed: host is already an IP, resolution may return it directly
+    result = scoring.enrich_score("http://192.168.1.20/admin")
+    infra = result["infrastructure"]
+
+    assert infra["ip"] in {"192.168.1.20", None}  # depending on resolution behavior
+    assert infra["ip_class"] in {"private", None}
+    assert infra["is_internal"] is True
+    assert infra["infra_flag"] in {"internal", "suspicious_infra"}
