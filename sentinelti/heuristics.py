@@ -14,28 +14,20 @@ ML classifier output.
 Current limitations of heuristic-based URL analysis (v1)
 
 IP and infrastructure scope
-Literal IP hosts and resolved IPs are classified as loopback, private, reserved, or public and lightly influence scoring.
 The scoring layer performs best-effort DNS resolution for hostnames and exposes infrastructure metadata (IP, class, internal flag, TLD, local IP reputation, and a summarized infra flag) in the enriched output.
 Mild infra-based heuristics are applied when an external-looking hostname resolves to an internal or loopback IP, or when the resolved IP appears in a small, locally maintained suspicious‑IP list.
 External infrastructure and reputation services (e.g., hosting provider, domain age, commercial IP/domain reputation feeds) are still not integrated; current infra signals rely only on local logic and static lists, behind a pluggable lookup_ip_reputation hook.
 
-5. Deep paths and complex SSO flows
-   - Deep paths and nested URLs contribute to the score, with lighter treatment for SSO/OAuth-style endpoints.
-     However, complex but legitimate SSO or application URLs can still be flagged as suspicious in some cases.
-
 6. Brand impersonation and typo scope
-   - Brand impersonation logic focuses on obvious brand tokens
-     (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.)
-     outside a small whitelist of trusted domains. It does not yet cover more subtle impersonation patterns
-     or use certificate/WHOIS/host reputation.
-   - Additional heuristics exist for some typo/IDN domains and for generic example-like typo domains with login paths,
-     but homograph coverage is not exhaustive.
+Brand impersonation logic focuses on obvious brand tokens (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.) outside a small whitelist of trusted domains. It does not yet cover more subtle impersonation patterns or use certificate/WHOIS/host reputation.
+Additional heuristics exist for some typo/IDN domains and for generic example-like typo domains with login paths, but homograph coverage is not exhaustive.
 
-     New heuristics (recent additions)
-   - Login on very long or unusual domains/TLDs (especially when combined with uncommon TLDs or deep subdomains).
-   - Conservative typo-domain + login detection for example-like domains (e.g. examp1e.com/login).
-   - Softer scoring for nested URLs on clearly SSO/OAuth-like endpoints to avoid over-flagging legitimate flows.
-   - Targeted handling for Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
+New heuristics (implemented in v1)
+Login on very long or unusual domains/TLDs (especially when combined with uncommon TLDs or deep subdomains).
+Conservative typo-domain + login detection for example-like domains (e.g. examp1e.com/login).
+Softer scoring for nested URLs on clearly SSO/OAuth-like endpoints to avoid over-flagging legitimate flows.
+Targeted handling for Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
+
 """
 
 from urllib.parse import parse_qsl, unquote
