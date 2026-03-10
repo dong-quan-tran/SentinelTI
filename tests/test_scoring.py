@@ -122,3 +122,8 @@ def test_deep_path_on_sso_like_endpoint_is_treated_softly() -> None:
     assert h.features["path_depth"] >= 6
     # Either no extra bump, or a smaller one
     assert not any("unusually deep path" in r for r in h.reasons)
+
+def test_url_length_feature_is_populated() -> None:
+    h = analyze_url("http://example.com/a")
+    assert "url_length" in h.features
+    assert h.features["url_length"] > 0
