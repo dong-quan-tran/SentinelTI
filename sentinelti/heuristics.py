@@ -440,6 +440,16 @@ def analyze_url(url: str) -> HeuristicResult:
             f"Contains suspicious tokens often seen in phishing URLs: {', '.join(matched_tokens)}."
         )
 
+    url_length = len(url)
+    features["url_length"] = url_length
+
+    if url_length > 2000 and not is_trusted:
+        score += 0.5
+        reasons.append(
+            "URL is unusually long for a non-trusted domain, which can indicate "
+            "obfuscated or tracking-heavy phishing flows."
+        )
+
     #login + weird/very long domain/TLD
     host_labels = (lower_host or "").split(".")
     tld = host_labels[-1] if host_labels else ""
