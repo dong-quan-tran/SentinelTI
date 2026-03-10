@@ -31,7 +31,7 @@ def test_score_url_prints_infra_summary(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cli, "enrich_score", fake_enrich)
 
     # Call the CLI with explicit argv (so we avoid sys.argv)
-    monkeypatch.setattr("sys.argv", ["sentinelti", "score-url", "http://example.com/test"])
+    monkeypatch.setattr("sys.argv", ["sentinelti", "score-urls", "http://example.com/test"])
     cli.main()
 
     out, err = capsys.readouterr()
