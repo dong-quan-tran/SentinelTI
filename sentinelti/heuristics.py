@@ -201,6 +201,10 @@ def analyze_url(url: str) -> HeuristicResult:
     path = parsed.path or ""
     query = parsed.query or ""
 
+    path_depth = max(0, path.count("/") - 1)
+
+    features["path_depth"] = path_depth
+
     lower_host = (host or "").lower()
     lower_path = path.lower()
     lower_query = query.lower()

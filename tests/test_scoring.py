@@ -3,6 +3,7 @@ from sentinelti.scoring import enrich_score
 from sentinelti import resolution
 from sentinelti import scoring
 import pytest
+from sentinelti.heuristics import analyze_url
 
 
 def test_enrich_score_has_expected_keys():
@@ -104,3 +105,8 @@ def test_literal_internal_ip_host_sets_internal_flag() -> None:
     assert infra["ip_class"] in {"private", None}
     assert infra["is_internal"] is True
     assert infra["infra_flag"] in {"internal", "suspicious_infra"}
+
+def test_path_depth_feature_is_populated() -> None:
+    h = analyze_url("http://example.com/a/b/c")
+    assert "path_depth" in h.features
+    assert h.features["path_depth"] == 3
