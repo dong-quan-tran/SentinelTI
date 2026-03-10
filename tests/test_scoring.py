@@ -110,3 +110,15 @@ def test_path_depth_feature_is_populated() -> None:
     h = analyze_url("http://example.com/a/b/c")
     assert "path_depth" in h.features
     assert h.features["path_depth"] == 3
+
+def test_deep_path_on_non_trusted_domain_increases_score() -> None:
+    h = analyze_url("http://evil.test/a/b/c/d/e/f/g")
+    assert h.features["path_depth"] >= 6
+    assert h.score > 0.0
+    assert any("unusually deep path" in r for r in h.reasons)
+
+def test_deep_path_on_sso_like_endpoint_is_treated_softly() -> None:
+    h = analyze_url("https://login.microsoftonline.com/tenant/oauth2/v2.0/authorize/a/b/c/d/e/f")
+    assert h.features["path_depth"] >= 6
+    # Either no extra bump, or a smaller one
+    assert not any("unusually deep path" in r for r in h.reasons)
