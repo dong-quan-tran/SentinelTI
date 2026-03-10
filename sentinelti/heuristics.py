@@ -15,9 +15,9 @@ Current limitations of heuristic-based URL analysis (v1)
 
 IP and infrastructure scope
 Literal IP hosts and resolved IPs are classified as loopback, private, reserved, or public and lightly influence scoring.
-The scoring layer performs best-effort DNS resolution for hostnames and exposes infrastructure metadata (IP, class, internal flag, TLD, and a basic local IP reputation flag) in the enriched output.
-Mild infra-based heuristics are applied when an external-looking hostname resolves to an internal or loopback IP, or when the resolved IP appears in a small, locally maintained suspicious-IP list.
-External infrastructure and reputation services (e.g., hosting provider, domain age, commercial IP/domain reputation feeds) are still not integrated; current infra signals rely only on local logic and static lists.
+The scoring layer performs best-effort DNS resolution for hostnames and exposes infrastructure metadata (IP, class, internal flag, TLD, local IP reputation, and a summarized infra flag) in the enriched output.
+Mild infra-based heuristics are applied when an external-looking hostname resolves to an internal or loopback IP, or when the resolved IP appears in a small, locally maintained suspicious‑IP list.
+External infrastructure and reputation services (e.g., hosting provider, domain age, commercial IP/domain reputation feeds) are still not integrated; current infra signals rely only on local logic and static lists, behind a pluggable lookup_ip_reputation hook.
 
 5. Deep paths and complex SSO flows
    - Deep paths and nested URLs contribute to the score, with lighter treatment for SSO/OAuth-style endpoints.
@@ -36,8 +36,6 @@ External infrastructure and reputation services (e.g., hosting provider, domain 
    - Conservative typo-domain + login detection for example-like domains (e.g. examp1e.com/login).
    - Softer scoring for nested URLs on clearly SSO/OAuth-like endpoints to avoid over-flagging legitimate flows.
    - Targeted handling for Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
-
-
 """
 
 from urllib.parse import parse_qsl, unquote
@@ -721,6 +719,17 @@ def analyze_url(url: str) -> HeuristicResult:
         else:
             score += DEEP_PATH_SCORE
             reasons.append("URL path is deeply nested, often used to hide payloads or phishing pages.")
+
+    # Mild signal for unusually deep paths on non-trusted, non-SSO domains
+    is_trusted = base_domain in TRUSTED_DOMAINS  # or however you already do this
+
+    if path_depth >= 6 and not is_trusted and not is_sso_like:
+        score += 0.5
+        reasons.append(
+            "URL has an unusually deep path structure for a non-trusted domain, "
+            "which can indicate complex phishing or tracking flows."
+        )
+
 
     # Deduplicate reasons while preserving order
     seen = set()
