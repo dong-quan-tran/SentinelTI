@@ -167,26 +167,29 @@ def enrich_score(url: str) -> Dict[str, Any]:
 
     # Mild infra-based signal: external-looking host resolving to internal IP
     infra_note: str | None = None
-    if host and not host.replace(".", "").isdigit():  # rough check: not a bare IPv4 literal
+    if host and not host.replace(".", "").isdigit():
         if ip_class in {"private", "loopback"}:
             infra_note = (
-                "Hostname resolves to an internal or loopback IP address; "
-                "this can indicate tunneling, SSRF targets, or misconfigured internal services."
+                "Infrastructure anomaly: external-looking hostname resolves to an internal "
+                "or loopback IP address; this can indicate DNS rebinding, tunneling, or "
+                "exposed internal services."
             )
-            # Very small bump to avoid over-influencing final_label
             h += 0.25
 
     if infra_note:
         reasons.append(infra_note)
 
+
     # Minimal local reputation signal for resolved IPs
     rep_result = lookup_ip_reputation(resolved_ip) if resolved_ip else None
     reputation: str | None = rep_result.reputation if rep_result else "unknown"
+
     if reputation == "suspicious":
         h += 0.25
         reasons.append(
-            "Resolved IP is in a locally maintained list of suspicious infrastructure."
+            "Infrastructure: resolved IP appears in a locally maintained suspicious IP list."
         )
+
 
 
     heuristic_dict = asdict(heur)
