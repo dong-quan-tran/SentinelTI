@@ -127,3 +127,13 @@ def test_url_length_feature_is_populated() -> None:
     h = analyze_url("http://example.com/a")
     assert "url_length" in h.features
     assert h.features["url_length"] > 0
+
+def test_brand_token_in_path_not_domain_increases_score() -> None:
+    h = analyze_url("http://randomsite.com/paypal-login")
+    assert h.score > 0.0
+    assert any("Brand token 'paypal'" in r for r in h.reasons)
+
+
+def test_brand_token_in_trusted_domain_does_not_trigger_path_brand_reason() -> None:
+    h = analyze_url("https://paypal.com/signin")
+    assert not any("Brand token 'paypal'" in r for r in h.reasons)
