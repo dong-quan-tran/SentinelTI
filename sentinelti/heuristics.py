@@ -195,7 +195,16 @@ def analyze_url(url: str) -> HeuristicResult:
 
     features["path_depth"] = path_depth
 
+    if ext.domain and ext.suffix:
+        base_domain = f"{ext.domain}.{ext.suffix}"
+    else:
+        base_domain = host
+
     lower_host = (host or "").lower()
+
+    lower_url = url.lower()
+    lower_base = base_domain.lower()
+
     lower_path = path.lower()
     lower_query = query.lower()
 
@@ -230,6 +239,14 @@ def analyze_url(url: str) -> HeuristicResult:
     if any(hint in host_l for hint in SSO_HOST_HINTS) or any(hint in path_l for hint in SSO_PATH_HINTS):
         is_sso_like = True
 
+    for brand in BRAND_TOKENS:
+        if brand in lower_url and brand not in lower_base:
+            score += 0.5
+            reasons.append(
+                f"Brand token '{brand}' appears in the URL path or query but not in the domain, "
+                "which is common in brand-impersonation phishing pages."
+            )
+            break
 
     #fragment handling for nested URL detection (e.g. http://example.com/#http://evil.com)
     fragment = parsed.fragment or ""
