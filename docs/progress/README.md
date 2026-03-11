@@ -1399,3 +1399,10 @@ Introduced an infra_flag summary field (normal, internal, suspicious_infra) in t
 
 Evolved the lookup_ip_reputation stub to use a local KNOWN_SUSPICIOUS_IPS list, wired it into enrich_score, exposed reputation and reputation_source in the infrastructure block, and added tests to verify suspicious IPs affect both reputation and infra metadata.
 
+*** Progress log: 03/10/2026
+
+Implemented a heuristic that flags URLs where a well-known brand token appears in the path/query but not in the domain, plus tests to ensure it increases score only for unrelated domains and stays quiet for trusted brand domains.
+
+Strengthened the example-like typo + login heuristic so “example-style” typo domains combined with login paths are treated as suspicious, and added a complementary test confirming that the same domains without login paths don’t get the same bump.
+
+Refactored test_scoring.py and test_manual_eval_behavior.py to be clearer and more maintainable, grouping tests by concern and reducing duplication while preserving existing behavior.
