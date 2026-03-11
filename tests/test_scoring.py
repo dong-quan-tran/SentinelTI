@@ -137,3 +137,8 @@ def test_brand_token_in_path_not_domain_increases_score() -> None:
 def test_brand_token_in_trusted_domain_does_not_trigger_path_brand_reason() -> None:
     h = analyze_url("https://paypal.com/signin")
     assert not any("Brand token 'paypal'" in r for r in h.reasons)
+
+def test_example_like_domain_without_login_path_is_weaker() -> None:
+    h = analyze_url("http://examp1e.com/")
+    # Either no bump or clearly smaller score than with /login
+    assert not any("example/typo domain" in r for r in h.reasons)
