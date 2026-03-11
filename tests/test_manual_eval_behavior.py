@@ -3,19 +3,26 @@ import pytest
 from sentinelti.scoring import enrich_score
 
 
+def _reasons_text(result: dict) -> str:
+    return " ".join(result.get("reasons", []))
+
+
+# ---------------------------------------------------------------------------
+# Obvious phishing vs known legit brand logins
+# ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(
     "url",
     [
         "http://paypal.com.verify-update.info",
         "http://appleid.apple.com.security-check.net",
-        #"http://login-office365.com",
+        # "http://login-office365.com",
         "http://verify-account-netflix.com/login",
         "http://example.com@evil.com/login",
         "http://192.168.0.1/login",
         "http://example.xyz/login",
     ],
 )
-
 def test_obvious_phish_are_not_benign(url: str) -> None:
     """
     Obvious phishing-style URLs should never be classified as plain benign.
@@ -44,10 +51,15 @@ def test_known_legit_brand_logins_stay_benign(url: str) -> None:
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
 
+
+# ---------------------------------------------------------------------------
+# Typosquatting / IDN and brand-like domains
+# ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(
     "url",
     [
-        #"http://examp1e.com/login",
+        # "http://examp1e.com/login",
         "http://paypa1-secure.com/verify",
         "http://micr0soft-account.com/signin",
         "http://xn--pple-43d.com/login",
@@ -63,6 +75,78 @@ def test_typosquatted_and_idn_domains_are_suspicious(url: str) -> None:
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
+
+def test_example_typo_login_is_not_benign() -> None:
+    """
+    A typo/homoglyph of 'example.com' combined with a login path
+    should not be plain benign.
+    """
+    url = "http://examp1e.com/login"
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+
+def test_login_office365_is_not_benign() -> None:
+    """
+    Fake Office 365 login domains like login-office365.com
+    should not be plain benign.
+    """
+    url = "http://login-office365.com"
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://login-office365-secure.com",
+        "http://office365-login.example.net",
+        "http://secure-microsoftonline-login.xyz",
+    ],
+)
+def test_office365_like_login_domains_are_not_benign(url: str) -> None:
+    """
+    Office 365/Microsoft-themed login domains on non-trusted hosts
+    should not be plain benign.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+
+def test_login_github_com_is_malicious_and_high_risk() -> None:
+    """
+    Obvious fake GitHub login domains like login-github.com
+    should be treated as malicious/high-risk phishing.
+    """
+    url = "http://login-github.com"
+    result = enrich_score(url)
+
+    assert result["final_label"] == "malicious"
+    assert result["risk"] == "high"
+
+    reasons = _reasons_text(result)
+    assert "GitHub credential phishing pages" in reasons
+
+
+def test_github_oauth_authorize_stays_benign_low_risk() -> None:
+    """
+    Legitimate GitHub OAuth authorize endpoint should remain benign/low-risk
+    even though it contains login-related tokens.
+    """
+    url = "https://github.com/login/oauth/authorize"
+    result = enrich_score(url)
+
+    assert result["final_label"] == "benign"
+    assert result["risk"] == "low"
+
+    reasons = _reasons_text(result)
+    assert "Recognized as a standard GitHub OAuth authorization endpoint" in reasons
+
+
+# ---------------------------------------------------------------------------
+# Executable downloads and open redirects
+# ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -77,6 +161,7 @@ def test_executable_malware_downloads_are_not_benign(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
 
 @pytest.mark.parametrize(
     "url",
@@ -94,6 +179,27 @@ def test_open_redirect_style_urls_are_not_benign(url: str) -> None:
     """
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://93.184.216.34/payload.exe",
+        "http://203.0.113.42/update.scr",
+    ],
+)
+def test_executable_download_on_public_ip_is_not_benign(url: str) -> None:
+    """
+    Executable downloads served directly from bare public IPs
+    should not be plain benign.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+
+# ---------------------------------------------------------------------------
+# IP-based URLs and infrastructure edge cases
+# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     "url",
@@ -113,6 +219,59 @@ def test_private_or_local_ip_urls_are_not_benign(url: str) -> None:
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://192.0.2.10/example",      # TEST-NET-1
+        "http://198.51.100.23/demo",      # TEST-NET-2
+        "http://203.0.113.42/sample",     # TEST-NET-3
+    ],
+)
+def test_documentation_ip_ranges_are_handled_safely(url: str) -> None:
+    """
+    URLs using documentation-only IP ranges (RFC 5737) are uncommon in real browsing.
+    They should not be treated as clearly safe benign infrastructure.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"benign", "suspicious", "malicious"}
+
+    reasons_text = _reasons_text(result)
+    assert "IP address" in reasons_text or "raw IP" in reasons_text
+
+
+def test_public_raw_ip_is_flagged_by_heuristics() -> None:
+    """
+    URLs that use a bare public IP as host should receive some heuristic signal,
+    since bare-IP infrastructure is common in malicious hosting.
+    """
+    url = "http://93.184.216.34/login"  # example.org's IP in many docs
+    result = enrich_score(url)
+
+    reasons_text = _reasons_text(result)
+    assert "raw public IP address" in reasons_text or "raw IP address as host" in reasons_text
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://93.184.216.34/login",
+        "http://203.0.113.42/signin",
+    ],
+)
+def test_login_on_public_ip_is_not_benign(url: str) -> None:
+    """
+    Login flows directly on bare public IPs should not be plain benign.
+    They should be at least suspicious.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] in {"suspicious", "malicious"}
+
+
+# ---------------------------------------------------------------------------
+# SSO-like flows and benign deep content
+# ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -123,10 +282,34 @@ def test_private_or_local_ip_urls_are_not_benign(url: str) -> None:
     ],
 )
 def test_legit_sso_like_urls_stay_benign(url: str) -> None:
+    """
+    Legitimate SSO/OAuth-style URLs should normally stay benign/low-risk
+    despite containing login-related tokens.
+    """
     result = enrich_score(url)
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
 
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.net/blog/2025/01/security-tips",
+        "https://docs.example.com/products/platform/v2/guide/getting-started/installation",
+    ],
+)
+def test_benign_deep_content_urls_stay_benign(url: str) -> None:
+    """
+    Deep but clearly benign content URLs (blog/docs) should normally stay benign/low-risk.
+    """
+    result = enrich_score(url)
+    assert result["final_label"] == "benign"
+    assert result["risk"] == "low"
+
+
+# ---------------------------------------------------------------------------
+# Social engineering lures and cleartext credentials
+# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     "url",
@@ -146,20 +329,10 @@ def test_social_engineering_and_cleartext_cred_urls_are_not_benign(url: str) -> 
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
-@pytest.mark.parametrize(
-    "url",
-    [
-        "http://example.net/blog/2025/01/security-tips",
-        "https://docs.example.com/products/platform/v2/guide/getting-started/installation",
-    ],
-)
-def test_benign_deep_content_urls_stay_benign(url: str) -> None:
-    """
-    Deep but clearly benign content URLs (blog/docs) should normally stay benign/low-risk.
-    """
-    result = enrich_score(url)
-    assert result["final_label"] == "benign"
-    assert result["risk"] == "low"
+
+# ---------------------------------------------------------------------------
+# Misc login-ish edge cases
+# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     "url",
@@ -177,23 +350,6 @@ def test_weird_or_long_domain_logins_are_not_benign(url: str) -> None:
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
-def test_example_typo_login_is_not_benign() -> None:
-    """
-    A typo/homoglyph of 'example.com' combined with a login path
-    should not be plain benign.
-    """
-    url = "http://examp1e.com/login"
-    result = enrich_score(url)
-    assert result["final_label"] in {"suspicious", "malicious"}
-
-def test_login_office365_is_not_benign() -> None:
-    """
-    Fake Office 365 login domains like login-office365.com
-    should not be plain benign.
-    """
-    url = "http://login-office365.com"
-    result = enrich_score(url)
-    assert result["final_label"] in {"suspicious", "malicious"}
 
 def test_at_symbol_in_login_path_is_not_benign() -> None:
     """
@@ -203,6 +359,7 @@ def test_at_symbol_in_login_path_is_not_benign() -> None:
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
+
 def test_at_symbol_in_generic_path_can_be_benign() -> None:
     """
     Generic paths with '@' but no login/security context may remain benign.
@@ -210,6 +367,7 @@ def test_at_symbol_in_generic_path_can_be_benign() -> None:
     url = "http://example.com/path@id"
     result = enrich_score(url)
     assert result["final_label"] == "benign"
+
 
 def test_portal_like_login_is_not_escalated_to_malicious() -> None:
     """
@@ -219,112 +377,3 @@ def test_portal_like_login_is_not_escalated_to_malicious() -> None:
     url = "https://secure.portal.example.org/account/login"
     result = enrich_score(url)
     assert result["final_label"] in {"benign", "suspicious"}
-
-def test_login_github_com_is_malicious_and_high_risk() -> None:
-    """
-    Obvious fake GitHub login domains like login-github.com
-    should be treated as malicious/high-risk phishing.
-    """
-    url = "http://login-github.com"
-    result = enrich_score(url)
-
-    assert result["final_label"] == "malicious"
-    assert result["risk"] == "high"
-
-    reasons = " ".join(result.get("reasons", []))
-    assert "GitHub credential phishing pages" in reasons
-
-def test_github_oauth_authorize_stays_benign_low_risk() -> None:
-    """
-    Legitimate GitHub OAuth authorize endpoint should remain benign/low-risk
-    even though it contains login-related tokens.
-    """
-    url = "https://github.com/login/oauth/authorize"
-    result = enrich_score(url)
-
-    assert result["final_label"] == "benign"
-    assert result["risk"] == "low"
-
-    reasons = " ".join(result.get("reasons", []))
-    assert "Recognized as a standard GitHub OAuth authorization endpoint" in reasons
-
-def test_office365_like_login_domains_are_not_benign() -> None:
-    """
-    Office 365/Microsoft-themed login domains on non-trusted hosts
-    should not be plain benign.
-    """
-    urls = [
-        "http://login-office365-secure.com",
-        "http://office365-login.example.net",
-        "http://secure-microsoftonline-login.xyz",
-    ]
-    for url in urls:
-        result = enrich_score(url)
-        assert result["final_label"] in {"suspicious", "malicious"}
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "http://192.0.2.10/example",       # TEST-NET-1
-        "http://198.51.100.23/demo",       # TEST-NET-2
-        "http://203.0.113.42/sample",      # TEST-NET-3
-    ],
-)
-def test_documentation_ip_ranges_are_handled_safely(url: str) -> None:
-    """
-    URLs using documentation-only IP ranges (RFC 5737) are uncommon in real browsing.
-    They should not be treated as clearly safe benign infrastructure.
-    """
-    result = enrich_score(url)
-    # Allow either suspicious or benign+low risk depending on scoring,
-    # but assert we at least attach some heuristic signal.
-    assert result["final_label"] in {"benign", "suspicious", "malicious"}
-    # Heuristic should have at least one reason mentioning raw IP / reserved/documentation range
-    reasons_text = " ".join(result.get("reasons", []))
-    assert "IP address" in reasons_text or "raw IP" in reasons_text
-
-def test_public_raw_ip_is_flagged_by_heuristics() -> None:
-    """
-    URLs that use a bare public IP as host should receive some heuristic signal,
-    since bare-IP infrastructure is common in malicious hosting.
-    """
-    url = "http://93.184.216.34/login"  # example.org's IP in many docs
-    result = enrich_score(url)
-
-    reasons_text = " ".join(result.get("reasons", []))
-    assert "raw public IP address" in reasons_text or "raw IP address as host" in reasons_text
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "http://93.184.216.34/login",
-        "http://203.0.113.42/signin",
-    ],
-)
-def test_login_on_public_ip_is_not_benign(url: str) -> None:
-    """
-    Login flows directly on bare public IPs should not be plain benign.
-    They should be at least suspicious.
-    """
-    result = enrich_score(url)
-    assert result["final_label"] in {"suspicious", "malicious"}
-
-import pytest
-from sentinelti.scoring import enrich_score
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "http://93.184.216.34/payload.exe",
-        "http://203.0.113.42/update.scr",
-    ],
-)
-def test_executable_download_on_public_ip_is_not_benign(url: str) -> None:
-    """
-    Executable downloads served directly from bare public IPs
-    should not be plain benign.
-    """
-    result = enrich_score(url)
-    assert result["final_label"] in {"suspicious", "malicious"}
-
