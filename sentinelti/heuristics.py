@@ -236,6 +236,21 @@ def analyze_url(url: str) -> HeuristicResult:
             "which is typical of insecure or phishing login forms."
         )
 
+    def is_example_like_domain(domain: str) -> bool:
+        d = domain.lower()
+        return "examp" in d or "exampl" in d or "examp1e" in d
+
+    login_tokens = {"login", "signin", "sign-in", "account", "session"}
+    has_login_token = any(token in lower_path for token in login_tokens)
+
+    if is_example_like_domain(base_domain) and has_login_token:
+        score += 0.75
+        reasons.append(
+            "Domain name resembles a generic example/typo domain and is combined with a login-style path, "
+            "which is a common pattern in training-themed or test-looking phishing sites."
+        )
+
+
     if any(hint in host_l for hint in SSO_HOST_HINTS) or any(hint in path_l for hint in SSO_PATH_HINTS):
         is_sso_like = True
 
