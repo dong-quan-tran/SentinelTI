@@ -18,20 +18,20 @@ class IPReputationResult:
 def lookup_ip_reputation(
     ip: str,
     suspicious_ips: Optional[Iterable[str]] = None,
+    external_provider: Optional[ExternalIPReputationProvider] = None,
 ) -> IPReputationResult:
-    """
-    Placeholder for IP reputation lookup.
-
-    Currently uses a small local suspicious-IP list when provided, otherwise
-    returns 'unknown' for all IPs.
-    """
     if not ip:
         return IPReputationResult(reputation="unknown", source=None)
 
-    ips = set(suspicious_ips) if suspicious_ips is not None else KNOWN_SUSPICIOUS_IPS
+    # 1) Optional external provider first
+    if external_provider is not None:
+        ext = external_provider.lookup(ip)
+        if ext is not None:
+            return ext
 
+    # 2) Fallback to local suspicious-IP list
+    ips = set(suspicious_ips) if suspicious_ips is not None else KNOWN_SUSPICIOUS_IPS
     if ips and ip in ips:
         return IPReputationResult(reputation="suspicious", source="local-list")
 
     return IPReputationResult(reputation="unknown", source="local-list" if ips else None)
-
