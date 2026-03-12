@@ -158,6 +158,25 @@ def _simple_token(s: str) -> str:
     """Strip to letters only, for simple typo checks."""
     return "".join(ch for ch in s if ch.isalpha())
 
+def _levenshtein(a: str, b: str) -> int:
+        if a == b:
+            return 0
+        if not a:
+            return len(b)
+        if not b:
+            return len(a)
+        dp = list(range(len(b) + 1))
+        for i, ca in enumerate(a, start=1):
+            prev = dp[0]
+            dp[0] = i
+            for j, cb in enumerate(b, start=1):
+                cur = dp[j]
+                if ca == cb:
+                    dp[j] = prev
+                else:
+                    dp[j] = 1 + min(prev, dp[j], dp[j - 1])
+                prev = cur
+        return dp[-1]
 
 def _one_char_digit_swap(a: str, b: str) -> bool:
     """
@@ -272,6 +291,16 @@ def analyze_url(url: str) -> HeuristicResult:
             "URL fragment contains a nested URL, which can be used to hide redirects or tracking."
         )
 
+    CORE_BRANDS = ["paypal", "google", "microsoft"]
+    label = ext.domain.lower() if ext.domain else ""
+    for brand in CORE_BRANDS:
+        if label and _levenshtein(label, brand) == 1 and base_domain not in TRUSTED_DOMAINS:
+            score += 1.0
+            reasons.append(
+                f"Domain label '{label}' is a 1-character typo of brand '{brand}', "
+                "which is common in typosquatting attacks."
+            )
+            break
 
     # Punycode / IDN lookalike detection
     if "xn--" in lower_host:
@@ -690,7 +719,6 @@ def analyze_url(url: str) -> HeuristicResult:
                 "Hostname combines login and Office 365/Microsoft tokens on a non-trusted domain; "
                 "this pattern is common in Microsoft 365 credential phishing pages."
             )
-
 
 
     # Targeted special case: login-github-style hosts
