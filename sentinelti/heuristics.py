@@ -14,20 +14,30 @@ ML classifier output.
 Current limitations of heuristic-based URL analysis (v1)
 
 IP and infrastructure scope
-The scoring layer performs best-effort DNS resolution for hostnames and exposes infrastructure metadata (IP, class, internal flag, TLD, local IP reputation, and a summarized infra flag) in the enriched output.
-Mild infra-based heuristics are applied when an external-looking hostname resolves to an internal or loopback IP, or when the resolved IP appears in a small, locally maintained suspicious‑IP list.
-External infrastructure and reputation services (e.g., hosting provider, domain age, commercial IP/domain reputation feeds) are still not integrated; current infra signals rely only on local logic and static lists, behind a pluggable lookup_ip_reputation hook.
+- The scoring layer performs best-effort DNS resolution for hostnames and exposes infrastructure metadata (IP, class, internal flag, TLD, local IP reputation, a summarized infra flag, and a reputation source) in the enriched output.
+- Mild infra-based heuristics are applied when an external-looking hostname resolves to an internal or loopback IP, when the resolved IP appears in a small, locally maintained suspicious‑IP list, or when login/executable content is served directly from a bare public IP.
+- External infrastructure and reputation services (e.g., hosting provider, domain age, commercial IP/domain reputation feeds) are still not integrated; infra signals currently rely only on local logic and static lists, behind a pluggable IP reputation hook that can accept optional external providers.
 
-6. Brand impersonation and typo scope
-Brand impersonation logic focuses on obvious brand tokens (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.) outside a small whitelist of trusted domains. It does not yet cover more subtle impersonation patterns or use certificate/WHOIS/host reputation.
-Additional heuristics exist for some typo/IDN domains and for generic example-like typo domains with login paths, but homograph coverage is not exhaustive.
+Next steps:
+- Add optional configuration and wiring to actually call one or more external IP/domain reputation feeds through the existing adapter.
+- Consider enriching infra metadata with provider/ASN or coarse “cloud vs ISP vs hosting” classification once an external data source is available.
+- Add more targeted tests around behavior when external reputation is present vs absent (e.g., external “trusted” vs “malicious” overriding local list).
 
-New heuristics (implemented in v1)
-Login on very long or unusual domains/TLDs (especially when combined with uncommon TLDs or deep subdomains).
-Conservative typo-domain + login detection for example-like domains (e.g. examp1e.com/login).
-Softer scoring for nested URLs on clearly SSO/OAuth-like endpoints to avoid over-flagging legitimate flows.
-Targeted handling for Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
 
+Brand impersonation and typo scope
+- Brand impersonation logic focuses on obvious brand tokens (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.) outside a small whitelist of trusted domains, plus cases where brand tokens appear in the URL path or query but not in the base domain. It still does not use certificate/WHOIS/host reputation.
+- Additional heuristics exist for:
+  - Some typo/IDN domains (including Punycode-based lookalikes).
+  - Generic example-like typo domains with login paths (e.g. examp1e.com/login).
+  - Core brand typosquats where the registrable label is a 1‑character edit from a small set of high-value brands (e.g. paypal, microsoft).
+  - Targeted Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
+- Homograph/typosquatting coverage is not exhaustive, especially for more complex character substitutions (e.g., rn vs m, mixed scripts) and multi-word brand phrases.
+
+Next steps:
+- Expand the core brand typo logic beyond simple 1-character edits for a small, carefully chosen set of high-value brands (e.g., handle common homoglyph pairs like rn↔m or vv↔w in a separate, conservative heuristic).
+- Introduce a small, configurable list of “protected brands” with more aggressive heuristics (e.g., higher scores or additional checks when brand tokens appear off-domain) while preserving whitelists for known-good hosts.
+- Add more unit tests and manual-eval cases covering complex homographs and multi-token brand patterns (e.g., “microsoft support”, “google drive”, “apple id”) to better document current coverage and guide future improvements.
+- Keep external reputation/certificate/WHOIS-based checks as a separate future enhancement, so current lexical/structural heuristics remain lightweight and self-contained.
 """
 
 from urllib.parse import parse_qsl, unquote
