@@ -377,3 +377,17 @@ def test_portal_like_login_is_not_escalated_to_malicious() -> None:
     url = "https://secure.portal.example.org/account/login"
     result = enrich_score(url)
     assert result["final_label"] in {"benign", "suspicious"}
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://paypol.com/login",          # close to paypal
+        "http://micros0ft.com/signin",     # rn vs m case
+    ],
+)
+def test_core_brand_typosquats_get_heuristic_signal(url: str) -> None:
+    result = enrich_score(url)
+    h = result["heuristic"]
+    assert h["score"] > 0.0
+    reasons = " ".join(h["reasons"])
+    assert "1-character typo of brand" in reasons
