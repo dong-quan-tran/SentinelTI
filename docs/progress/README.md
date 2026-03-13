@@ -1419,3 +1419,17 @@ Implemented a standalone homoglyphs.py helper to detect simple m vs rn homoglyph
 
 
 Created tests/test_homoglyphs.py to exercise the homoglyph helper on known spoof and non-spoof inputs and got the full test suite back to green.
+
+*** Progress log: 03/13/2026
+
+Refined the IP scoring layer by adding a shared _classify_ip helper and updating enrich_score to use it, keeping behavior but simplifying the code.
+
+Cleaned up scoring.py imports and removed unused homoglyph logic, while preserving all existing tests and behavior.
+
+Tightened heuristics.py by unifying path-depth computation, fixing duplicate deep-path scoring, and exempting obvious docs/blog URLs from aggressive deep-path penalties.
+
+Implemented a conservative rn vs m homoglyph heuristic end-to-end: standalone helper, integration into analyze_url, and tests for rnicrosoft-style domains.
+
+Extended homoglyph coverage to include a vv vs w spoof pattern and added tests to confirm detection of tvvitter-style domains.
+
+Added new unit tests for multi-token brand impersonation patterns (e.g., “microsoft support”, “google drive”, “apple id”) to ensure they receive non-zero heuristic scores.
