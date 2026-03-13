@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Iterable, Set
+from typing import Optional, Iterable, Set, Protocol
 
 # You can either import this from scoring or define it here and import it there.
 KNOWN_SUSPICIOUS_IPS: Set[str] = {
@@ -9,11 +9,15 @@ KNOWN_SUSPICIOUS_IPS: Set[str] = {
 }
 
 
+
 class IPReputationResult:
     def __init__(self, reputation: str = "unknown", source: Optional[str] = None) -> None:
         self.reputation = reputation  # e.g. 'unknown', 'suspicious', 'trusted'
         self.source = source          # e.g. 'local-list', 'external-feed-name'
 
+class ExternalIPReputationProvider(Protocol):
+    def lookup(self, ip: str) -> Optional["IPReputationResult"]:
+        ...
 
 def lookup_ip_reputation(
     ip: str,
