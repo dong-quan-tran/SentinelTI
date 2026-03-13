@@ -21,6 +21,8 @@ from .resolution import resolve_hostname_to_ip
 
 from .reputation import lookup_ip_reputation
 
+from .homoglyphs import has_m_rn_homoglyph_token
+
 
 TRUSTED_DOMAINS = {
     "google.com",
@@ -39,7 +41,6 @@ KNOWN_SUSPICIOUS_IPS = {
     "203.0.113.66",
     "198.51.100.200",
 }
-
 
 def enrich_score(url: str) -> Dict[str, Any]:
     """
@@ -93,6 +94,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
     # unless the model is extremely confident they are malicious.
     parsed = urlparse(url)
     host = parsed.hostname or ""
+
 
     # Use the base domain (last two labels) as a simple heuristic.
     parts = host.split(".")
@@ -231,3 +233,4 @@ def enrich_score(url: str) -> Dict[str, Any]:
         "reasons": reasons,
         "infrastructure": infra,
     }
+
