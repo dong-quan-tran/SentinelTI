@@ -6,7 +6,7 @@ from typing import Iterable
 BRAND_LIKE_HOMOGLYPH_PATTERNS: tuple[tuple[str, str], ...] = (
     ("microsoft", "rnicrosoft"),
     ("marriott", "rnarriott"),
-    # add more as needed
+    ("twitter", "tvvitter"),
 )
 
 
