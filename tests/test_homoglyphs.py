@@ -12,6 +12,18 @@ def test_has_m_rn_homoglyph_token_ignores_legit_brand() -> None:
 def test_has_m_rn_homoglyph_token_handles_empty_input() -> None:
     assert not has_m_rn_homoglyph_token([])
 
+
+def test_has_m_rn_homoglyph_token_detects_tvvitter_spoof() -> None:
+    assert has_m_rn_homoglyph_token(["login.tvvitter.com"])
+
+
+def test_analyze_url_flags_tvvitter_like_domain() -> None:
+    url = "https://login.tvvitter.com/session"
+    result = analyze_url(url)
+    assert result.features.get("has_m_rn_homoglyph") is True
+    assert result.score > 0.0
+
+
 def test_analyze_url_flags_rnicrosoft_homoglyph() -> None:
     url = "https://rnicrosoft.com/login"
 
