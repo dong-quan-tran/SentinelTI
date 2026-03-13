@@ -1,7 +1,7 @@
 import pytest
 
 from sentinelti.scoring import enrich_score
-
+from sentinelti.heuristics import analyze_url
 
 def _reasons_text(result: dict) -> str:
     return " ".join(result.get("reasons", []))
@@ -391,3 +391,29 @@ def test_core_brand_typosquats_get_heuristic_signal(url: str) -> None:
     assert h["score"] > 0.0
     reasons = " ".join(h["reasons"])
     assert "1-character typo of brand" in reasons
+
+def test_microsoft_support_like_host_is_suspicious() -> None:
+    url = "http://microsoft-support-login.example.com/reset"
+    result = analyze_url(url)
+
+    assert result.score > 0.0
+    reason_text = " ".join(result.reasons).lower()
+    assert "microsoft" in reason_text or "brand-like" in reason_text
+
+
+def test_google_drive_like_login_is_suspicious() -> None:
+    url = "http://google-drive.example.net/login"
+    result = analyze_url(url)
+
+    assert result.score > 0.0
+    reason_text = " ".join(result.reasons).lower()
+    assert "google" in reason_text or "brand-like" in reason_text
+
+
+def test_apple_id_like_verification_is_suspicious() -> None:
+    url = "http://apple-id.verify-payments.xyz/account/verify"
+    result = analyze_url(url)
+
+    assert result.score > 0.0
+    reason_text = " ".join(result.reasons).lower()
+    assert "apple" in reason_text or "brand-like" in reason_text
