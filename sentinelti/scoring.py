@@ -16,12 +16,10 @@ import ipaddress
 from urllib.parse import urlparse
 
 from .heuristics import analyze_url
-from .ml.service import score_url as ml_score_url  # adjust path if needed
 from .resolution import resolve_hostname_to_ip
+from .ml.service import score_url as ml_score_url
 
 from .reputation import lookup_ip_reputation
-
-from .homoglyphs import has_m_rn_homoglyph_token
 
 
 TRUSTED_DOMAINS = {
@@ -41,6 +39,21 @@ KNOWN_SUSPICIOUS_IPS = {
     "203.0.113.66",
     "198.51.100.200",
 }
+
+def _classify_ip(ip: str | None) -> str | None:
+    if not ip:
+        return None
+    try:
+        obj = ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    if obj.is_loopback:
+        return "loopback"
+    if obj.is_private:
+        return "private"
+    if obj.is_reserved:
+        return "reserved"
+    return "public"
 
 def enrich_score(url: str) -> Dict[str, Any]:
     """
@@ -150,22 +163,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
         )
 
     # Classify resolved IP (if any) using ipaddress
-    ip_class = None
-    if resolved_ip:
-        try:
-            ip_obj = ipaddress.ip_address(resolved_ip)
-        except ValueError:
-            ip_obj = None
-
-        if ip_obj is not None:
-            if ip_obj.is_loopback:
-                ip_class = "loopback"
-            elif ip_obj.is_private:
-                ip_class = "private"
-            elif ip_obj.is_reserved:
-                ip_class = "reserved"
-            else:
-                ip_class = "public"
+    ip_class = _classify_ip(resolved_ip)
 
     # Mild infra-based signal: external-looking host resolving to internal IP
     infra_note: str | None = None
