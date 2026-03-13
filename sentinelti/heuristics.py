@@ -44,6 +44,8 @@ from urllib.parse import parse_qsl, unquote
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 from urllib.parse import urlparse
+from .homoglyphs import has_m_rn_homoglyph_token
+
 
 import os
 import tldextract
@@ -802,6 +804,27 @@ def analyze_url(url: str) -> HeuristicResult:
             "which can indicate complex phishing or tracking flows."
         )
 
+    # New: simple m vs rn homoglyph brand heuristic
+    hostname_tokens_for_homoglyph : list[str] = []
+    if lower_host:
+        hostname_tokens_for_homoglyph.append(lower_host)
+
+    has_homoglyph = has_m_rn_homoglyph_token(hostname_tokens_for_homoglyph)
+    features["has_m_rn_homoglyph"] = has_homoglyph
+
+    if has_homoglyph and not is_trusted:
+        score += 0.25
+        reasons.append(
+            "Hostname contains a lookalike 'rn' vs 'm' brand pattern "
+            "(homoglyph typosquatting), seen in recent Microsoft/Marriott phishing campaigns."
+        )
+
+    if path_depth >= 6 and not is_trusted and not is_sso_like:
+        score += 0.5
+        reasons.append(
+            "URL has an unusually deep path structure for a non-trusted domain, "
+            "which can indicate complex phishing or tracking flows."
+        )
 
     # Deduplicate reasons while preserving order
     seen = set()
