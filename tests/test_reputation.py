@@ -33,3 +33,16 @@ def test_external_provider_can_override_local_list() -> None:
     result = lookup_ip_reputation("203.0.113.10", suspicious_ips={"203.0.113.10"}, external_provider=provider)
     assert result.reputation == "trusted"
     assert result.source == "external-feed"
+
+def test_lookup_ip_reputation_uses_external_provider_when_available() -> None:
+    external_result = IPReputationResult(reputation="trusted", source="external-feed")
+    provider = DummyExternalProvider({"203.0.113.10": external_result})
+
+    result = lookup_ip_reputation(
+        "203.0.113.10",
+        suspicious_ips={"203.0.113.10"},
+        external_provider=provider,
+    )
+
+    assert result.reputation == "trusted"
+    assert result.source == "external-feed"
