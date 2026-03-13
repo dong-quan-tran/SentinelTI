@@ -34,9 +34,7 @@ Brand impersonation and typo scope
 - Homograph/typosquatting coverage is not exhaustive, especially for more complex character substitutions (e.g., rn vs m, mixed scripts) and multi-word brand phrases.
 
 Next steps:
-- Expand the core brand typo logic beyond simple 1-character edits for a small, carefully chosen set of high-value brands (e.g., handle common homoglyph pairs like rn↔m or vv↔w in a separate, conservative heuristic).
 - Introduce a small, configurable list of “protected brands” with more aggressive heuristics (e.g., higher scores or additional checks when brand tokens appear off-domain) while preserving whitelists for known-good hosts.
-- Add more unit tests and manual-eval cases covering complex homographs and multi-token brand patterns (e.g., “microsoft support”, “google drive”, “apple id”) to better document current coverage and guide future improvements.
 - Keep external reputation/certificate/WHOIS-based checks as a separate future enhancement, so current lexical/structural heuristics remain lightweight and self-contained.
 """
 
