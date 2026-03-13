@@ -181,7 +181,11 @@ def enrich_score(url: str) -> Dict[str, Any]:
 
 
     # Minimal local reputation signal for resolved IPs
-    rep_result = lookup_ip_reputation(resolved_ip) if resolved_ip else None
+    rep_result = lookup_ip_reputation(
+        resolved_ip,
+        suspicious_ips=KNOWN_SUSPICIOUS_IPS,
+        external_provider=None,  # placeholder for future external feeds
+    ) if resolved_ip else None
     reputation: str | None = rep_result.reputation if rep_result else "unknown"
 
     if reputation == "suspicious":
