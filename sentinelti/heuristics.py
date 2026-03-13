@@ -40,12 +40,10 @@ Next steps:
 - Keep external reputation/certificate/WHOIS-based checks as a separate future enhancement, so current lexical/structural heuristics remain lightweight and self-contained.
 """
 
-from urllib.parse import parse_qsl, unquote
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl, unquote
 from .homoglyphs import has_m_rn_homoglyph_token
-
 
 import os
 import tldextract
@@ -89,7 +87,7 @@ BRAND_TOKENS = {
     "faceb0ok",
     "bankofamerica",
     "amazon",
-     "teams",
+    "teams",
     "onedrive",
     "github",
 }
@@ -134,8 +132,6 @@ SSO_PATH_HINTS = {
     "/authorize",
 }
 
-COMMON_GENERIC_WORDS = {"example"}
-
 
 RAW_IP_SCORE = 2.0
 AT_AUTHORITY_SCORE = 1.5
@@ -170,25 +166,28 @@ def _simple_token(s: str) -> str:
     """Strip to letters only, for simple typo checks."""
     return "".join(ch for ch in s if ch.isalpha())
 
+def _is_sso_like(host: str, path: str) -> bool:
+    return any(h in host for h in SSO_HOST_HINTS) or any(h in path for h in SSO_PATH_HINTS)
+
 def _levenshtein(a: str, b: str) -> int:
-        if a == b:
-            return 0
-        if not a:
-            return len(b)
-        if not b:
-            return len(a)
-        dp = list(range(len(b) + 1))
-        for i, ca in enumerate(a, start=1):
-            prev = dp[0]
-            dp[0] = i
-            for j, cb in enumerate(b, start=1):
-                cur = dp[j]
-                if ca == cb:
-                    dp[j] = prev
-                else:
-                    dp[j] = 1 + min(prev, dp[j], dp[j - 1])
-                prev = cur
-        return dp[-1]
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    dp = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        prev = dp[0]
+        dp[0] = i
+        for j, cb in enumerate(b, start=1):
+            cur = dp[j]
+            if ca == cb:
+                dp[j] = prev
+            else:
+                dp[j] = 1 + min(prev, dp[j], dp[j - 1])
+            prev = cur
+    return dp[-1]
 
 def _one_char_digit_swap(a: str, b: str) -> bool:
     """
@@ -222,9 +221,10 @@ def analyze_url(url: str) -> HeuristicResult:
     path = parsed.path or ""
     query = parsed.query or ""
 
-    path_depth = max(0, path.count("/") - 1)
-
+    # Compute path depth as number of non-empty segments
+    path_depth = len([p for p in path.split("/") if p])
     features["path_depth"] = path_depth
+
 
     if ext.domain and ext.suffix:
         base_domain = f"{ext.domain}.{ext.suffix}"
@@ -433,9 +433,7 @@ def analyze_url(url: str) -> HeuristicResult:
 
     SPECIAL_NESTED_PARAMS = {"callback", "share", "tracker", "u", "link"}
 
-    is_sso_like = any(hint in lower_host for hint in SSO_HOST_HINTS) or any(
-        hint in lower_path for hint in SSO_PATH_HINTS
-    )
+    is_sso_like = _is_sso_like(lower_host, lower_path)
 
     if redirect_param_nested:
         # Soften for clearly SSO-like flows
@@ -488,9 +486,7 @@ def analyze_url(url: str) -> HeuristicResult:
         has_account_like = any(t in {"account", "accounts"} for t in all_tokens)
 
         # Soften for clearly SSO-like flows
-        is_sso_like = any(h in (lower_host or "") for h in SSO_HOST_HINTS) or any(
-            h in (lower_path or "") for h in SSO_PATH_HINTS
-        )
+        is_sso_like = _is_sso_like(lower_host, lower_path)
 
         if (has_login_like or has_security_like or has_account_like) and not is_sso_like:
             score += 0.75
@@ -534,9 +530,7 @@ def analyze_url(url: str) -> HeuristicResult:
 
     has_login_like = has_login_hint or has_login_in_host
 
-    is_sso_like = any(h in (lower_host or "") for h in SSO_HOST_HINTS) or any(
-        h in (lower_path or "") for h in SSO_PATH_HINTS
-    )
+    is_sso_like = _is_sso_like(lower_host, lower_path)
 
     hostname_long = len(lower_host or "") > 45
     label_depth_high = len(host_labels) >= 5
@@ -583,9 +577,6 @@ def analyze_url(url: str) -> HeuristicResult:
             )
 
     # Extra: executable download hosted directly on a bare public IP
-    is_public_ip = ip_obj is not None and not (
-        ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved
-    )
     if is_public_ip and filename and any(filename.endswith(ext) for ext in EXECUTABLE_EXTS):
         score += 0.5
         reasons.append(
@@ -784,9 +775,7 @@ def analyze_url(url: str) -> HeuristicResult:
 
 
     # Deep path
-    depth = len([p for p in path.split("/") if p])
-    features["path_depth"] = depth
-    if depth >= 5:
+    if path_depth >= 5:
         if is_sso_like or is_docs_or_blog:
             # maybe no bump or a tiny one
             score += 0.0
@@ -795,14 +784,20 @@ def analyze_url(url: str) -> HeuristicResult:
             reasons.append("URL path is deeply nested, often used to hide payloads or phishing pages.")
 
     # Mild signal for unusually deep paths on non-trusted, non-SSO domains
-    is_trusted = base_domain in TRUSTED_DOMAINS  # or however you already do this
+    is_trusted = base_domain in TRUSTED_DOMAINS
 
-    if path_depth >= 6 and not is_trusted and not is_sso_like:
+    if (
+        path_depth >= 6
+        and not is_trusted
+        and not is_sso_like
+        and not is_docs_or_blog
+    ):
         score += 0.5
         reasons.append(
             "URL has an unusually deep path structure for a non-trusted domain, "
             "which can indicate complex phishing or tracking flows."
         )
+
 
     # New: simple m vs rn homoglyph brand heuristic
     hostname_tokens_for_homoglyph : list[str] = []
@@ -819,12 +814,6 @@ def analyze_url(url: str) -> HeuristicResult:
             "(homoglyph typosquatting), seen in recent Microsoft/Marriott phishing campaigns."
         )
 
-    if path_depth >= 6 and not is_trusted and not is_sso_like:
-        score += 0.5
-        reasons.append(
-            "URL has an unusually deep path structure for a non-trusted domain, "
-            "which can indicate complex phishing or tracking flows."
-        )
 
     # Deduplicate reasons while preserving order
     seen = set()
