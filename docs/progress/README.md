@@ -1406,3 +1406,16 @@ Implemented a heuristic that flags URLs where a well-known brand token appears i
 Strengthened the example-like typo + login heuristic so “example-style” typo domains combined with login paths are treated as suspicious, and added a complementary test confirming that the same domains without login paths don’t get the same bump.
 
 Refactored test_scoring.py and test_manual_eval_behavior.py to be clearer and more maintainable, grouping tests by concern and reducing duplication while preserving existing behavior.
+
+*** Progress log: 03/12/2026
+
+Refactored IP reputation lookups to support an optional external provider while keeping a local suspicious IP list as fallback.
+
+Updated scoring to call the new lookup_ip_reputation helper and adjust heuristic risk based on local IP reputation.
+
+Added an ExternalIPReputationProvider protocol and tests to ensure external reputation overrides the local list when present.
+
+Implemented a standalone homoglyphs.py helper to detect simple m vs rn homoglyph brand spoofs (like rnicrosoft), including substring matching for real domains.
+
+
+Created tests/test_homoglyphs.py to exercise the homoglyph helper on known spoof and non-spoof inputs and got the full test suite back to green.
