@@ -90,6 +90,15 @@ BRAND_TOKENS = {
     "github",
 }
 
+PROTECTED_BRANDS = {
+    "paypal",
+    "apple",
+    "google",
+    "microsoft",
+    "netflix",
+    "amazon",
+}
+
 PHISHING_KEYWORDS = {
     "login", "signin", "sign-in",
     "verify", "verification",
@@ -604,6 +613,14 @@ def analyze_url(url: str) -> HeuristicResult:
 
     present_brands = {b for b in BRAND_TOKENS if b in host_flat}
     phishing_hits = {k for k in PHISHING_KEYWORDS if k in lower_host or k in lower_path or k in lower_query}
+
+    protected_hits = present_brands & PROTECTED_BRANDS
+    if protected_hits and base_domain not in TRUSTED_DOMAINS:
+        score += 0.25
+        reasons.append(
+            "Hostname contains protected brand tokens on a non-trusted domain; "
+            "this pattern is common in brand impersonation infrastructure."
+        )
 
     # Identify the part of the host before the base domain
     host_labels = (lower_host or "").split(".")
