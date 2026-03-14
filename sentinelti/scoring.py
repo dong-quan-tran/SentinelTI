@@ -200,6 +200,14 @@ def enrich_score(url: str) -> Dict[str, Any]:
 
     infra_flag = "normal"
 
+    # Surface homoglyph heuristic as an explicit reason
+    has_homoglyph = heuristic_dict.get("features", {}).get("has_m_rn_homoglyph")
+    if has_homoglyph:
+        reasons.append(
+            "URL hostname includes a known homoglyph brand pattern "
+            "(e.g., rn vs m or vv vs w), often used in phishing domains."
+        )
+
     # Internal-looking hosts (literal or resolved) get 'internal'
     is_internal = heuristic_dict.get("features", {}).get("is_internal")
     if is_internal:
