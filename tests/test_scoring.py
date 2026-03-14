@@ -176,3 +176,9 @@ def test_brand_token_in_trusted_domain_does_not_trigger_path_brand_reason() -> N
 def test_example_like_domain_without_login_path_is_weaker() -> None:
     h = analyze_url("http://examp1e.com/")
     assert not _has_reason("example/typo domain", h.reasons)
+
+
+def test_enrich_score_includes_homoglyph_reason() -> None:
+    result = enrich_score("https://rnicrosoft.com/login")
+    joined = " ".join(result["reasons"]).lower()
+    assert "homoglyph" in joined or "rn vs m" in joined
