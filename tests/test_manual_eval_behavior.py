@@ -417,3 +417,10 @@ def test_apple_id_like_verification_is_suspicious() -> None:
     assert result.score > 0.0
     reason_text = " ".join(result.reasons).lower()
     assert "apple" in reason_text or "brand-like" in reason_text
+
+
+def test_protected_brand_off_domain_gets_small_bump() -> None:
+    url = "http://secure-microsoft-login.example.com"
+    result = analyze_url(url)
+
+    assert result.score > 0.0
