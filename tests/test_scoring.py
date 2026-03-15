@@ -1,5 +1,5 @@
 import socket
-from typing import Iterable
+from typing import Iterable, Optional
 
 import pytest
 
@@ -7,6 +7,8 @@ from sentinelti import resolution, scoring
 from sentinelti.scoring import enrich_score
 from sentinelti.heuristics import analyze_url
 
+from sentinelti.scoring import enrich_score
+from sentinelti.reputation import IPReputationResult, ExternalIPReputationProvider
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -182,3 +184,15 @@ def test_enrich_score_includes_homoglyph_reason() -> None:
     result = enrich_score("https://rnicrosoft.com/login")
     joined = " ".join(result["reasons"]).lower()
     assert "homoglyph" in joined or "rn vs m" in joined
+
+
+def test_enrich_score_uses_local_ip_reputation() -> None:
+    url = "http://203.0.113.66/login"
+
+    result = enrich_score(url)
+
+    infra = result["infrastructure"]
+    assert infra["ip"] == "203.0.113.66"
+    # 203.0.113.66 is in KNOWN_SUSPICIOUS_IPS, so reputation should be suspicious
+    assert infra["reputation"] == "suspicious"
+    assert infra["reputation_source"] == "local-list"
