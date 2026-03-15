@@ -45,3 +45,8 @@ def test_analyze_url_does_not_flag_microsoft_dot_com() -> None:
     result = analyze_url(url)
 
     assert result.features.get("has_m_rn_homoglyph") is False
+
+
+def test_homoglyph_detection_is_case_insensitive_and_handles_subdomains() -> None:
+    assert has_m_rn_homoglyph_token(["Login.RNicrosoft.com"])
+    assert has_m_rn_homoglyph_token(["secure.tvvitter.example.net"])
