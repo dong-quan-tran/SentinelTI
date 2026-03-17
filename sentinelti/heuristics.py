@@ -617,11 +617,21 @@ def analyze_url(url: str) -> HeuristicResult:
 
     protected_hits = present_brands & PROTECTED_BRANDS
     if protected_hits and base_domain not in TRUSTED_DOMAINS:
-        score += 0.25
-        reasons.append(
-            "Hostname contains protected brand tokens on a non-trusted domain; "
-            "this pattern is common in brand impersonation infrastructure."
-        )
+        # Build a minimal token view over host+path for context
+        host_tokens_for_protected = (lower_host or "").replace(".", "-").split("-")
+        path_tokens_for_protected = [p for p in (lower_path or "").split("/") if p]
+        protected_tokens = host_tokens_for_protected + path_tokens_for_protected
+
+        has_login_like = any(t in {"login", "signin", "sign-in", "account"} for t in protected_tokens)
+        has_security_like = any(t in {"secure", "security", "security-check"} for t in protected_tokens)
+        has_recovery_like = any(t in {"recover", "recovery", "reset"} for t in protected_tokens)
+
+        if has_login_like or has_security_like or has_recovery_like:
+            score += 0.25
+            reasons.append(
+                "Hostname contains protected brand tokens with login/security/recovery terms "
+                "on a non-trusted domain; this pattern is common in brand impersonation infrastructure."
+            )
 
     # Identify the part of the host before the base domain
     host_labels = (lower_host or "").split(".")
