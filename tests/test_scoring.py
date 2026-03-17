@@ -196,3 +196,19 @@ def test_enrich_score_uses_local_ip_reputation() -> None:
     # 203.0.113.66 is in KNOWN_SUSPICIOUS_IPS, so reputation should be suspicious
     assert infra["reputation"] == "suspicious"
     assert infra["reputation_source"] == "local-list"
+
+
+def test_suspicious_ip_increases_heuristic_score() -> None:
+    url = "http://203.0.113.66/login"
+
+    result = enrich_score(url)
+
+    heur = result["heuristic"]
+    infra = result["infrastructure"]
+
+    assert infra["reputation"] == "suspicious"
+    assert infra["reputation_source"] == "local-list"
+
+    raw_score = heur.get("features", {}).get("raw_score")
+    assert raw_score is not None
+    assert raw_score > 0.0
