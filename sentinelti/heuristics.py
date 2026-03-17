@@ -16,25 +16,26 @@ Current limitations of heuristic-based URL analysis (v1)
 IP and infrastructure scope
 - The scoring layer performs best-effort DNS resolution for hostnames and exposes infrastructure metadata (IP, class, internal flag, TLD, local IP reputation, a summarized infra flag, and a reputation source) in the enriched output.
 - Mild infra-based heuristics are applied when an external-looking hostname resolves to an internal or loopback IP, when the resolved IP appears in a small, locally maintained suspicious‑IP list, or when login/executable content is served directly from a bare public IP.
-- External infrastructure and reputation services (e.g., hosting provider, domain age, commercial IP/domain reputation feeds) are still not integrated; infra signals currently rely only on local logic and static lists, behind a pluggable IP reputation hook that can accept optional external providers.
+- IP reputation currently relies on a small, static local list behind a pluggable reputation hook; external infrastructure and reputation services (e.g., commercial IP/domain feeds, hosting/provider data, domain age) are not yet wired in and infra signals still depend solely on local logic and static lists.
 
 Next steps:
-- Add optional configuration and wiring to actually call one or more external IP/domain reputation feeds through the existing adapter.
+- Add optional configuration and wiring to actually call one or more external IP/domain reputation feeds through the existing adapter, so external reputation can override or complement the local list where appropriate.
 - Consider enriching infra metadata with provider/ASN or coarse “cloud vs ISP vs hosting” classification once an external data source is available.
 - Add more targeted tests around behavior when external reputation is present vs absent (e.g., external “trusted” vs “malicious” overriding local list).
 
-
-Brand impersonation and typo scope
+Brand impersonation, typos, and homoglyphs
 - Brand impersonation logic focuses on obvious brand tokens (paypal, apple, google, microsoft, netflix, dropbox, facebook, amazon, etc.) outside a small whitelist of trusted domains, plus cases where brand tokens appear in the URL path or query but not in the base domain. It still does not use certificate/WHOIS/host reputation.
 - Additional heuristics exist for:
   - Some typo/IDN domains (including Punycode-based lookalikes).
   - Generic example-like typo domains with login paths (e.g. examp1e.com/login).
   - Core brand typosquats where the registrable label is a 1‑character edit from a small set of high-value brands (e.g. paypal, microsoft).
   - Targeted Microsoft-typo recovery domains (e.g. micr0soft-account.com/recover).
-- Homograph/typosquatting coverage is not exhaustive, especially for more complex character substitutions (e.g., rn vs m, mixed scripts) and multi-word brand phrases.
+  - A small set of explicit homoglyph patterns (currently rn↔m and vv↔w) used in simple brand-lookalike domains, implemented as a conservative, low-weight heuristic.
+- A protected-brands list (for common high-value targets like paypal, apple, google, microsoft, netflix, amazon) adds a small extra bump when those tokens appear on non-trusted domains, but brand and homoglyph coverage is still not exhaustive, especially for mixed scripts, more complex substitutions, and multi-word brand phrases.
 
 Next steps:
-- Introduce a small, configurable list of “protected brands” with more aggressive heuristics (e.g., higher scores or additional checks when brand tokens appear off-domain) while preserving whitelists for known-good hosts.
+- Gradually expand homoglyph and typo coverage beyond the current small set of explicit patterns, while keeping heuristics conservative to avoid excessive false positives.
+- Consider introducing configuration for protected brands and their weights so deployments can tune sensitivity per environment.
 - Keep external reputation/certificate/WHOIS-based checks as a separate future enhancement, so current lexical/structural heuristics remain lightweight and self-contained.
 """
 
