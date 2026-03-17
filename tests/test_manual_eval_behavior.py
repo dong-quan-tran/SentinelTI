@@ -424,3 +424,9 @@ def test_protected_brand_off_domain_gets_small_bump() -> None:
     result = analyze_url(url)
 
     assert result.score > 0.0
+
+
+def test_protected_brand_google_off_domain_gets_bump() -> None:
+    url = "http://google-security-check.example.net/login"
+    result = analyze_url(url)
+    assert result.score > 0.0
