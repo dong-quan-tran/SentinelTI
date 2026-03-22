@@ -430,3 +430,11 @@ def test_protected_brand_google_off_domain_gets_bump() -> None:
     url = "http://google-security-check.example.net/login"
     result = analyze_url(url)
     assert result.score > 0.0
+
+
+def test_docs_style_deep_path_has_low_heuristic_score() -> None:
+    url = "https://docs.example.com/products/platform/v2/guide/getting-started/installation"
+    result = analyze_url(url)
+    assert result.score >= 0.0
+    # Should not be strongly flagged by heuristics alone
+    assert result.score < 1.0
