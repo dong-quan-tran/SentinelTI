@@ -836,8 +836,8 @@ def analyze_url(url: str) -> HeuristicResult:
     if has_homoglyph and not is_trusted:
         score += 0.25
         reasons.append(
-            "Hostname contains a lookalike 'rn' vs 'm' brand pattern "
-            "(homoglyph typosquatting), seen in recent Microsoft/Marriott phishing campaigns."
+            "Hostname contains a known homoglyph brand pattern (e.g. 'rn' vs 'm' or 'vv' vs 'w'), "
+            "a simple typosquatting trick seen in recent phishing campaigns."
         )
 
 
