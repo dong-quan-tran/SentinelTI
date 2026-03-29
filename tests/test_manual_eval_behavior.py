@@ -438,3 +438,26 @@ def test_docs_style_deep_path_has_low_heuristic_score() -> None:
     assert result.score >= 0.0
     # Should not be strongly flagged by heuristics alone
     assert result.score < 1.0
+
+
+def test_deep_docs_path_is_not_penalized_heavily() -> None:
+    url = (
+        "https://docs.example.com/platform/product/v2/guide/getting-started/"
+        "installation/linux/package-manager/advanced/options"
+    )
+    result = analyze_url(url)
+
+    assert result.features.get("path_depth", 0) >= 6
+    # Should not get a big deep-path bump just for being docs
+    assert result.score < 1.0
+
+
+def test_protected_brand_with_login_on_untrusted_domain_gets_small_bump() -> None:
+    url = "https://secure-paypal-login.badexample.xyz/account/verify"
+    result = analyze_url(url)
+
+    # Sanity: we saw the brand heuristic at all
+    assert any(
+        "protected brand tokens" in r.lower()
+        for r in result.reasons
+    )
