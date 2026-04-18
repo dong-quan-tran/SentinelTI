@@ -9,6 +9,8 @@ from datetime import datetime
 import json
 import os
 
+from typing import Tuple, Any
+
 import joblib
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
@@ -24,6 +26,39 @@ MODELS_DIR.mkdir(exist_ok=True)
 
 def get_model_path(model_name: str) -> Path:
     return MODELS_DIR / f"url_classifier_{model_name}.joblib"
+
+def load_url_model(prefer: str = "xgb") -> Tuple[Any, list[str]]:
+    """
+    Load a trained URL model artifact.
+
+    Preference order (by default):
+    - Try XGBoost artifact.
+    - Fallback to Logistic Regression artifact.
+    """
+    # Map logical names to filenames
+    order = ["xgb", "logreg"]
+    if prefer == "logreg":
+        order = ["logreg", "xgb"]
+
+    last_error: Exception | None = None
+    for model_name in order:
+        path = get_model_path(model_name)
+        if not path.exists():
+            continue
+
+        try:
+            artifact = joblib.load(path)
+        except Exception as exc:  # pragma: no cover - defensive
+            last_error = exc
+            continue
+
+        model = artifact.get("model")
+        feature_names = artifact.get("feature_names", [])
+        return model, feature_names
+
+    if last_error is not None:
+        raise RuntimeError("Failed to load any URL model artifact") from last_error
+    raise FileNotFoundError("No trained URL model artifacts found")
 
 def train_url_model(
     use_real_data: bool = False,
