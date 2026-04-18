@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from sentinelti.ml.predict import predict_url_with_model_info
+from sentinelti.ml.predict import predict_url, get_malicious_threshold
 
 
 def score_url(url: str) -> Dict[str, object]:
-    label, prob_malicious, model_type = predict_url_with_model_info(url)
+    label, prob_malicious = predict_url(url)
     return {
         "url": url,
         "label": label,
         "prob_malicious": prob_malicious,
-        "model_type": model_type,
+        "threshold": get_malicious_threshold(),
     }
 
 

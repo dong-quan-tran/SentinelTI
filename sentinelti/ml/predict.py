@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Tuple
+import os
 
 import joblib
 import numpy as np
@@ -44,7 +45,22 @@ def load_model(prefer: str = "xgb"):
     raise FileNotFoundError("No trained URL model artifacts found")
 
 
-MALICIOUS_THRESHOLD = 0.75
+DEFAULT_MALICIOUS_THRESHOLD = 0.75
+
+
+def get_malicious_threshold() -> float:
+    raw = os.getenv("SENTINELTI_MALICIOUS_THRESHOLD")
+    if raw is None:
+        return DEFAULT_MALICIOUS_THRESHOLD
+
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_MALICIOUS_THRESHOLD
+
+    if 0.0 <= value <= 1.0:
+        return value
+    return DEFAULT_MALICIOUS_THRESHOLD
 
 
 def predict_url(url: str) -> Tuple[int, float]:
@@ -58,16 +74,6 @@ def predict_url(url: str) -> Tuple[int, float]:
     x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
 
     prob_malicious = float(model.predict_proba(x)[0][1])
-    label = int(prob_malicious >= MALICIOUS_THRESHOLD)
+    threshold = get_malicious_threshold()
+    label = int(prob_malicious >= threshold)
     return label, prob_malicious
-
-
-def predict_url_with_model_info(url: str) -> Tuple[int, float, str]:
-    model, feature_names, model_type = load_model()
-
-    feat_dict = extract_features(url)
-    x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
-
-    prob_malicious = float(model.predict_proba(x)[0][1])
-    label = int(prob_malicious >= MALICIOUS_THRESHOLD)
-    return label, prob_malicious, model_type
