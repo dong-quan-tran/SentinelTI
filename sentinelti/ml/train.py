@@ -20,8 +20,10 @@ from sentinelti.ml.dataset import build_dummy_dataset, build_real_dataset, build
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 MODELS_DIR.mkdir(exist_ok=True)
-MODEL_PATH = MODELS_DIR / "url_classifier.joblib"
 
+
+def get_model_path(model_name: str) -> Path:
+    return MODELS_DIR / f"url_classifier_{model_name}.joblib"
 
 def train_url_model(
     use_real_data: bool = False,
@@ -84,11 +86,13 @@ def train_url_model(
 
 
     artifact = {
+        "model_type": "logreg",
         "model": clf,
         "feature_names": feature_names,
     }
-    joblib.dump(artifact, MODEL_PATH)
-    print(f"Saved model to {MODEL_PATH}")
+    model_path = get_model_path("logreg")
+    joblib.dump(artifact, model_path)
+    print(f"Saved model to {model_path}")
 
 def load_dataset_for_training(
     use_real_data: bool = False,
@@ -197,11 +201,13 @@ def train_url_model_xgb(
 
 
     artifact = {
+        "model_type": "xgb",
         "model": clf,
         "feature_names": feature_names,
     }
-    joblib.dump(artifact, MODEL_PATH)
-    print(f"Saved model to {MODEL_PATH}")
+    model_path = get_model_path("xgb")
+    joblib.dump(artifact, model_path)
+    print(f"Saved model to {model_path}")
 
 
 def main():
