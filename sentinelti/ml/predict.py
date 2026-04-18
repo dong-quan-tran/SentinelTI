@@ -8,17 +8,43 @@ import numpy as np
 
 from sentinelti.ml.features import extract_features
 
-
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
-MODEL_PATH = MODELS_DIR / "url_classifier.joblib"
 
 
-def load_model():
-    artifact = joblib.load(MODEL_PATH)
-    return artifact["model"], artifact["feature_names"]
+def get_model_path(model_name: str) -> Path:
+    return MODELS_DIR / f"url_classifier_{model_name}.joblib"
 
 
-MALICIOUS_THRESHOLD = 0.75  # or start with 0.85–0.9
+def load_model(prefer: str = "xgb"):
+    order = ["xgb", "logreg"]
+    if prefer == "logreg":
+        order = ["logreg", "xgb"]
+
+    last_error: Exception | None = None
+
+    for model_name in order:
+        path = get_model_path(model_name)
+        if not path.exists():
+            continue
+
+        try:
+            artifact = joblib.load(path)
+        except Exception as exc:
+            last_error = exc
+            continue
+
+        return (
+            artifact["model"],
+            artifact["feature_names"],
+            artifact.get("model_type", model_name),
+        )
+
+    if last_error is not None:
+        raise RuntimeError("Failed to load any trained URL model") from last_error
+    raise FileNotFoundError("No trained URL model artifacts found")
+
+
+MALICIOUS_THRESHOLD = 0.75
 
 
 def predict_url(url: str) -> Tuple[int, float]:
@@ -26,7 +52,7 @@ def predict_url(url: str) -> Tuple[int, float]:
     Return (predicted_label, probability_of_malicious).
     label: 1 = malicious, 0 = benign.
     """
-    model, feature_names = load_model()
+    model, feature_names, _model_type = load_model()
 
     feat_dict = extract_features(url)
     x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
@@ -35,3 +61,13 @@ def predict_url(url: str) -> Tuple[int, float]:
     label = int(prob_malicious >= MALICIOUS_THRESHOLD)
     return label, prob_malicious
 
+
+def predict_url_with_model_info(url: str) -> Tuple[int, float, str]:
+    model, feature_names, model_type = load_model()
+
+    feat_dict = extract_features(url)
+    x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
+
+    prob_malicious = float(model.predict_proba(x)[0][1])
+    label = int(prob_malicious >= MALICIOUS_THRESHOLD)
+    return label, prob_malicious, model_type
