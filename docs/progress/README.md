@@ -1433,3 +1433,24 @@ Implemented a conservative rn vs m homoglyph heuristic end-to-end: standalone he
 Extended homoglyph coverage to include a vv vs w spoof pattern and added tests to confirm detection of tvvitter-style domains.
 
 Added new unit tests for multi-token brand impersonation patterns (e.g., “microsoft support”, “google drive”, “apple id”) to ensure they receive non-zero heuristic scores.
+
+Progress log: 4/19/2026
+
+### Completed
+- Stabilized tests after ML model artifact naming/loading changes
+- Removed accidental dependency on real trained model files in unit and behavior tests
+- Reworked one CLI test to run in-process instead of through `subprocess`
+
+### Changed
+- `tests/test_ml_service.py`: mocked `predict_url` within `sentinelti.ml.service`
+- `tests/test_scoring.py`: mocked `scoring.ml_score_url` for `enrich_score` tests
+- `tests/test_manual_eval_behavior.py`: mocked `scoring.ml_score_url` for behavior-driven scoring tests
+- `tests/test_cli_score_file.py`: switched from subprocess execution to direct `cli.main()` with mocked `enrich_score`
+
+### Notes
+The failures were caused by tests reaching the real model loader after the project moved away from a single hardcoded artifact path. The updated tests now isolate the ML boundary and verify behavior without requiring local model files.
+
+### Next
+- Add reusable fixtures for fake ML responses
+- Consider marking true model-artifact tests as integration tests
+- Run full suite in CI to confirm portability
