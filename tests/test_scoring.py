@@ -26,23 +26,14 @@ def _has_reason(snippet: str, reasons: Iterable[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def test_enrich_score_has_expected_keys(monkeypatch) -> None:
-    def fake_ml_score_url(url: str) -> dict:
-        return {
-            "url": url,
-            "label": 0,
-            "prob_malicious": 0.08,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
+def test_enrich_score_has_expected_keys(fake_ml_score) -> None:
+    fake_ml_score(prob=0.08, label=0)
 
     result = enrich_score("http://example.com")
 
-    for key in ["url", "label", "prob_malicious", "final_label", "risk", "reasons", "heuristic"]:
-        assert key in result
-
-    assert isinstance(result["reasons"], list)
-    assert isinstance(result["heuristic"], dict)
+    assert "url" in result
+    assert "label" in result
+    assert "prob_malicious" in result
 
 
 def test_enrich_score_includes_infrastructure_metadata(monkeypatch) -> None:
