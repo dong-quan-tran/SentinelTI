@@ -26,20 +26,8 @@ def _reasons_text(result: dict) -> str:
         "http://example.xyz/login",
     ],
 )
-def test_obvious_phish_are_not_benign(url: str, monkeypatch) -> None:
-    """
-    Obvious phishing-style URLs should never be classified as plain benign.
-    They should be at least 'suspicious' or 'malicious'.
-    """
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.20,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
+def test_obvious_phish_are_not_benign(url: str, fake_ml_score) -> None:
+    fake_ml_score(prob=0.20, label=0)
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
@@ -54,20 +42,8 @@ def test_obvious_phish_are_not_benign(url: str, monkeypatch) -> None:
         "https://www.amazon.com/ap/signin",
     ],
 )
-def test_known_legit_brand_logins_stay_benign(url: str, monkeypatch) -> None:
-    """
-    Known legitimate brand login URLs should normally stay benign/low-risk.
-    This guards against over-aggressive brand impersonation heuristics.
-    """
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.05,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
+def test_known_legit_brand_logins_stay_benign(url: str, fake_ml_score) -> None:
+    fake_ml_score(prob=0.05, label=0)
     result = enrich_score(url)
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
@@ -89,40 +65,15 @@ def test_known_legit_brand_logins_stay_benign(url: str, monkeypatch) -> None:
         "http://micr0soft-account.com/recover",
     ],
 )
-def test_typosquatted_and_idn_domains_are_suspicious(url: str, monkeypatch) -> None:
-    """
-    Typosquatted and IDN/Punycode lookalike domains should not be plain benign.
-    They should be at least 'suspicious' or 'malicious'.
-    """
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.20,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
+def test_typosquatted_and_idn_domains_are_suspicious(url: str, fake_ml_score) -> None:
+    fake_ml_score(prob=0.20, label=0)
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
 
-def test_example_typo_login_is_not_benign(monkeypatch) -> None:
-    """
-    A typo/homoglyph of 'example.com' combined with a login path
-    should not be plain benign.
-    """
+def test_example_typo_login_is_not_benign(fake_ml_score) -> None:
+    fake_ml_score(prob=0.20, label=0)
     url = "http://examp1e.com/login"
-
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.20,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
 
@@ -173,22 +124,9 @@ def test_office365_like_login_domains_are_not_benign(url: str, monkeypatch) -> N
     assert result["final_label"] in {"suspicious", "malicious"}
 
 
-def test_login_github_com_is_malicious_and_high_risk(monkeypatch) -> None:
-    """
-    Obvious fake GitHub login domains like login-github.com
-    should be treated as malicious/high-risk phishing.
-    """
+def test_login_github_com_is_malicious_and_high_risk(fake_ml_score) -> None:
+    fake_ml_score(prob=0.95, label=1)
     url = "http://login-github.com"
-
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 1,
-            "prob_malicious": 0.95,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
     result = enrich_score(url)
 
     assert result["final_label"] == "malicious"
@@ -198,22 +136,9 @@ def test_login_github_com_is_malicious_and_high_risk(monkeypatch) -> None:
     assert "GitHub credential phishing pages" in reasons
 
 
-def test_github_oauth_authorize_stays_benign_low_risk(monkeypatch) -> None:
-    """
-    Legitimate GitHub OAuth authorize endpoint should remain benign/low-risk
-    even though it contains login-related tokens.
-    """
+def test_github_oauth_authorize_stays_benign_low_risk(fake_ml_score) -> None:
+    fake_ml_score(prob=0.05, label=0)
     url = "https://github.com/login/oauth/authorize"
-
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.05,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
     result = enrich_score(url)
 
     assert result["final_label"] == "benign"
@@ -320,23 +245,11 @@ def test_executable_download_on_public_ip_is_not_benign(url: str, monkeypatch) -
         "http://localhost/dashboard",
     ],
 )
-def test_private_or_local_ip_urls_are_not_benign(url: str, monkeypatch) -> None:
-    """
-    URLs pointing to private or local IPs should not be plain benign.
-    They should be at least 'suspicious' due to potential internal exposure.
-    """
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.15,
-        }
 
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
+def test_private_or_local_ip_urls_are_not_benign(url: str, fake_ml_score) -> None:
+    fake_ml_score(prob=0.15, label=0)
     result = enrich_score(url)
     assert result["final_label"] in {"suspicious", "malicious"}
-
 
 @pytest.mark.parametrize(
     "url",
@@ -428,24 +341,11 @@ def test_login_on_public_ip_is_not_benign(url: str, monkeypatch) -> None:
         "https://login.microsoftonline.com/common/oauth2/authorize",
     ],
 )
-def test_legit_sso_like_urls_stay_benign(url: str, monkeypatch) -> None:
-    """
-    Legitimate SSO/OAuth-style URLs should normally stay benign/low-risk
-    despite containing login-related tokens.
-    """
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.05,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
+def test_legit_sso_like_urls_stay_benign(url: str, fake_ml_score) -> None:
+    fake_ml_score(prob=0.05, label=0)
     result = enrich_score(url)
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
-
 
 @pytest.mark.parametrize(
     "url",
@@ -454,19 +354,8 @@ def test_legit_sso_like_urls_stay_benign(url: str, monkeypatch) -> None:
         "https://docs.example.com/products/platform/v2/guide/getting-started/installation",
     ],
 )
-def test_benign_deep_content_urls_stay_benign(url: str, monkeypatch) -> None:
-    """
-    Deep but clearly benign content URLs (blog/docs) should normally stay benign/low-risk.
-    """
-    def fake_ml_score_url(u: str) -> dict:
-        return {
-            "url": u,
-            "label": 0,
-            "prob_malicious": 0.05,
-        }
-
-    monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-
+def test_benign_deep_content_urls_stay_benign(url: str, fake_ml_score) -> None:
+    fake_ml_score(prob=0.05, label=0)
     result = enrich_score(url)
     assert result["final_label"] == "benign"
     assert result["risk"] == "low"
