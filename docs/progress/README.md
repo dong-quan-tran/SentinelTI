@@ -1454,3 +1454,45 @@ The failures were caused by tests reaching the real model loader after the proje
 - Add reusable fixtures for fake ML responses
 - Consider marking true model-artifact tests as integration tests
 - Run full suite in CI to confirm portability
+
+
+## Progress Log - 2026-04-20
+
+### Testing and reliability
+
+- Added `tests/test_predict.py` to cover URL model loading and prediction:
+  - Verified `get_model_path()` builds the correct artifact filenames.
+  - Confirmed `load_model()` prefers the XGBoost artifact when available and falls back to logistic regression when only that artifact exists.
+  - Ensured `load_model(prefer="logreg")` respects the preference order.
+  - Added tests for error paths when no artifacts exist or an existing artifact fails to load (raising `FileNotFoundError` or `RuntimeError` as appropriate).
+  - Verified `predict_url()` returns the expected label and probability relative to the malicious threshold.
+
+### Test infrastructure and configuration
+
+- Created `tests/conftest.py` with shared fixtures:
+  - `fake_ml_score` to patch `sentinelti.scoring.ml_score_url` with configurable probabilities and labels across tests.
+  - `fake_cli_enrich_score` to patch `sentinelti.cli.enrich_score` for CLI tests without touching the real model/heuristic stack.
+- Updated `tests/test_manual_eval_behavior.py` to use the shared `fake_ml_score` fixture instead of inline ML fakes, reducing duplication and making behavior tests independent of real model artifacts.
+- Updated `tests/test_cli_score_file.py`:
+  - Switched to in-process `cli.main()` execution (no subprocess) and reused `fake_cli_enrich_score` for the success-path test.
+  - Added `test_cli_reports_missing_model_artifacts_gracefully` to assert CLI behavior when the underlying scoring raises a “No trained URL model artifacts found” error.
+
+### CLI robustness
+
+- Extended `sentinelti/cli.py` to handle missing model artifacts gracefully:
+  - Wrapped command dispatch in a narrow `try/except FileNotFoundError`.
+  - When the message matches “No trained URL model artifacts found”, the CLI now:
+    - prints a clear error to stderr explaining that model artifacts are missing and must be trained or added,
+    - exits with status code `1` instead of showing a raw traceback.
+  - Non-matching `FileNotFoundError` cases are re-raised, so unrelated bugs are not silently swallowed.
+
+### Pytest configuration
+
+- Added a repo-level `pytest.ini`:
+  - Registered an `integration` marker for any future tests that depend on real model artifacts or environment-specific setup.
+  - Set basic defaults (`addopts = -ra`, `testpaths = tests`) to streamline local and CI test runs.
+
+### Current status
+
+- All tests (including the new `test_predict.py` and CLI error-handling test) are passing.
+- The test suite no longer depends on model artifacts for unit and behavior tests, and the CLI now fails cleanly when artifacts are missing.
