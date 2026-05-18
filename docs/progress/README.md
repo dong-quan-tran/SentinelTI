@@ -1496,3 +1496,37 @@ The failures were caused by tests reaching the real model loader after the proje
 
 - All tests (including the new `test_predict.py` and CLI error-handling test) are passing.
 - The test suite no longer depends on model artifacts for unit and behavior tests, and the CLI now fails cleanly when artifacts are missing.
+
+Progress log: 05/17/2026
+
+Revalidated the SentinelTI ML stack context (datasets, models, feature extractor, prediction service) and confirmed that the current focus is model metadata and integration, not new modeling work.
+
+Shared the existing implementations of sentinelti/ml/train.py, sentinelti/ml/predict.py, and sentinelti/ml/service.py and walked through their current behavior, including how artifacts and metrics JSON were being written.
+
+Refactored train.py to:
+
+Standardize a model artifact format that bundles the trained estimator, feature names, and a nested metadata dictionary.
+
+Add richer metadata, including dataset source flags, class counts, feature version, threshold, class label mapping, and training parameters.
+
+Compute additional evaluation metrics (ROC AUC, average precision) alongside the existing classification_report to better characterize classifier performance.
+
+Save both a self-contained .joblib artifact and a JSON metrics document derived from the same metadata source to avoid drift.
+
+Refactored predict.py to:
+
+Load the new artifact structure while remaining backwards-compatible with simpler, legacy artifacts.
+
+Normalize metadata into a stable schema for downstream consumers (model type, trained timestamp, dataset name, metrics, threshold, feature version, class labels/counts, training params, artifact path).
+
+Centralize feature-vector construction and scoring in a helper so that both predict_url and predict_url_with_metadata rely on the same logic.
+
+Honor a threshold embedded in artifact metadata, with an environment-variable‑based fallback for global overrides.
+
+Verified the changes end-to-end by retraining both models on the Kaggle dataset:
+
+XGBoost: very high performance, metrics JSON and artifact written with the new metadata structure.
+
+Logistic Regression: similarly strong performance with a convergence warning (as expected), and a new artifact/metrics pair written.
+
+Crafted a commit message summarizing all these changes (metadata pipeline, artifact format, prediction refactor, and service stability).

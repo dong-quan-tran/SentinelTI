@@ -1,182 +1,148 @@
-## ML improvements
+Detailed to-do list (from tomorrow onward)
+1. Sanity-check and inspect metadata
+Load each artifact in a Python REPL or a small script and inspect artifact["metadata"] to confirm:
 
-The main ML weakness right now is that the classifier only sees a small lexical feature set, while much of the stronger detection logic lives outside the model in heuristics. A good next step is to **expand feature engineering and model metadata**, not replace the classifier outright. [par.nsf](https://par.nsf.gov/servlets/purl/10408623)
+model_type, trained_at, dataset_name, feature_version, threshold, class_counts, metrics, and training_params are present and shaped as you expect.
 
-### Feature engineering
-- Add hostname structure features: subdomain count, registrable-domain length, label count, max label length, average label length, repeated-label patterns. [ieeexplore.ieee](https://ieeexplore.ieee.org/document/11231397/)
-- Add lexical risk features: punycode flag, entropy-like score, repeated characters, uppercase ratio, separator density, suspicious extension flags (`.exe`, `.zip`, `.js`, `.scr`, `.bat`). [arxiv](https://arxiv.org/pdf/1910.06277.pdf)
-- Add phishing-flow features: redirect-style parameter count, nested URL presence, login token in host vs path, credential-parameter presence, recovery/reset keywords, raw-IP + login combo, uncommon port flag. [onlinelibrary.wiley](https://onlinelibrary.wiley.com/doi/10.1155/2021/8241104)
-- Add domain trust features in a lightweight way: trusted-domain exact match, protected-brand-in-host flag, typo-distance-to-brand features, SSO-like endpoint flag, internal/localhost flag. [blog.cloudflare](https://blog.cloudflare.com/50-most-impersonated-brands-protect-phishing/)
-- Normalize the TLD feature properly instead of carrying `_tld_raw`; either bucket TLDs into categories or encode them consistently during training and inference so the model can actually use them. [par.nsf](https://par.nsf.gov/servlets/purl/10408623)
+Values like class_counts match your dataset splits reasonably.
 
-### Model pipeline
-- Store richer artifact metadata inside each `.joblib`: `model_type`, `trained_at`, `dataset_name`, `metrics`, `feature_names`, `threshold`, `feature_version`.
-- Add feature schema validation in `predict.py` so inference fails clearly if the saved artifact expects missing features.
-- Add offline evaluation scripts for precision, recall, F1, ROC-AUC, and false-positive review on a fixed holdout set. [norma.ncirl](https://norma.ncirl.ie/8195/1/charandeepchinthalapalli.pdf)
-- Compare XGBoost against Random Forest or LightGBM-style boosting equivalents if available; boosted tree models often work well on engineered phishing URL features. [techscience](https://www.techscience.com/iasc/v31n3/44838/html)
-- Tune the threshold using validation data instead of a mostly static default of `0.75`, then expose that threshold from artifact metadata rather than environment override alone. [norma.ncirl](https://norma.ncirl.ie/8195/1/charandeepchinthalapalli.pdf)
+Open the latest JSON metrics files and confirm they align with the embedded artifact metadata (no drift between the two sources).
 
-### ML/heuristics boundary cleanup
-Right now some signals are duplicated conceptually across heuristics and what should eventually become model features. A clean split would be:
-- ML handles broad pattern recognition from structured features.
-- Heuristics keep explicit high-signal rules like raw IP + executable, brand impersonation edge cases, trusted-domain softening, and known dangerous URL structures. [ituonline](https://www.ituonline.com/blogs/mastering-heuristic-methods-for-malware-detection-and-reverse-engineering/)
-- `scoring.py` becomes the policy layer that fuses ML, heuristics, infra, and later LLM review.
+Decide whether any additional fields would be useful to add now (e.g., train_size, test_size, or a short free-text notes field).
 
-## AI / LLM additions
+2. Add unit/integration tests for ML plumbing
+Focus on small, targeted tests that guard the new behavior:
 
-The safest and most useful AI upgrade is to use LLMs as a **second-stage explainer and reviewer**, not as the sole detector. Layered systems are generally more robust than relying on one AI component alone. [veridas](https://veridas.com/en/layered-security/)
+Artifact loading:
 
-### Best initial use cases
-- Plain-English explanation of why a URL is suspicious or likely safe.
-- Rewrite technical reasons into normal-user language.
-- Generate user guidance like “Do not sign in”, “Open the company’s official site manually instead”, or “Verify with the sender through another channel”. [cuanschutz](https://www.cuanschutz.edu/offices/iss/iss-newsroom/it-security-action-and-awareness-best-practices-to-protect-against-phishing-and-smishing)
-- Review borderline cases where ML and heuristics disagree, for example:
-  - ML low, heuristics high
-  - ML medium, heuristics low
-  - trusted domain with unusual redirect behavior
+Test that loading a freshly trained artifact returns a model and feature names, and that the normalized metadata contains mandatory keys (model_type, threshold, feature_version, metrics, artifact_path).
 
-### Architecture
-Add an AI review layer after `enrich_score()`:
-- `enrich_score(url)` returns core result.
-- `review_with_llm(url, enriched_result, mode="consumer" | "analyst")` adds:
-  - `summary`
-  - `advice`
-  - `confidence_note`
-  - optional `llm_observations`
+Add a regression test ensuring older artifacts (without nested metadata) still load and produce a sensible metadata structure with defaults.
 
-Suggested modules:
-- `sentinelti/ai/providers/ollama.py`
-- `sentinelti/ai/providers/gemini.py`
-- `sentinelti/ai/review.py`
-- `sentinelti/ai/prompts.py`
+Prediction API:
 
-### Provider plan
-- **Ollama first** for free, local, privacy-friendly operation.
-- **Gemini second** as an optional cloud backend with stronger reasoning and structured response support, while watching current free-tier and rate-limit constraints. [ai.google](https://ai.google.dev/gemini-api/docs/pricing)
+Test predict_url_with_metadata returns a dict with label, prob_malicious, threshold, and model_meta, and that the types are correct.
 
-### AI todo list
-- Add a provider interface: `generate_analysis(prompt, response_schema)`.
-- Require structured JSON-only responses from the LLM.
-- Add a timeout and fallback so scoring still works if the LLM is unavailable.
-- Never let the LLM override a strong malicious verdict from deterministic layers without explicit policy.
-- Add red-team tests for prompt injection via malicious URLs and weird query strings, since attacker-controlled input will be sent to the model. [confident-ai](https://www.confident-ai.com/blog/red-teaming-llms-a-step-by-step-guide)
-- Add two explanation styles:
-  - `consumer`: simple, short, reassuring, action-focused
-  - `analyst`: fuller reasoning with signal grouping and caveats
+Test that when an artifact specifies a custom threshold, predictions honor that value rather than the environment default.
 
-## User-friendly UI
+Test that missing features in extract_features raise the expected error, and maybe add a positive test with a known URL and a mocked model to ensure feature-order mapping is correct.
 
-You already have the backend foundation in FastAPI, so the quickest win is to build a simple web app on top of `/score-url`. For public-facing security tools, the UI should reduce confusion and drive safe behavior with clear language and defensive design. [confetti](https://confetti.design/blog/a-better-ui-ux-can-save-your-users-from-security-threats)
+Service layer:
 
-### Public / regular-person view
-The public mode should answer only three things:
-- Is this safe?
-- Why?
-- What should I do next?
+Test score_url returns the full payload (url, label, prob_malicious, threshold, model_meta).
 
-#### Core screen
-- Large URL input box.
-- One primary button: **Check URL**.
-- A result card with:
-  - verdict: Safe / Suspicious / Dangerous
-  - short one-sentence explanation
-  - 2–4 action steps
-  - a confidence indicator in plain words, not only probabilities
+Test score_urls preserves ordering and simply maps over score_url.
 
-#### Recommended sections
-- “Why we flagged this” with 2–5 simple bullets.
-- “What you should do now”:
-  - Don’t log in yet
-  - Don’t download anything
-  - Visit the official site manually
-  - Ask the sender through another channel [consumer.ftc](https://consumer.ftc.gov/articles/how-recognize-avoid-phishing-scams)
-- “Technical details” collapsed by default.
+You can start with a single test file like tests/test_ml_predict_and_service.py and expand from there.
 
-#### UX principles
-- Avoid dumping raw probabilities first.
-- Avoid jargon like “lexical anomaly” in public mode.
-- Use color carefully: green, amber, red, but always with text labels for accessibility.
-- Add copy/paste-friendly results and a “report suspicious URL” action later. [cm-alliance](https://www.cm-alliance.com/cybersecurity-blog/when-poor-ui-becomes-a-security-risk-real-world-examples)
+3. Tighten feature extraction contracts
+Review features.py and explicitly list the feature names and their semantics somewhere (docstring or a constants block) so the relationship between the extractor and the model artifacts is documented.
 
-### Specialist / analyst view
-Analysts and advanced users will want the raw signals.
+Add tests for extract_features:
 
-#### Specialist panel
-- ML block:
-  - model type
-  - `prob_malicious`
-  - threshold
-  - model verdict
-- Heuristics block:
-  - heuristic score
-  - triggered rules
-  - raw features
-- Infrastructure block:
-  - resolved IP
-  - IP class
-  - infra flag
-  - reputation source
-- AI review block:
-  - structured summary
-  - reasoning notes
-  - disagreement/caveat markers
+A few “normal” URLs (benign-looking, obviously malicious, short, long).
 
-#### Extra specialist features
-- Full JSON response viewer.
-- Copy JSON / export JSON.
-- Batch upload and batch results table.
-- Filter by risk / final label.
-- Optional future redirect chain and DNS/ASN enrichment.
+Edge cases: malformed schemes, weird ports, nested URLs, punycode, missing host, etc.
 
-## Product roadmap
+Assert it never raises under those cases and always returns a full feature set containing every feature expected by your trained models.
 
-A practical order would be:
+Decide how you want to evolve feature_version:
 
-### Phase 1: strengthen detection
-- Expand `ml/features.py`
-- Add artifact metadata
-- Build evaluation scripts and curated test sets
-- Refine scoring thresholds in `scoring.py`
+For now, it’s a static label (“v2”).
 
-### Phase 2: add AI explanation
-- Build LLM provider abstraction
-- Add Ollama integration first
-- Add structured explanation output
-- Add optional Gemini provider
-- Only use LLM on borderline or explanation paths at first
+Later, when you add new features or change existing ones, you can bump that and treat it as part of your artifact compatibility story.
 
-### Phase 3: launch user UI
-- Build a simple single-page frontend
-- Public result mode by default
-- Collapsible analyst mode
-- Hook into existing FastAPI backend
+4. Threshold analysis and selection
+You have thresholds hardcoded for now; next step is to support more principled selection:
 
-### Phase 4: advanced features
-- Batch UI
-- redirect-chain inspection
-- screenshot preview
-- domain age / WHOIS / ASN enrichment
-- browser extension
-- email/text paste mode that extracts URLs automatically
+Write an offline analysis script/notebook that:
 
-## Highest-priority next tasks
+Loads a trained model artifact and its dataset split (or re-splits deterministically using the same random state).
 
-If you want the fastest meaningful progress, I’d do these next:
+Computes the score distribution for benign vs malicious on the holdout set.
 
-1. Expand `ml/features.py` with 10–15 stronger features. [pmc.ncbi.nlm.nih](https://pmc.ncbi.nlm.nih.gov/articles/PMC9436524/)
-2. Add model artifact metadata and expose real model info via API instead of hardcoding `"model": "xgb"`. [norma.ncirl](https://norma.ncirl.ie/8195/1/charandeepchinthalapalli.pdf)
-3. Build `ai/review.py` with an Ollama provider and strict JSON output. [arxiv](https://arxiv.org/html/2507.18215v2)
-4. Add a public-facing `/analyze` web page with:
-   - one input,
-   - verdict,
-   - simple explanation,
-   - hidden advanced details. [confetti](https://confetti.design/blog/a-better-ui-ux-can-save-your-users-from-security-threats)
+Plots or computes metrics across a grid of candidate thresholds (e.g., 0.5–0.99 in small increments).
 
-## My recommendation
+Logs precision, recall, F1, and maybe false-positive rate at each threshold.
 
-The best product shape is:
+From this, choose:
 
-- **ML + heuristics** = actual detection engine  
-- **LLM** = explanation and borderline review  
-- **UI** = two layers, public and analyst  
+A “default production” threshold aligned with your tolerance for false positives vs false negatives.
 
+Possibly alternate thresholds for different risk modes (e.g., “strict” vs “sensitive” in the future).
+
+Update the training code to:
+
+Optionally compute and record the “best threshold for F1” and/or a threshold based on a constraint (e.g., recall ≥ X at minimal FPs).
+
+Store that chosen threshold in the artifact metadata instead of the current static default.
+
+Update predict.py to:
+
+Prefer a threshold derived from this analysis if present in metadata.
+
+Keep the environment variable as an override mechanism only.
+
+5. Extend metadata for future API/UI
+Think about what the API/UI will want to display without re-parsing raw metrics:
+
+Consider adding in metadata:
+
+A short metrics_summary block with headline numbers (e.g., {"f1": ..., "precision": ..., "recall": ...} for the positive class only).
+
+Possibly a version_tag or model_id that you can surface in responses and logs for debugging (e.g., url-xgb-20260518).
+
+Ensure service.py passes through enough metadata so that your future API response schema doesn’t need to reach back into the artifacts again.
+
+Document the metadata schema in a small Markdown file (e.g., docs/model_artifacts.md) for future you.
+
+6. Design the API response schema
+Now that the service layer returns a rich structure, you can shape a clear, typed API response:
+
+Decide on a stable JSON schema for a single URL:
+
+Required: url, label (bool/int), risk_score (float), threshold, model_id, model_version, trained_at.
+
+Optional: model_family (xgb/logreg), metrics_summary, feature_version.
+
+Decide on batch responses:
+
+Likely a top-level { "results": [ ... ] } structure with each element using the single-URL schema.
+
+Map service.score_url output into that API shape in your backend (FastAPI/Flask/etc.), keeping the service layer free of web-framework concerns.
+
+Consider simple error representation: how you’ll surface feature-extraction failure or model-loading issues as HTTP responses.
+
+7. Plan the explanation / LLM layer
+You don’t need to implement it tomorrow, but you can define the inputs it will require:
+
+Identify what the explainer will see:
+
+The URL itself.
+
+Model score and label.
+
+Key feature values (and perhaps a few engineered “explanatory” signals like “length,” “number of suspicious TLDs,” “presence of IP-based host,” etc.).
+
+Model metadata (type, version, training date, maybe overall performance).
+
+Draft a small “reasoning payload” structure that the API can generate and the LLM can consume later.
+
+Note any extra signals you might want to add during feature extraction specifically for explanations (even if they are not used by the numeric model yet).
+
+8. UX/API design for the future UI
+Parallel to backend work, start sketching:
+
+What a basic “URL scan” page should show:
+
+Input box, scan button, risk label (safe/suspicious/malicious), probability bar, threshold marker.
+
+A small “about this model” footer showing model type, training date, dataset, and feature version.
+
+How you’ll represent model confidence visually (gauge, meter, text).
+
+How you’ll display explanations:
+
+Short textual explanation now; later, LLM-generated rationales.
+
+Make sure the API response schema from step 6 supports everything the UI needs without additional backend calls.
