@@ -1530,3 +1530,57 @@ XGBoost: very high performance, metrics JSON and artifact written with the new m
 Logistic Regression: similarly strong performance with a convergence warning (as expected), and a new artifact/metrics pair written.
 
 Crafted a commit message summarizing all these changes (metadata pipeline, artifact format, prediction refactor, and service stability).
+
+# SentinelTI progress log — 2026-05-18
+
+## ML / model status
+- Confirmed the current direction is no longer just “train models,” but to finish the ML metadata plumbing and make it usable in API/UI-facing flows.
+- Re-aligned on the ML roadmap: artifact metadata completeness, threshold handling, and tests remain key follow-up items.
+
+## Backend / API
+- Extended the backend/API work around explanation-oriented scoring.
+- Updated `sentinelti/scoring.py` so score output includes structured explanation data suitable for downstream consumers.
+- Updated `sentinelti/api.py` so explanation-aware responses are exposed through the API.
+- Aligned API expectations around the newer response shape and schema `1.2`.
+
+## Frontend / React
+- Confirmed React is the chosen frontend direction for SentinelTI.
+- Continued work on the result UX around:
+  - `VerdictCard.jsx`
+  - `DetailPanel.jsx`
+- Moved the UI toward a better split between:
+  - simple public-facing verdict experience
+  - expandable technical details for specialist users
+- Improved styling of the verdict/details panels to better match the app’s dark theme.
+- Updated the hero subtitle styling so:
+  - “Check whether a URL looks safe before you open it.”
+  stays on one line on larger screens.
+
+## Testing
+- Reworked `tests/test_api.py` to better cover explanation-aware endpoint behavior.
+- Added/updated test expectations for:
+  - schema version changes
+  - explanation fields
+  - `/explain-score`
+  - auth behavior
+- Hit a local pytest import-path issue (`ModuleNotFoundError: No module named 'sentinelti'`) while loading `tests/conftest.py`.
+- Resolved the local test runner/import setup issue.
+- Re-ran the API tests successfully and confirmed all tests are green.
+
+## Git / commits completed
+- Committed backend + UI explanation work:
+  - `sentinelti/api.py`
+  - `sentinelti/scoring.py`
+  - `sentinelti/frontend/src/components/VerdictCard.jsx`
+  - `sentinelti/frontend/src/components/DetailPanel.jsx`
+- Committed explanation-aware API test updates.
+- Continued styling iteration after functional work was verified.
+
+## Product direction reaffirmed
+- Kept the overall SentinelTI product direction aligned:
+  - simple “is this URL safe?” experience for regular users
+  - deeper technical analysis for advanced users
+  - future LLM-assisted explanation layer after deterministic plumbing is stable
+
+## Best next step
+- Resume with ML metadata sanity checks and ML predict/service tests, while continuing lighter frontend polish in parallel as needed.

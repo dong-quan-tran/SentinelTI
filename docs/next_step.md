@@ -1,148 +1,256 @@
-Detailed to-do list (from tomorrow onward)
-1. Sanity-check and inspect metadata
-Load each artifact in a Python REPL or a small script and inspect artifact["metadata"] to confirm:
+# Detailed to-do list (updated after today's progress)
 
-model_type, trained_at, dataset_name, feature_version, threshold, class_counts, metrics, and training_params are present and shaped as you expect.
+## What was completed today
 
-Values like class_counts match your dataset splits reasonably.
+- Added / refined explanation-oriented scoring output in the backend so API/UI consumers can use structured explanation fields instead of only raw score data.
+- Updated `sentinelti/api.py` and `sentinelti/scoring.py` so explanation data is exposed through the API layer.
+- Updated React frontend components (`sentinelti/frontend/src/components/VerdictCard.jsx` and `DetailPanel.jsx`) to support a simpler public-facing verdict view plus expandable technical details.
+- Added / updated API tests to cover the newer response contract, including explanation-aware behavior and schema `1.2`.
+- Fixed local pytest execution issues by addressing package import / test runner setup, then confirmed all tests are green.
+- Improved frontend styling so the verdict/details panels match the dark theme better instead of using harsh white cards.
+- Updated the hero copy styling so “Check whether a URL looks safe before you open it.” stays on one line on larger screens.
 
-Open the latest JSON metrics files and confirm they align with the embedded artifact metadata (no drift between the two sources).
+---
 
-Decide whether any additional fields would be useful to add now (e.g., train_size, test_size, or a short free-text notes field).
+## 1. Sanity-check and inspect ML artifact metadata
 
-2. Add unit/integration tests for ML plumbing
-Focus on small, targeted tests that guard the new behavior:
+Load each artifact in a Python REPL or a small script and inspect `artifact["metadata"]` to confirm:
 
-Artifact loading:
+- `model_type`, `trained_at`, `dataset_name`, `feature_version`, `threshold`, `class_counts`, `metrics`, and `training_params` are present and shaped as expected.
+- Values like `class_counts` match your dataset splits reasonably.
+- The latest JSON metrics files align with the embedded artifact metadata (no drift between the two sources).
+- Decide whether any additional fields would be useful now, such as:
+  - `train_size`
+  - `test_size`
+  - `notes`
+  - `model_id` / `version_tag`
 
-Test that loading a freshly trained artifact returns a model and feature names, and that the normalized metadata contains mandatory keys (model_type, threshold, feature_version, metrics, artifact_path).
+## 2. Add unit/integration tests for ML plumbing
 
-Add a regression test ensuring older artifacts (without nested metadata) still load and produce a sensible metadata structure with defaults.
+Create or expand a focused file such as:
 
-Prediction API:
+- `tests/test_ml_predict_and_service.py`
 
-Test predict_url_with_metadata returns a dict with label, prob_malicious, threshold, and model_meta, and that the types are correct.
+Cover:
 
-Test that when an artifact specifies a custom threshold, predictions honor that value rather than the environment default.
+### Artifact loading
+- Loading a freshly trained artifact returns:
+  - a model,
+  - feature names,
+  - normalized metadata with mandatory keys (`model_type`, `threshold`, `feature_version`, `metrics`, `artifact_path`)
+- Older artifacts without nested metadata still load and normalize to sensible defaults
 
-Test that missing features in extract_features raise the expected error, and maybe add a positive test with a known URL and a mocked model to ensure feature-order mapping is correct.
+### Prediction API
+- `predict_url_with_metadata()` returns:
+  - `label`
+  - `prob_malicious`
+  - `threshold`
+  - `model_meta`
+- Types are correct
+- Custom threshold from artifact metadata is honored
+- Missing features from `extract_features()` raise the expected error
+- Positive test with a mocked model confirms feature ordering is respected
 
-Service layer:
+### Service layer
+- `score_url()` returns:
+  - `url`
+  - `label`
+  - `prob_malicious`
+  - `threshold`
+  - `model_meta`
+- `score_urls()` preserves ordering and maps cleanly over `score_url()`
 
-Test score_url returns the full payload (url, label, prob_malicious, threshold, model_meta).
+## 3. Tighten feature extraction contracts
 
-Test score_urls preserves ordering and simply maps over score_url.
+Review `features.py` and explicitly document feature names plus semantics in either:
 
-You can start with a single test file like tests/test_ml_predict_and_service.py and expand from there.
+- a module docstring, or
+- a constant block
 
+Add tests for `extract_features()` covering:
+
+- normal URLs:
+  - benign-looking
+  - obviously malicious
+  - short
+  - long
+- edge cases:
+  - malformed schemes
+  - weird ports
+  - nested URLs
+  - punycode
+  - missing host
+
+Assert that:
+
+- extraction does not crash on those cases unless failure is intentionally expected,
+- the returned feature set is complete,
+- the feature keys match what trained artifacts expect.
+
+Also decide how to evolve `feature_version`:
+
+- current static label: `v2`
+- future changes should treat feature version as part of artifact compatibility
+
+## 4. Threshold analysis and selection
+
+Thresholding is still fairly static and should become more principled.
+
+Write an offline analysis script or notebook that:
+
+- loads a trained model artifact,
+- reconstructs or reuses the holdout split deterministically,
+- computes score distributions for benign vs malicious samples,
+- evaluates candidate thresholds (for example `0.50` to `0.99`),
+- logs:
+  - precision
+  - recall
+  - F1
+  - false-positive rate
+
+From that, choose:
+
+- a default production threshold,
+- possibly alternate thresholds later (`strict`, `sensitive`, etc.)
+
+Then update training to:
+
+- compute and store a chosen threshold from analysis,
+- optionally record “best F1 threshold” and/or constraint-based thresholds,
+- save that threshold into artifact metadata.
+
+Then update `predict.py` to:
+
+- prefer threshold from artifact metadata,
+- use environment overrides only as an override mechanism.
+
+## 5. Extend metadata for future API/UI
+
+Think about what the API/UI should display without extra parsing.
+
+Consider adding to metadata:
+
+- `metrics_summary`
+- `model_id`
+- `version_tag`
+- positive-class summary metrics only (`precision`, `recall`, `f1`)
+- any lightweight debugging identifiers helpful in logs
+
+Ensure `service.py` passes enough metadata through so the API and UI do not need to reopen artifacts or reconstruct context elsewhere.
+
+Document the metadata schema in:
+
+- `docs/model_artifacts.md`
+
+## 6. Refine the API response schema
+
+This area made progress today, but it should now be stabilized.
+
+Decide on a clear long-term single-URL schema, likely including:
+
+- `url`
+- `label`
+- `prob_malicious` or `risk_score`
+- `threshold`
+- `final_label`
+- `risk`
+- `model_id`
+- `model_version`
+- `trained_at`
+- `feature_version`
+- `model_family`
+- `metrics_summary`
+- `explanation`
+
+For explanation output, standardize fields like:
+
+- `summary`
+- `why_flagged`
+- `user_action`
+- `technical_notes`
+
+For batch responses:
+
+- keep a top-level `{ "results": [...] }` shape
+
+Also decide how API errors should be represented for:
+
+- feature extraction failures
+- model loading issues
+- invalid URL input
+
+## 7. Plan the explanation / LLM layer
+
+You do not need to implement it immediately, but today’s explanation work means you now have a natural place to plug it in later.
+
+Define the future explainer input payload, including:
+
+- the URL
+- model score and label
+- threshold
+- final verdict
+- heuristic reasons
+- key explanatory feature values
+- model metadata
+
+Decide:
+
+- which explanation fields remain deterministic / rule-based,
+- which fields could later be enhanced by Ollama or Gemini,
+- whether an LLM should be optional for borderline or high-interest cases only.
+
+A good next artifact here would be a small “reasoning payload” contract the API can emit and a future explainer can consume.
+
+## 8. Continue frontend UX polish
+
+This became an active workstream today and should continue.
+
+Completed today:
+- React verdict/details components were updated
+- expandable technical details were introduced
+- dark-theme styling was improved
+
+Next frontend tasks:
+
+### Request-state polish
+- strengthen loading state UX
+- improve API error presentation
+- improve empty-state behavior before the first scan
+
+### Result clarity
+- make safe / warning / malicious states visually more distinct
+- tune spacing, badges, and contrast further
+- verify advanced details remain easy to scan
+
+### Public vs specialist UX
+- keep the default result simple for normal users
+- preserve expandable technical details for advanced users
+- consider explicit “simple” / “advanced” labeling if needed
+
+### Metadata display
+- add a small “about this model” footer or block:
+  - model type
+  - trained date
+  - dataset
+  - feature version
+
+## 9. Add frontend/API integration confidence checks
+
+Because the UI now depends on explanation-aware responses, add a small round of integration validation:
+
+- verify frontend handles missing optional explanation fields gracefully
+- verify batch and single-result API shapes do not drift
+- ensure the UI does not break if metadata is partially missing
+- consider one light frontend test later for verdict rendering behavior
+
+## 10. Keep the roadmap order practical
+
+Recommended order from here:
+
+1. Sanity-check embedded model metadata
+2. Add ML predict/service tests
 3. Tighten feature extraction contracts
-Review features.py and explicitly list the feature names and their semantics somewhere (docstring or a constants block) so the relationship between the extractor and the model artifacts is documented.
-
-Add tests for extract_features:
-
-A few “normal” URLs (benign-looking, obviously malicious, short, long).
-
-Edge cases: malformed schemes, weird ports, nested URLs, punycode, missing host, etc.
-
-Assert it never raises under those cases and always returns a full feature set containing every feature expected by your trained models.
-
-Decide how you want to evolve feature_version:
-
-For now, it’s a static label (“v2”).
-
-Later, when you add new features or change existing ones, you can bump that and treat it as part of your artifact compatibility story.
-
-4. Threshold analysis and selection
-You have thresholds hardcoded for now; next step is to support more principled selection:
-
-Write an offline analysis script/notebook that:
-
-Loads a trained model artifact and its dataset split (or re-splits deterministically using the same random state).
-
-Computes the score distribution for benign vs malicious on the holdout set.
-
-Plots or computes metrics across a grid of candidate thresholds (e.g., 0.5–0.99 in small increments).
-
-Logs precision, recall, F1, and maybe false-positive rate at each threshold.
-
-From this, choose:
-
-A “default production” threshold aligned with your tolerance for false positives vs false negatives.
-
-Possibly alternate thresholds for different risk modes (e.g., “strict” vs “sensitive” in the future).
-
-Update the training code to:
-
-Optionally compute and record the “best threshold for F1” and/or a threshold based on a constraint (e.g., recall ≥ X at minimal FPs).
-
-Store that chosen threshold in the artifact metadata instead of the current static default.
-
-Update predict.py to:
-
-Prefer a threshold derived from this analysis if present in metadata.
-
-Keep the environment variable as an override mechanism only.
-
-5. Extend metadata for future API/UI
-Think about what the API/UI will want to display without re-parsing raw metrics:
-
-Consider adding in metadata:
-
-A short metrics_summary block with headline numbers (e.g., {"f1": ..., "precision": ..., "recall": ...} for the positive class only).
-
-Possibly a version_tag or model_id that you can surface in responses and logs for debugging (e.g., url-xgb-20260518).
-
-Ensure service.py passes through enough metadata so that your future API response schema doesn’t need to reach back into the artifacts again.
-
-Document the metadata schema in a small Markdown file (e.g., docs/model_artifacts.md) for future you.
-
-6. Design the API response schema
-Now that the service layer returns a rich structure, you can shape a clear, typed API response:
-
-Decide on a stable JSON schema for a single URL:
-
-Required: url, label (bool/int), risk_score (float), threshold, model_id, model_version, trained_at.
-
-Optional: model_family (xgb/logreg), metrics_summary, feature_version.
-
-Decide on batch responses:
-
-Likely a top-level { "results": [ ... ] } structure with each element using the single-URL schema.
-
-Map service.score_url output into that API shape in your backend (FastAPI/Flask/etc.), keeping the service layer free of web-framework concerns.
-
-Consider simple error representation: how you’ll surface feature-extraction failure or model-loading issues as HTTP responses.
-
-7. Plan the explanation / LLM layer
-You don’t need to implement it tomorrow, but you can define the inputs it will require:
-
-Identify what the explainer will see:
-
-The URL itself.
-
-Model score and label.
-
-Key feature values (and perhaps a few engineered “explanatory” signals like “length,” “number of suspicious TLDs,” “presence of IP-based host,” etc.).
-
-Model metadata (type, version, training date, maybe overall performance).
-
-Draft a small “reasoning payload” structure that the API can generate and the LLM can consume later.
-
-Note any extra signals you might want to add during feature extraction specifically for explanations (even if they are not used by the numeric model yet).
-
-8. UX/API design for the future UI
-Parallel to backend work, start sketching:
-
-What a basic “URL scan” page should show:
-
-Input box, scan button, risk label (safe/suspicious/malicious), probability bar, threshold marker.
-
-A small “about this model” footer showing model type, training date, dataset, and feature version.
-
-How you’ll represent model confidence visually (gauge, meter, text).
-
-How you’ll display explanations:
-
-Short textual explanation now; later, LLM-generated rationales.
-
-Make sure the API response schema from step 6 supports everything the UI needs without additional backend calls.
+4. Stabilize and document API schema
+5. Improve request/error/empty frontend states
+6. Do threshold analysis
+7. Define the future LLM reasoning payload
