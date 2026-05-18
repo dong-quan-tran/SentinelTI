@@ -1,85 +1,128 @@
+import { useMemo, useState } from "react";
+import DetailPanel from "./DetailPanel";
+
+function getVerdictTone(finalLabel, risk) {
+  if (finalLabel === "malicious" || risk === "high") {
+    return {
+      badgeClass: "badge-danger",
+      cardClass: "verdict-card verdict-danger",
+      title: "Potentially unsafe URL",
+    };
+  }
+
+  if (risk === "medium" || finalLabel === "suspicious") {
+    return {
+      badgeClass: "badge-warning",
+      cardClass: "verdict-card verdict-warning",
+      title: "Use caution",
+    };
+  }
+
+  return {
+    badgeClass: "badge-safe",
+    cardClass: "verdict-card verdict-safe",
+    title: "Looks relatively safe",
+  };
+}
+
 function formatPercent(value) {
-  return `${Math.round((value || 0) * 100)}%`;
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "N/A";
+  }
+  return `${Math.round(value * 100)}%`;
 }
 
-function getTone(finalLabel, risk) {
-  if (finalLabel === "malicious" || risk === "high") return "danger";
-  if (finalLabel === "suspicious" || risk === "medium") return "warning";
-  return "safe";
-}
+export default function VerdictCard({ result, isLoading = false }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-function getTitle(finalLabel, risk) {
-  if (finalLabel === "malicious" || risk === "high") return "Likely malicious";
-  if (finalLabel === "suspicious" || risk === "medium") return "Suspicious";
-  return "Looks low risk";
-}
+  const tone = useMemo(() => {
+    return getVerdictTone(result?.final_label, result?.risk);
+  }, [result?.final_label, result?.risk]);
 
-export default function VerdictCard({ result }) {
-  if (!result) return null;
+  if (isLoading) {
+    return (
+      <section className="verdict-card verdict-loading" aria-live="polite">
+        <div className="skeleton skeleton-title" />
+        <div className="skeleton skeleton-line" />
+        <div className="skeleton skeleton-line short" />
+      </section>
+    );
+  }
 
-  const probability = result.prob_malicious || 0;
-  const threshold = result.threshold || 0.75;
-  const explanation = result.explanation || {};
-  const tone = getTone(result.final_label, result.risk);
-  const title = getTitle(result.final_label, result.risk);
+  if (!result) {
+    return null;
+  }
+
+  const explanation = result.explanation ?? {};
+  const summary =
+    explanation.summary ??
+    "A URL analysis result is available, but no summary was returned.";
+  const whyFlagged =
+    explanation.why_flagged ??
+    "No additional explanation was returned by the backend.";
+  const userAction =
+    explanation.user_action ??
+    "Use caution and verify the destination before visiting the link.";
+  const confidenceText = formatPercent(result.prob_malicious);
 
   return (
-    <section className="card result-card">
-      <div className="result-header">
-        <div className={`verdict-pill ${tone}`}>{title}</div>
-        <div className="risk-text">Risk: {result.risk}</div>
-      </div>
-
-      <div className="score-number">{formatPercent(probability)}</div>
-      <div className="score-caption">estimated malicious probability</div>
-
-      <div className="meter">
-        <div
-          className="meter-fill"
-          style={{ width: `${Math.max(0, Math.min(100, probability * 100))}%` }}
-        />
-        <div
-          className="meter-threshold"
-          style={{ left: `${Math.max(0, Math.min(100, threshold * 100))}%` }}
-        />
-      </div>
-
-      <div className="meter-labels">
-        <span>Lower risk</span>
-        <span>Threshold</span>
-        <span>Higher risk</span>
-      </div>
-
-      <div className="tip-grid">
-        <div className="tip-card">
-          <h3>Summary</h3>
-          <p>
-            {explanation.summary ||
-              "No summary was returned for this scan."}
-          </p>
+    <section className={tone.cardClass} aria-live="polite">
+      <div className="verdict-card__header">
+        <div>
+          <p className="eyebrow">SentinelTI verdict</p>
+          <h2>{tone.title}</h2>
         </div>
-        <div className="tip-card">
-          <h3>Recommended action</h3>
-          <p>
-            {explanation.user_action ||
-              "Proceed carefully and verify the destination independently."}
-          </p>
-        </div>
+
+        <span className={`verdict-badge ${tone.badgeClass}`}>
+          {result.final_label ?? "unknown"}
+        </span>
       </div>
 
-      <div className="reason-block">
-        <h3>Why it was flagged</h3>
-        <div className="reason-list">
-          <div className="reason-item">
-            {explanation.why_flagged || "No explanation details were returned."}
+      <div className="verdict-card__body">
+        <p className="verdict-summary">{summary}</p>
+
+        <div className="verdict-key-facts">
+          <div className="fact-chip">
+            <span className="fact-chip__label">Risk</span>
+            <span className="fact-chip__value">{result.risk ?? "unknown"}</span>
           </div>
-          {(explanation.technical_notes || []).map((note, index) => (
-            <div className="reason-item" key={`${note}-${index}`}>
-              {note}
-            </div>
-          ))}
+
+          <div className="fact-chip">
+            <span className="fact-chip__label">Malicious score</span>
+            <span className="fact-chip__value">{confidenceText}</span>
+          </div>
+        </div>
+
+        <div className="verdict-guidance">
+          <div className="verdict-guidance__block">
+            <h3>Why this was flagged</h3>
+            <p>{whyFlagged}</p>
+          </div>
+
+          <div className="verdict-guidance__block">
+            <h3>What you should do</h3>
+            <p>{userAction}</p>
+          </div>
         </div>
       </div>
+
+      <div className="verdict-card__actions">
+        <button
+          type="button"
+          className="details-toggle"
+          aria-expanded={showAdvanced}
+          aria-controls="technical-details-panel"
+          onClick={() => setShowAdvanced((value) => !value)}
+        >
+          {showAdvanced ? "Hide technical details" : "Show technical details"}
+        </button>
+      </div>
+
+      {showAdvanced ? (
+        <div id="technical-details-panel" className="verdict-card__details">
+          <DetailPanel result={result} />
+        </div>
+      ) : null}
     </section>
   );
 }

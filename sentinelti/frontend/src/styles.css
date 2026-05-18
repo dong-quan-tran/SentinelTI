@@ -2,6 +2,7 @@
   --bg: #0d1321;
   --surface: #151c2f;
   --surface-2: #1b2440;
+  --surface-3: #202b4a;
   --border: #2d3a63;
   --text: #eef3ff;
   --muted: #a5b3d9;
@@ -20,7 +21,9 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   min-height: 100%;
 }
 
@@ -75,6 +78,7 @@ h1 {
   max-width: 64ch;
   font-size: 1.05rem;
   line-height: 1.65;
+  white-space: nowrap;
 }
 
 .top-grid,
@@ -96,7 +100,7 @@ h1 {
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.025));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.025));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -365,6 +369,201 @@ h1 {
   line-height: 1.55;
 }
 
+.verdict-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 1.1rem;
+  background: linear-gradient(180deg, rgba(27, 36, 64, 0.92), rgba(21, 28, 47, 0.96));
+  color: var(--text);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
+.verdict-card__header,
+.verdict-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.verdict-card__header {
+  margin-bottom: 1rem;
+}
+
+.verdict-card__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.verdict-summary {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.verdict-key-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.fact-chip {
+  min-width: 140px;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.fact-chip__label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.fact-chip__value {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.verdict-guidance {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.verdict-guidance__block h3,
+.detail-card h3,
+.detail-card h4 {
+  margin-bottom: 0.45rem;
+  color: var(--text);
+}
+
+.verdict-guidance__block p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.details-toggle {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.details-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.details-toggle.secondary {
+  margin-top: 0.5rem;
+}
+
+.verdict-card__details {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.detail-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-panel__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.detail-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(32, 43, 74, 0.78), rgba(27, 36, 64, 0.72));
+  color: var(--text);
+}
+
+.detail-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.detail-list dt {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.detail-list dd {
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.detail-bullets {
+  padding-left: 1.1rem;
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+}
+
+.detail-bullets li + li {
+  margin-top: 0.45rem;
+}
+
+.detail-copy {
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.detail-copy.muted {
+  opacity: 0.85;
+}
+
+.raw-json-block {
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 14px;
+  background: rgba(10, 15, 28, 0.92);
+  color: #dbe7ff;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.badge-danger {
+  background: rgba(227, 93, 106, 0.16);
+  color: #ffb4bc;
+}
+
+.badge-warning {
+  background: rgba(231, 169, 61, 0.16);
+  color: #ffd086;
+}
+
+.badge-safe {
+  background: rgba(29, 187, 115, 0.16);
+  color: #8ef0bf;
+}
+
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
 @media (max-width: 920px) {
   .top-grid,
   .result-grid,
@@ -378,5 +577,21 @@ h1 {
 
   .kv-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-copy {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 640px) {
+  .verdict-card__header,
+  .verdict-card__actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .fact-chip {
+    width: 100%;
   }
 }
