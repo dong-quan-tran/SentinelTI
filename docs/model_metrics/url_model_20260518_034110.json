@@ -1,0 +1,41 @@
+{
+  "model": "logreg",
+  "train_source": {
+    "use_real_data": true,
+    "use_urlhaus": false,
+    "csv_path": "data/urldata.csv"
+  },
+  "class_counts": {
+    "train_0": 242016,
+    "train_1": 73106,
+    "test_0": 103722,
+    "test_1": 31331
+  },
+  "report": {
+    "0": {
+      "precision": 0.99204874216849,
+      "recall": 0.9983995680762037,
+      "f1-score": 0.9952140234878044,
+      "support": 103722.0
+    },
+    "1": {
+      "precision": 0.9945870153585287,
+      "recall": 0.9735086655389231,
+      "f1-score": 0.983934965644053,
+      "support": 31331.0
+    },
+    "accuracy": 0.9926251175464448,
+    "macro avg": {
+      "precision": 0.9933178787635093,
+      "recall": 0.9859541168075634,
+      "f1-score": 0.9895744945659287,
+      "support": 135053.0
+    },
+    "weighted avg": {
+      "precision": 0.992637597190719,
+      "recall": 0.9926251175464448,
+      "f1-score": 0.9925973903045167,
+      "support": 135053.0
+    }
+  }
+}
