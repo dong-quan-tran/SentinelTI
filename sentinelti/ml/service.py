@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from sentinelti.ml.predict import predict_url_with_metadata
+from sentinelti.ml.predict import predict_url, predict_url_with_metadata
 
 
 def score_url(url: str) -> Dict[str, object]:
@@ -17,4 +17,4 @@ def score_url(url: str) -> Dict[str, object]:
 
 
 def score_urls(urls: List[str]) -> List[Dict[str, object]]:
-    return [score_url(url) for url in urls]
+    return [score_url(u) for u in urls]

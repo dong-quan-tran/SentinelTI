@@ -64,7 +64,7 @@ def _normalize_metadata(
     }
 
 
-def load_model(prefer: str = "xgb"):
+def _load_artifact(prefer: str = "xgb"):
     order = ["xgb", "logreg"]
     if prefer == "logreg":
         order = ["logreg", "xgb"]
@@ -84,7 +84,6 @@ def load_model(prefer: str = "xgb"):
 
         _validate_artifact(artifact, path)
         metadata = _normalize_metadata(artifact, model_name, path)
-
         return artifact["model"], artifact["feature_names"], metadata
 
     if last_error is not None:
@@ -92,9 +91,44 @@ def load_model(prefer: str = "xgb"):
     raise FileNotFoundError("No trained URL model artifacts found")
 
 
+def load_model(prefer: str = "xgb"):
+    """
+    Primary loader.
+
+    Returns:
+        tuple[model, feature_names, metadata]
+    """
+    return _load_artifact(prefer=prefer)
+
+
+def load_model_legacy(prefer: str = "xgb"):
+    """
+    Backward-compatible loader for older tests/code.
+
+    Returns:
+        tuple[model, feature_names, model_type]
+    """
+    model, feature_names, metadata = _load_artifact(prefer=prefer)
+    return model, feature_names, str(metadata.get("model_type", prefer))
+
+
 def get_loaded_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
     _model, _feature_names, metadata = load_model(prefer=prefer)
-    return metadata
+    if isinstance(metadata, dict):
+        return metadata
+    return {
+        "model_type": str(metadata),
+        "threshold": get_malicious_threshold(),
+        "feature_version": DEFAULT_FEATURE_VERSION,
+        "metrics": {},
+    }
+
+
+def get_loaded_model_type(prefer: str = "xgb") -> str:
+    _model, _feature_names, metadata = load_model(prefer=prefer)
+    if isinstance(metadata, dict):
+        return str(metadata.get("model_type", prefer))
+    return str(metadata)
 
 
 def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
@@ -109,8 +143,21 @@ def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
     return np.array([[feat_dict[name] for name in feature_names]], dtype=float)
 
 
+def _coerce_metadata(metadata: Any, prefer: str = "xgb") -> Dict[str, Any]:
+    if isinstance(metadata, dict):
+        return metadata
+    return {
+        "model_type": str(metadata),
+        "threshold": get_malicious_threshold(),
+        "feature_version": DEFAULT_FEATURE_VERSION,
+        "metrics": {},
+    }
+
+
 def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
     model, feature_names, metadata = load_model(prefer=prefer)
+    metadata = _coerce_metadata(metadata, prefer=prefer)
+
     x = _build_feature_vector(url, feature_names)
 
     prob_malicious = float(model.predict_proba(x)[0][1])
