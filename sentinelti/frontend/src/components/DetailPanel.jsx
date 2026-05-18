@@ -35,7 +35,8 @@ export default function DetailPanel({ result }) {
           <div>Trained at</div><div>{meta.trained_at || "—"}</div>
           <div>ROC AUC</div><div>{metrics.roc_auc ?? "—"}</div>
           <div>Avg precision</div><div>{metrics.average_precision ?? "—"}</div>
-          <div>Artifact path</div><div>{meta.artifact_path || "—"}</div>
+          <div>Risk</div><div>{result.risk}</div>
+          <div>ML label</div><div>{result.label}</div>
         </div>
       </details>
 

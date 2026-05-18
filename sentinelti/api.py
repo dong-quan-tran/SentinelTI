@@ -3,12 +3,15 @@ from __future__ import annotations
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .ml.predict import get_loaded_model_metadata
@@ -24,17 +27,18 @@ origins = [
     "http://127.0.0.1:5174",
 ]
 
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("sentinelti.api")
 
-
 RATE_LIMIT_REQUESTS = 60
 RATE_LIMIT_WINDOW = 60
 _rate_limit_store: dict[str, list[float]] = {}
+
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
 
 
 async def check_rate_limit(request: Request, response: Response):
@@ -102,13 +106,22 @@ class ModelMetadataResponse(BaseModel):
     artifact_path: str | None = None
 
 
+class ExplanationResponse(BaseModel):
+    summary: str
+    why_flagged: str
+    user_action: str
+    technical_notes: List[str] = Field(default_factory=list)
+    risk: Literal["low", "medium", "high"]
+    final_label: Literal["benign", "suspicious", "malicious"]
+
+
 class ModelInfoResponse(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     model_meta: ModelMetadataResponse
 
 
 class ScoreResponse(BaseModel):
-    schema_version: Literal["1.1"] = "1.1"
+    schema_version: Literal["1.2"] = "1.2"
     url: str
     label: int
     prob_malicious: float
@@ -117,6 +130,7 @@ class ScoreResponse(BaseModel):
     final_label: Literal["benign", "suspicious", "malicious"]
     risk: Literal["low", "medium", "high"]
     reasons: List[str]
+    explanation: ExplanationResponse
     model_meta: ModelMetadataResponse
 
 
@@ -201,6 +215,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except (HTTPException, StarletteHTTPException) as ex:
+            if ex.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise ex
+
+
 def _build_model_meta() -> Dict[str, Any]:
     metadata = get_loaded_model_metadata()
     metrics = metadata.get("metrics", {}) or {}
@@ -229,7 +253,7 @@ def _build_score_response(url: str) -> Dict[str, Any]:
     model_meta = _build_model_meta()
 
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "url": result["url"],
         "label": result["label"],
         "prob_malicious": result["prob_malicious"],
@@ -238,6 +262,7 @@ def _build_score_response(url: str) -> Dict[str, Any]:
         "final_label": result["final_label"],
         "risk": result["risk"],
         "reasons": result["reasons"],
+        "explanation": result["explanation"],
         "model_meta": model_meta,
     }
 
@@ -288,6 +313,26 @@ async def score_url(body: ScoreUrlRequest):
 )
 async def score_urls(body: ScoreUrlsRequest):
     return {"results": [_build_score_response(url) for url in body.urls]}
+
+
+@app.post(
+    "/explain-score",
+    response_model=ExplanationResponse,
+    dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
+)
+async def explain_score(body: ScoreUrlRequest):
+    result = enrich_score(body.url)
+    return result["explanation"]
+
+
+if FRONTEND_DIST_DIR.exists():
+    app.mount(
+        "/",
+        SPAStaticFiles(directory=str(FRONTEND_DIST_DIR), html=True),
+        name="frontend",
+    )
+else:
+    logger.info("Frontend dist not found at %s; serving API only.", FRONTEND_DIST_DIR)
 
 
 if __name__ == "__main__":

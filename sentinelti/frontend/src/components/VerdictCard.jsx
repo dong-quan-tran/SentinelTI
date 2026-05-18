@@ -2,50 +2,31 @@ function formatPercent(value) {
   return `${Math.round((value || 0) * 100)}%`;
 }
 
-function getVerdictMeta(finalLabel, risk) {
-  if (finalLabel === "malicious" || risk === "high") {
-    return {
-      title: "Likely malicious",
-      tone: "danger",
-      summary:
-        "This URL shows strong warning signs and should be treated as unsafe until verified.",
-      action:
-        "Do not open the link or enter credentials. Verify the sender and inspect the domain safely."
-    };
-  }
+function getTone(finalLabel, risk) {
+  if (finalLabel === "malicious" || risk === "high") return "danger";
+  if (finalLabel === "suspicious" || risk === "medium") return "warning";
+  return "safe";
+}
 
-  if (finalLabel === "suspicious" || risk === "medium") {
-    return {
-      title: "Suspicious",
-      tone: "warning",
-      summary:
-        "This URL contains enough risk indicators to justify caution before interacting with it.",
-      action:
-        "Avoid logging in or downloading anything until you confirm the destination is legitimate."
-    };
-  }
-
-  return {
-    title: "Looks low risk",
-    tone: "safe",
-    summary:
-      "No strong indicators pushed this scan into a suspicious or malicious verdict.",
-    action:
-      "Proceed carefully and still verify important destinations manually when sensitive data is involved."
-  };
+function getTitle(finalLabel, risk) {
+  if (finalLabel === "malicious" || risk === "high") return "Likely malicious";
+  if (finalLabel === "suspicious" || risk === "medium") return "Suspicious";
+  return "Looks low risk";
 }
 
 export default function VerdictCard({ result }) {
   if (!result) return null;
 
-  const verdict = getVerdictMeta(result.final_label, result.risk);
   const probability = result.prob_malicious || 0;
   const threshold = result.threshold || 0.75;
+  const explanation = result.explanation || {};
+  const tone = getTone(result.final_label, result.risk);
+  const title = getTitle(result.final_label, result.risk);
 
   return (
     <section className="card result-card">
       <div className="result-header">
-        <div className={`verdict-pill ${verdict.tone}`}>{verdict.title}</div>
+        <div className={`verdict-pill ${tone}`}>{title}</div>
         <div className="risk-text">Risk: {result.risk}</div>
       </div>
 
@@ -71,27 +52,32 @@ export default function VerdictCard({ result }) {
 
       <div className="tip-grid">
         <div className="tip-card">
-          <h3>What this means</h3>
-          <p>{verdict.summary}</p>
+          <h3>Summary</h3>
+          <p>
+            {explanation.summary ||
+              "No summary was returned for this scan."}
+          </p>
         </div>
         <div className="tip-card">
           <h3>Recommended action</h3>
-          <p>{verdict.action}</p>
+          <p>
+            {explanation.user_action ||
+              "Proceed carefully and verify the destination independently."}
+          </p>
         </div>
       </div>
 
       <div className="reason-block">
         <h3>Why it was flagged</h3>
         <div className="reason-list">
-          {(result.reasons || []).length > 0 ? (
-            result.reasons.map((reason, index) => (
-              <div className="reason-item" key={`${reason}-${index}`}>
-                {reason}
-              </div>
-            ))
-          ) : (
-            <div className="reason-item">No specific reasons were returned.</div>
-          )}
+          <div className="reason-item">
+            {explanation.why_flagged || "No explanation details were returned."}
+          </div>
+          {(explanation.technical_notes || []).map((note, index) => (
+            <div className="reason-item" key={`${note}-${index}`}>
+              {note}
+            </div>
+          ))}
         </div>
       </div>
     </section>
