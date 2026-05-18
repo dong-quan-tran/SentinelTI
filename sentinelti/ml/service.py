@@ -17,4 +17,4 @@ def score_url(url: str) -> Dict[str, object]:
 
 
 def score_urls(urls: List[str]) -> List[Dict[str, object]]:
-    return [score_url(u) for u in urls]
+    return [score_url(url) for url in urls]

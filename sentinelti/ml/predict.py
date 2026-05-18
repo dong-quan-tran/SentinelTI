@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, Tuple
-import os
 
 import joblib
 import numpy as np
 
 from sentinelti.ml.features import extract_features
 
-
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 DEFAULT_MALICIOUS_THRESHOLD = 0.75
+DEFAULT_FEATURE_VERSION = "v2"
 
 
 def get_model_path(model_name: str) -> Path:
@@ -33,6 +33,37 @@ def get_malicious_threshold() -> float:
     return DEFAULT_MALICIOUS_THRESHOLD
 
 
+def _normalize_metadata(
+    artifact: Dict[str, Any],
+    model_name: str,
+    path: Path,
+) -> Dict[str, Any]:
+    nested = artifact.get("metadata", {}) if isinstance(artifact.get("metadata"), dict) else {}
+
+    threshold = nested.get(
+        "threshold",
+        artifact.get("threshold", get_malicious_threshold()),
+    )
+
+    return {
+        "artifact_version": artifact.get("artifact_version", "legacy"),
+        "model_type": nested.get("model_type", artifact.get("model_type", model_name)),
+        "trained_at": nested.get("trained_at", artifact.get("trained_at")),
+        "dataset_name": nested.get("dataset_name", artifact.get("dataset_name")),
+        "dataset_source": nested.get("dataset_source", artifact.get("dataset_source", {})),
+        "metrics": nested.get("metrics", artifact.get("metrics", {})),
+        "threshold": float(threshold),
+        "feature_version": nested.get(
+            "feature_version",
+            artifact.get("feature_version", DEFAULT_FEATURE_VERSION),
+        ),
+        "class_labels": nested.get("class_labels", artifact.get("class_labels", {})),
+        "class_counts": nested.get("class_counts", artifact.get("class_counts", {})),
+        "training_params": nested.get("training_params", artifact.get("training_params", {})),
+        "artifact_path": str(path),
+    }
+
+
 def load_model(prefer: str = "xgb"):
     order = ["xgb", "logreg"]
     if prefer == "logreg":
@@ -52,22 +83,9 @@ def load_model(prefer: str = "xgb"):
             continue
 
         _validate_artifact(artifact, path)
+        metadata = _normalize_metadata(artifact, model_name, path)
 
-        metadata = {
-            "model_type": artifact.get("model_type", model_name),
-            "trained_at": artifact.get("trained_at"),
-            "dataset_name": artifact.get("dataset_name"),
-            "metrics": artifact.get("metrics", {}),
-            "threshold": artifact.get("threshold", get_malicious_threshold()),
-            "feature_version": artifact.get("feature_version", "v2"),
-            "artifact_path": str(path),
-        }
-
-        return (
-            artifact["model"],
-            artifact["feature_names"],
-            metadata,
-        )
+        return artifact["model"], artifact["feature_names"], metadata
 
     if last_error is not None:
         raise RuntimeError("Failed to load any trained URL model") from last_error
@@ -79,9 +97,7 @@ def get_loaded_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
     return metadata
 
 
-def predict_url(url: str) -> Tuple[int, float]:
-    model, feature_names, metadata = load_model()
-
+def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
     feat_dict = extract_features(url)
     missing_features = [name for name in feature_names if name not in feat_dict]
     if missing_features:
@@ -90,26 +106,13 @@ def predict_url(url: str) -> Tuple[int, float]:
             + ", ".join(missing_features)
         )
 
-    x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
-
-    prob_malicious = float(model.predict_proba(x)[0][1])
-    threshold = float(metadata.get("threshold", get_malicious_threshold()))
-    label = int(prob_malicious >= threshold)
-    return label, prob_malicious
+    return np.array([[feat_dict[name] for name in feature_names]], dtype=float)
 
 
-def predict_url_with_metadata(url: str) -> Dict[str, Any]:
-    model, feature_names, metadata = load_model()
+def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
+    model, feature_names, metadata = load_model(prefer=prefer)
+    x = _build_feature_vector(url, feature_names)
 
-    feat_dict = extract_features(url)
-    missing_features = [name for name in feature_names if name not in feat_dict]
-    if missing_features:
-        raise RuntimeError(
-            "Feature extraction is missing expected model features: "
-            + ", ".join(missing_features)
-        )
-
-    x = np.array([[feat_dict[k] for k in feature_names]], dtype=float)
     prob_malicious = float(model.predict_proba(x)[0][1])
     threshold = float(metadata.get("threshold", get_malicious_threshold()))
     label = int(prob_malicious >= threshold)
@@ -120,6 +123,15 @@ def predict_url_with_metadata(url: str) -> Dict[str, Any]:
         "threshold": threshold,
         "model_meta": metadata,
     }
+
+
+def predict_url(url: str) -> Tuple[int, float]:
+    result = _score_url(url)
+    return int(result["label"]), float(result["prob_malicious"])
+
+
+def predict_url_with_metadata(url: str) -> Dict[str, Any]:
+    return _score_url(url)
 
 
 def _validate_artifact(artifact: Dict[str, Any], path: Path) -> None:

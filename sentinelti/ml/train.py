@@ -1,133 +1,41 @@
 from __future__ import annotations
 
-from pathlib import Path
 import argparse
-
-from xgboost import XGBClassifier
-
-from datetime import datetime
 import json
-import os
-
-from typing import Tuple, Any
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import joblib
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
+from sklearn.metrics import (
+    average_precision_score,
+    classification_report,
+    roc_auc_score,
+)
 from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
 
-from sentinelti.ml.dataset import build_dummy_dataset, build_real_dataset, build_urlhaus_plus_benign_dataset
-
-
+from sentinelti.ml.dataset import (
+    build_dummy_dataset,
+    build_real_dataset,
+    build_urlhaus_plus_benign_dataset,
+)
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 MODELS_DIR.mkdir(exist_ok=True)
+
+METRICS_DIR = Path("docs/model_metrics")
+METRICS_DIR.mkdir(parents=True, exist_ok=True)
+
+DEFAULT_THRESHOLD = 0.75
+FEATURE_VERSION = "v2"
+ARTIFACT_VERSION = "1.0"
 
 
 def get_model_path(model_name: str) -> Path:
     return MODELS_DIR / f"url_classifier_{model_name}.joblib"
 
-def load_url_model(prefer: str = "xgb") -> Tuple[Any, list[str]]:
-    """
-    Load a trained URL model artifact.
-
-    Preference order (by default):
-    - Try XGBoost artifact.
-    - Fallback to Logistic Regression artifact.
-    """
-    # Map logical names to filenames
-    order = ["xgb", "logreg"]
-    if prefer == "logreg":
-        order = ["logreg", "xgb"]
-
-    last_error: Exception | None = None
-    for model_name in order:
-        path = get_model_path(model_name)
-        if not path.exists():
-            continue
-
-        try:
-            artifact = joblib.load(path)
-        except Exception as exc:  # pragma: no cover - defensive
-            last_error = exc
-            continue
-
-        model = artifact.get("model")
-        feature_names = artifact.get("feature_names", [])
-        return model, feature_names
-
-    if last_error is not None:
-        raise RuntimeError("Failed to load any URL model artifact") from last_error
-    raise FileNotFoundError("No trained URL model artifacts found")
-
-def train_url_model(
-    use_real_data: bool = False,
-    csv_path: str | None = None,
-    max_samples: int | None = None,
-    use_urlhaus: bool = False,
-    urlhaus_max_malicious: int | None = 1000,
-    urlhaus_max_benign: int | None = 1000,
-) -> None:
-    X, y, feature_names = load_dataset_for_training(
-        use_real_data=use_real_data,
-        csv_path=csv_path,
-        max_samples=max_samples,
-        use_urlhaus=use_urlhaus,
-        urlhaus_max_malicious=urlhaus_max_malicious,
-        urlhaus_max_benign=urlhaus_max_benign,
-    )
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.3,
-        random_state=42,
-        stratify=y,
-    )
-
-    clf = LogisticRegression(max_iter=1000)
-    clf.fit(X_train, y_train)
-
-    y_pred = clf.predict(X_test)
-    print("Evaluation on holdout set (LogisticRegression):")
-    print(classification_report(y_test, y_pred))
-
-    report_dict = classification_report(y_test, y_pred, output_dict=True)
-
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    os.makedirs("docs/model_metrics", exist_ok=True)
-    source = "urlhaus" if use_urlhaus else ("kaggle" if use_real_data else "dummy")
-    metrics_path = f"docs/model_metrics/url_model_{ts}.json"
-
-    metrics = {
-        "model": "logreg",  # or "xgb" in train_url_model_xgb
-        "train_source": {
-            "use_real_data": use_real_data,
-            "use_urlhaus": use_urlhaus,
-            "csv_path": csv_path,
-        },
-        "class_counts": {
-            "train_0": int((y_train == 0).sum()),
-            "train_1": int((y_train == 1).sum()),
-            "test_0": int((y_test == 0).sum()),
-            "test_1": int((y_test == 1).sum()),
-        },
-        "report": report_dict,
-    }
-
-    with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
-    print(f"Saved metrics to {metrics_path}")
-
-
-    artifact = {
-        "model_type": "logreg",
-        "model": clf,
-        "feature_names": feature_names,
-    }
-    model_path = get_model_path("logreg")
-    joblib.dump(artifact, model_path)
-    print(f"Saved model to {model_path}")
 
 def load_dataset_for_training(
     use_real_data: bool = False,
@@ -162,6 +70,182 @@ def load_dataset_for_training(
     return X, y, feature_names
 
 
+def _dataset_name(use_real_data: bool, use_urlhaus: bool) -> str:
+    if use_urlhaus:
+        return "urlhaus"
+    if use_real_data:
+        return "kaggle"
+    return "dummy"
+
+
+def _utc_now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def _to_builtin(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): _to_builtin(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_builtin(v) for v in value]
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            return str(value)
+    return value
+
+
+def _build_metadata(
+    *,
+    model_name: str,
+    clf: Any,
+    use_real_data: bool,
+    csv_path: str | None,
+    max_samples: int | None,
+    use_urlhaus: bool,
+    urlhaus_max_malicious: int | None,
+    urlhaus_max_benign: int | None,
+    y_train,
+    y_test,
+    y_pred,
+    y_prob,
+) -> dict[str, Any]:
+    report_dict = classification_report(y_test, y_pred, output_dict=True)
+    roc_auc = float(roc_auc_score(y_test, y_prob))
+    average_precision = float(average_precision_score(y_test, y_prob))
+
+    metadata = {
+        "model_type": model_name,
+        "trained_at": _utc_now_iso(),
+        "dataset_name": _dataset_name(use_real_data, use_urlhaus),
+        "dataset_source": {
+            "use_real_data": use_real_data,
+            "use_urlhaus": use_urlhaus,
+            "csv_path": csv_path,
+            "max_samples": max_samples,
+            "urlhaus_max_malicious": urlhaus_max_malicious,
+            "urlhaus_max_benign": urlhaus_max_benign,
+        },
+        "feature_version": FEATURE_VERSION,
+        "threshold": DEFAULT_THRESHOLD,
+        "class_labels": {
+            "benign": 0,
+            "malicious": 1,
+        },
+        "class_counts": {
+            "train_0": int((y_train == 0).sum()),
+            "train_1": int((y_train == 1).sum()),
+            "test_0": int((y_test == 0).sum()),
+            "test_1": int((y_test == 1).sum()),
+        },
+        "metrics": {
+            "classification_report": _to_builtin(report_dict),
+            "roc_auc": roc_auc,
+            "average_precision": average_precision,
+        },
+        "training_params": _to_builtin(clf.get_params()),
+    }
+    return metadata
+
+
+def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    metrics_path = METRICS_DIR / f"url_model_{model_name}_{ts}.json"
+
+    payload = {
+        "artifact_version": ARTIFACT_VERSION,
+        "model": model_name,
+        "trained_at": metadata["trained_at"],
+        "dataset_name": metadata["dataset_name"],
+        "dataset_source": metadata["dataset_source"],
+        "feature_version": metadata["feature_version"],
+        "threshold": metadata["threshold"],
+        "class_labels": metadata["class_labels"],
+        "class_counts": metadata["class_counts"],
+        "metrics": metadata["metrics"],
+        "training_params": metadata["training_params"],
+    }
+
+    with metrics_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+    return metrics_path
+
+
+def _save_artifact(
+    model_name: str,
+    clf: Any,
+    feature_names: list[str],
+    metadata: dict[str, Any],
+) -> Path:
+    artifact = {
+        "artifact_version": ARTIFACT_VERSION,
+        "model": clf,
+        "feature_names": feature_names,
+        "metadata": metadata,
+    }
+
+    model_path = get_model_path(model_name)
+    joblib.dump(artifact, model_path)
+    return model_path
+
+
+def train_url_model(
+    use_real_data: bool = False,
+    csv_path: str | None = None,
+    max_samples: int | None = None,
+    use_urlhaus: bool = False,
+    urlhaus_max_malicious: int | None = 1000,
+    urlhaus_max_benign: int | None = 1000,
+) -> None:
+    X, y, feature_names = load_dataset_for_training(
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+    )
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.3,
+        random_state=42,
+        stratify=y,
+    )
+
+    clf = LogisticRegression(max_iter=2000)
+    clf.fit(X_train, y_train)
+
+    y_pred = clf.predict(X_test)
+    y_prob = clf.predict_proba(X_test)[:, 1]
+
+    print("Evaluation on holdout set (LogisticRegression):")
+    print(classification_report(y_test, y_pred))
+
+    metadata = _build_metadata(
+        model_name="logreg",
+        clf=clf,
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+        y_train=y_train,
+        y_test=y_test,
+        y_pred=y_pred,
+        y_prob=y_prob,
+    )
+
+    metrics_path = _save_metrics_json("logreg", metadata)
+    print(f"Saved metrics to {metrics_path}")
+
+    model_path = _save_artifact("logreg", clf, feature_names, metadata)
+    print(f"Saved model to {model_path}")
+
+
 def train_url_model_xgb(
     use_real_data: bool = False,
     csv_path: str | None = None,
@@ -187,7 +271,7 @@ def train_url_model_xgb(
         stratify=y,
     )
 
-    scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()
+    scale_pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
 
     clf = XGBClassifier(
         n_estimators=400,
@@ -202,46 +286,32 @@ def train_url_model_xgb(
     )
 
     clf.fit(X_train, y_train)
+
     y_pred = clf.predict(X_test)
+    y_prob = clf.predict_proba(X_test)[:, 1]
 
     print("Evaluation on holdout set (XGBoost):")
     print(classification_report(y_test, y_pred))
 
-    report_dict = classification_report(y_test, y_pred, output_dict=True)
+    metadata = _build_metadata(
+        model_name="xgb",
+        clf=clf,
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+        y_train=y_train,
+        y_test=y_test,
+        y_pred=y_pred,
+        y_prob=y_prob,
+    )
 
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    os.makedirs("docs/model_metrics", exist_ok=True)
-    source = "urlhaus" if use_urlhaus else ("kaggle" if use_real_data else "dummy")
-    metrics_path = f"docs/model_metrics/url_model_{ts}.json"
-
-    metrics = {
-        "model": "xgb",  # or "xgb" in train_url_model_xgb
-        "train_source": {
-            "use_real_data": use_real_data,
-            "use_urlhaus": use_urlhaus,
-            "csv_path": csv_path,
-        },
-        "class_counts": {
-            "train_0": int((y_train == 0).sum()),
-            "train_1": int((y_train == 1).sum()),
-            "test_0": int((y_test == 0).sum()),
-            "test_1": int((y_test == 1).sum()),
-        },
-        "report": report_dict,
-    }
-
-    with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
+    metrics_path = _save_metrics_json("xgb", metadata)
     print(f"Saved metrics to {metrics_path}")
 
-
-    artifact = {
-        "model_type": "xgb",
-        "model": clf,
-        "feature_names": feature_names,
-    }
-    model_path = get_model_path("xgb")
-    joblib.dump(artifact, model_path)
+    model_path = _save_artifact("xgb", clf, feature_names, metadata)
     print(f"Saved model to {model_path}")
 
 
@@ -310,5 +380,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
