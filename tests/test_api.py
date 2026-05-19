@@ -260,3 +260,192 @@ def test_explain_score_validation_error_for_missing_url(monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+def test_model_info_returns_metadata_response(monkeypatch):
+    _set_test_auth(monkeypatch)
+    _mock_model_meta(monkeypatch, model_type="xgb")
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == "1.0"
+    assert body["model_meta"]["model_type"] == "xgb"
+    assert body["model_meta"]["feature_version"] == "v2"
+    assert body["model_meta"]["metrics"]["roc_auc"] == 0.999
+
+
+def test_score_url_sets_rate_limit_headers(monkeypatch):
+    _set_test_auth(monkeypatch)
+    _mock_model_meta(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.05,
+            "heuristic": {"score": 0.0, "reasons": []},
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": [],
+            "explanation": {
+                "summary": "Looks low risk.",
+                "why_flagged": "",
+                "user_action": "Proceed carefully.",
+                "technical_notes": [],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["model_meta"]["model_type"] == "xgb"
+    assert body["model_meta"]["threshold"] == 0.75
+    assert body["model_meta"]["dataset_source"] == {}
+    assert body["model_meta"]["metrics"] == {
+        "roc_auc": None,
+        "average_precision": None,
+    }
+    assert body["model_meta"]["class_labels"] == {
+        "benign": None,
+        "malicious": None,
+    }
+    assert body["model_meta"]["class_counts"] == {
+        "train_0": None,
+        "train_1": None,
+        "test_0": None,
+        "test_1": None,
+    }
+    assert body["model_meta"]["training_params"] == {}
+
+
+def test_score_url_returns_structured_runtime_error(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: (_ for _ in ()).throw(RuntimeError("model load failed")),
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Internal scoring error",
+        "error_type": "runtime_error",
+    }
+
+
+def test_explain_score_returns_structured_runtime_error(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: (_ for _ in ()).throw(RuntimeError("feature extraction failed")),
+    )
+
+    response = client.post(
+        "/explain-score",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Internal scoring error",
+        "error_type": "runtime_error",
+    }
+
+
+def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
+    _set_test_auth(monkeypatch)
+    _mock_model_meta(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 1,
+            "prob_malicious": 0.83,
+            "heuristic": {"score": 1.2, "reasons": ["login keyword"]},
+            "final_label": "suspicious",
+            "risk": "medium",
+            "reasons": ["Flagged by ML and heuristics"],
+            "explanation": {
+                "summary": "Suspicious traits detected.",
+                "why_flagged": "Elevated model probability.",
+                "user_action": "Verify independently.",
+                "technical_notes": ["Flagged by ML and heuristics"],
+                "risk": "medium",
+                "final_label": "suspicious",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com/login"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert set(body.keys()) == {
+        "schema_version",
+        "url",
+        "label",
+        "prob_malicious",
+        "threshold",
+        "heuristic",
+        "final_label",
+        "risk",
+        "reasons",
+        "explanation",
+        "model_meta",
+    }
