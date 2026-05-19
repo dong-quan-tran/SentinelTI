@@ -379,3 +379,107 @@ def test_load_model_raises_for_missing_required_artifact_fields(
 
     with pytest.raises(RuntimeError, match=expected_message):
         predict_module.load_model(prefer="xgb")
+
+
+def test_predict_url_with_metadata_returns_artifact_metadata_even_when_legacy_loader_shape_is_used(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            DummyModel(0.81),
+            ["f1"],
+            "xgb",
+        ),
+    )
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {"f1": 1.0},
+    )
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", "0.75")
+
+    result = predict_module.predict_url_with_metadata("http://example.com")
+
+    assert result["label"] == 1
+    assert result["prob_malicious"] == 0.81
+    assert result["threshold"] == 0.75
+    assert result["model_meta"]["model_type"] == "xgb"
+    assert result["model_meta"]["feature_version"] == "v2"
+    assert result["model_meta"]["metrics"] == {}
+
+
+def test_get_loaded_model_metadata_coerces_legacy_string_metadata(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            DummyModel(0.40),
+            ["f1"],
+            "logreg",
+        ),
+    )
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", "0.66")
+
+    metadata = predict_module.get_loaded_model_metadata(prefer="logreg")
+
+    assert metadata == {
+        "model_type": "logreg",
+        "threshold": 0.66,
+        "feature_version": "v2",
+        "metrics": {},
+    }
+
+
+def test_get_loaded_model_type_handles_legacy_string_metadata(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            DummyModel(0.40),
+            ["f1"],
+            "logreg",
+        ),
+    )
+
+    model_type = predict_module.get_loaded_model_type(prefer="logreg")
+
+    assert model_type == "logreg"
+
+
+def test_get_malicious_threshold_falls_back_for_invalid_env(monkeypatch):
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", "not-a-number")
+
+    assert predict_module.get_malicious_threshold() == 0.75
+
+
+@pytest.mark.parametrize("raw", ["-1", "1.1"])
+def test_get_malicious_threshold_falls_back_for_out_of_range_env(monkeypatch, raw):
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", raw)
+
+    assert predict_module.get_malicious_threshold() == 0.75
+
+
+def test_load_model_falls_back_to_secondary_model_when_preferred_missing(temp_models_dir):
+    write_artifact(
+        temp_models_dir,
+        "xgb",
+        {
+            "artifact_version": "1.0",
+            "model": DummyModel(0.9),
+            "feature_names": ["f1"],
+            "metadata": {"model_type": "xgb", "threshold": 0.75, "feature_version": "v2"},
+        },
+    )
+
+    model, feature_names, metadata = predict_module.load_model(prefer="logreg")
+
+    assert isinstance(model, DummyModel)
+    assert feature_names == ["f1"]
+    assert metadata["model_type"] == "xgb"
+
+
+def test_load_model_raises_file_not_found_when_no_artifacts_exist(temp_models_dir):
+    with pytest.raises(FileNotFoundError, match="No trained URL model artifacts found"):
+        predict_module.load_model(prefer="xgb")
