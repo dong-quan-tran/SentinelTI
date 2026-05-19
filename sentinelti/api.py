@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,7 +17,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .ml.predict import get_loaded_model_metadata
 from .scoring import enrich_score
-
 
 origins = [
     "http://localhost",
@@ -268,6 +268,23 @@ def _build_score_response(url: str) -> Dict[str, Any]:
 
 
 app = FastAPI(title="SentinelTI", version="0.1.0")
+
+
+@app.exception_handler(RuntimeError)
+async def runtime_error_handler(request: Request, exc: RuntimeError):
+    logger.exception(
+        "Runtime error while handling %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal scoring error",
+            "error_type": "runtime_error",
+        },
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
