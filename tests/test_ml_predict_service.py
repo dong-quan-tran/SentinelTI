@@ -16,6 +16,13 @@ class DummyModel:
     def predict_proba(self, x):
         return [[1.0 - self.prob, self.prob] for _ in range(len(x))]
 
+class CapturingModel:
+    def __init__(self):
+        self.seen_x = None
+
+    def predict_proba(self, x):
+        self.seen_x = x
+        return [[0.2, 0.8] for _ in range(len(x))]
 
 @pytest.fixture
 def temp_models_dir(tmp_path, monkeypatch):
@@ -222,3 +229,153 @@ def test_score_urls_maps_over_inputs(monkeypatch):
 
     assert [r["url"] for r in results] == ["a", "b", "c"]
     assert all("threshold" in r for r in results)
+
+
+def test_build_feature_vector_respects_feature_name_order(monkeypatch):
+    model = CapturingModel()
+
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            model,
+            ["f3", "f1", "f2"],
+            {
+                "model_type": "xgb",
+                "threshold": 0.75,
+                "feature_version": "v2",
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {"f1": 10.0, "f2": 20.0, "f3": 30.0},
+    )
+
+    result = predict_module.predict_url_with_metadata("http://example.com")
+
+    assert result["label"] == 1
+    assert model.seen_x.shape == (1, 3)
+    assert model.seen_x.tolist() == [[30.0, 10.0, 20.0]]
+def test_get_loaded_model_metadata_returns_normalized_metadata(temp_models_dir):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.4),
+        "feature_names": ["f1"],
+        "metadata": {
+            "model_type": "xgb",
+            "threshold": 0.77,
+            "feature_version": "v2",
+            "metrics": {"roc_auc": 0.98},
+        },
+    }
+    write_artifact(temp_models_dir, "xgb", artifact)
+
+    metadata = predict_module.get_loaded_model_metadata(prefer="xgb")
+
+    assert metadata["model_type"] == "xgb"
+    assert metadata["threshold"] == 0.77
+    assert metadata["feature_version"] == "v2"
+    assert metadata["metrics"]["roc_auc"] == 0.98
+    assert metadata["artifact_path"].endswith("url_classifier_xgb.joblib")
+
+
+def test_load_model_legacy_returns_model_type_string(temp_models_dir):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.4),
+        "feature_names": ["f1"],
+        "metadata": {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "feature_version": "v2",
+        },
+    }
+    write_artifact(temp_models_dir, "xgb", artifact)
+
+    model, feature_names, model_type = predict_module.load_model_legacy(prefer="xgb")
+
+    assert isinstance(model, DummyModel)
+    assert feature_names == ["f1"]
+    assert model_type == "xgb"
+
+
+def test_get_loaded_model_type_returns_metadata_model_type(temp_models_dir):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.4),
+        "feature_names": ["f1"],
+        "metadata": {
+            "model_type": "logreg",
+            "threshold": 0.75,
+            "feature_version": "v2",
+        },
+    }
+    write_artifact(temp_models_dir, "logreg", artifact)
+
+    model_type = predict_module.get_loaded_model_type(prefer="logreg")
+
+    assert model_type == "logreg"
+
+
+def test_load_model_prefers_requested_model_when_both_exist(temp_models_dir):
+    write_artifact(
+        temp_models_dir,
+        "xgb",
+        {
+            "artifact_version": "1.0",
+            "model": DummyModel(0.9),
+            "feature_names": ["f1"],
+            "metadata": {"model_type": "xgb", "threshold": 0.75, "feature_version": "v2"},
+        },
+    )
+    write_artifact(
+        temp_models_dir,
+        "logreg",
+        {
+            "artifact_version": "1.0",
+            "model": DummyModel(0.2),
+            "feature_names": ["f1"],
+            "metadata": {"model_type": "logreg", "threshold": 0.75, "feature_version": "v2"},
+        },
+    )
+
+    _model, _feature_names, metadata = predict_module.load_model(prefer="logreg")
+
+    assert metadata["model_type"] == "logreg"
+
+
+def test_load_model_raises_for_invalid_artifact_format(temp_models_dir):
+    path = temp_models_dir / "url_classifier_xgb.joblib"
+    joblib.dump(["not", "a", "dict"], path)
+
+    with pytest.raises(RuntimeError, match="Invalid model artifact format"):
+        predict_module.load_model(prefer="xgb")
+
+@pytest.mark.parametrize(
+    "artifact, expected_message",
+    [
+        (
+            {"feature_names": ["f1"]},
+            "Model artifact missing 'model'",
+        ),
+        (
+            {"model": DummyModel(0.5)},
+            "Model artifact missing 'feature_names'",
+        ),
+        (
+            {"model": DummyModel(0.5), "feature_names": "not-a-list"},
+            "Model artifact 'feature_names' must be a list",
+        ),
+    ],
+)
+def test_load_model_raises_for_missing_required_artifact_fields(
+    temp_models_dir, artifact, expected_message
+):
+    path = temp_models_dir / "url_classifier_xgb.joblib"
+    joblib.dump(artifact, path)
+
+    with pytest.raises(RuntimeError, match=expected_message):
+        predict_module.load_model(prefer="xgb")
