@@ -1,6 +1,6 @@
 # SentinelTI
 
-SentinelTI is a Python-based URL threat scoring tool. It ingests threat intelligence feeds (currently URLhaus), stores indicators in SQLite, and scores URLs using a trained ML model plus heuristic rules. You can interact with SentinelTi via a CLI or a FastAPI HTTP API to classify URLs as benign, suspicious, or malicious with human-readable explanations.
+SentinelTI is a Python-based URL threat scoring tool that combines machine learning, heuristic analysis, and threat-intelligence ingestion to classify URLs as **benign**, **suspicious**, or **malicious**.[web:526] It supports both a CLI workflow and a FastAPI HTTP API, and returns human-readable explanations alongside model output and metadata.[web:526]
 
 ## Quick start
 
@@ -8,8 +8,8 @@ SentinelTI is a Python-based URL threat scoring tool. It ingests threat intellig
 
 - Python 3.10+
 - Git
-- Recommended: virtual environment for dependencies
-- Trained model file at `sentinelti/models/url_classifier.joblib` (or train one; see “Training the model” below)
+- Recommended: a virtual environment
+- A trained model artifact in `sentinelti/models/` for scoring, or train one with the commands in the training section below
 
 ### 1. Clone the repository
 
@@ -20,21 +20,21 @@ cd SentinelTI
 
 ### 2. Create and activate a virtual environment
 
-On Windows (PowerShell):
+Windows (PowerShell):
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-On Windows (cmd):
+Windows (cmd):
 
 ```cmd
 python -m venv .venv
 .\.venv\Scripts\activate.bat
 ```
 
-On Linux/macOS:
+Linux/macOS:
 
 ```bash
 python -m venv .venv
@@ -50,18 +50,23 @@ pip install -r requirements.txt
 
 ### 4. Run the CLI or API
 
-CLI:
+CLI help:
 
 ```bash
 python -m sentinelti.cli --help
 ```
 
-API: see **HTTP API usage** below for running the FastAPI server.
+API server:
 
+```bash
+uvicorn sentinelti.api:app --host 0.0.0.0 --port 8000 --reload
+```
+
+FastAPI uses response models to validate and shape outbound API data, which is why the documented response structure below should match the actual app behavior closely.[web:526]
 
 ## CLI usage
 
-SentinelTi ships with a CLI for initializing the database, ingesting threat intel, and scoring URLs.
+SentinelTI includes a CLI for database initialization, feed ingestion, and URL scoring.
 
 ### Initialize the database
 
@@ -69,15 +74,15 @@ SentinelTi ships with a CLI for initializing the database, ingesting threat inte
 python -m sentinelti.cli init
 ```
 
-This creates the local SQLite database used to store URLhaus indicators.
+This creates the local SQLite database used for threat-intelligence storage.
 
-### Ingest URLhaus feed
+### Ingest the URLhaus feed
 
 ```bash
 python -m sentinelti.cli ingest urlhaus
 ```
 
-This downloads the recent URLhaus feed and upserts malicious URL indicators into the database.
+This downloads recent URLhaus data and upserts malicious URL indicators into the local database.
 
 ### Score a single URL
 
@@ -94,16 +99,6 @@ python -m sentinelti.cli score-url "http://example.com" --json
 python -m sentinelti.cli score-url "http://example.com" --json-pretty
 ```
 
-Each result includes:
-
-- `url`
-- `label` (raw ML label: `0` benign, `1` malicious)
-- `prob_malicious` (model probability the URL is malicious)
-- `heuristic` (score and reasons from rule-based analysis)
-- `final_label` (`benign` / `suspicious` / `malicious`)
-- `risk` (`low` / `medium` / `high`)
-- `reasons` (human-readable explanations)
-
 ### Score multiple URLs
 
 Human-readable output:
@@ -119,40 +114,46 @@ python -m sentinelti.cli score-urls "http://example.com" "http://192.168.0.1/log
 python -m sentinelti.cli score-urls "http://example.com" "http://192.168.0.1/login" --json-pretty
 ```
 
-This returns a list of enriched results, one per URL, with the same fields as above.
+Each CLI result is built from the same central scoring logic used by the API, which helps keep behavior consistent across interfaces.[web:526]
 
-## HTTP API usage
+## HTTP API
 
-SentinelTi exposes a FastAPI HTTP API that reuses the same `enrich_score(url)` logic as the CLI.
+SentinelTI exposes a FastAPI HTTP API that reuses the same scoring pipeline as the CLI.
 
-### Environment variable
+### API key
 
-Set an API key for protected endpoints:
+Protected endpoints require an `X-API-KEY` header.
+
+Linux/macOS:
 
 ```bash
-# Linux/macOS
 export SENTINELTI_API_KEY="your-secret-key"
+```
 
-# PowerShell
+Windows PowerShell:
+
+```powershell
 $env:SENTINELTI_API_KEY="your-secret-key"
 ```
 
-If not set, the app falls back to a default `"change-me"` key (for local dev only).
+If `SENTINELTI_API_KEY` is not set, the app falls back to `"change-me"`, which is suitable only for local development.
 
 ### Start the API server
-
-From the project root:
 
 ```bash
 uvicorn sentinelti.api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+Local endpoints:
+
 - Base URL: `http://localhost:8000`
-- Docs (Swagger UI): `http://localhost:8000/docs`
+- Swagger UI: `http://localhost:8000/docs`
 
 ### `GET /health`
 
-Simple health check, no auth required.
+No authentication required.
+
+Example response:
 
 ```json
 {
@@ -161,14 +162,59 @@ Simple health check, no auth required.
 }
 ```
 
-Use this for local or external uptime checks.
+### `GET /model-info`
+
+Authentication required.
+
+Example request:
+
+```bash
+curl -X GET "http://localhost:8000/model-info" \
+  -H "X-API-KEY: your-secret-key"
+```
+
+Example response:
+
+```json
+{
+  "schema_version": "1.0",
+  "model_meta": {
+    "artifact_version": "1.0",
+    "model_type": "xgb",
+    "trained_at": "2026-05-18T03:55:05Z",
+    "dataset_name": "kaggle",
+    "dataset_source": {
+      "use_real_data": true
+    },
+    "feature_version": "v2",
+    "threshold": 0.75,
+    "metrics": {
+      "roc_auc": 0.999,
+      "average_precision": 0.998
+    },
+    "class_labels": {
+      "benign": 0,
+      "malicious": 1
+    },
+    "class_counts": {
+      "train_0": 10,
+      "train_1": 5,
+      "test_0": 4,
+      "test_1": 2
+    },
+    "training_params": {
+      "n_estimators": 400
+    },
+    "artifact_path": "sentinelti/models/url_classifier_xgb.joblib"
+  }
+}
+```
 
 ### `POST /score-url`
 
-Score a single URL.
+Authentication required.
 
-- Auth: requires `X-API-KEY` header with a valid key.
-- Request body:
+Request body:
 
 ```json
 {
@@ -176,23 +222,24 @@ Score a single URL.
 }
 ```
 
-Example `curl` (Windows-friendly quoting):
+Example `curl`:
 
 ```bash
-curl -X POST "http://localhost:8000/score-url" ^
-  -H "Content-Type: application/json" ^
-  -H "X-API-KEY: your-secret-key" ^
+curl -X POST "http://localhost:8000/score-url" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: your-secret-key" \
   -d "{\"url\": \"https://example.com\"}"
 ```
 
-Response (simplified):
+Example response:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.2",
   "url": "https://example.com",
   "label": 0,
   "prob_malicious": 0.02,
+  "threshold": 0.75,
   "heuristic": {
     "score": 0.0,
     "reasons": []
@@ -202,28 +249,53 @@ Response (simplified):
   "reasons": [
     "No strong malicious indicators detected by model or heuristics."
   ],
-  "meta": {
-    "model": "xgb",
-    "source": "kaggle+urlhaus"
+  "explanation": {
+    "summary": "This URL currently appears low risk, although no automated check is perfect.",
+    "why_flagged": "The machine-learning model found relatively few malicious patterns.",
+    "user_action": "Proceed carefully and still verify the domain manually before sharing sensitive information.",
+    "technical_notes": [
+      "No strong malicious indicators detected by model or heuristics."
+    ],
+    "risk": "low",
+    "final_label": "benign"
+  },
+  "model_meta": {
+    "artifact_version": "1.0",
+    "model_type": "xgb",
+    "trained_at": "2026-05-18T03:55:05Z",
+    "dataset_name": "kaggle",
+    "dataset_source": {
+      "use_real_data": true
+    },
+    "feature_version": "v2",
+    "threshold": 0.75,
+    "metrics": {
+      "roc_auc": 0.999,
+      "average_precision": 0.998
+    },
+    "class_labels": {
+      "benign": 0,
+      "malicious": 1
+    },
+    "class_counts": {
+      "train_0": 10,
+      "train_1": 5,
+      "test_0": 4,
+      "test_1": 2
+    },
+    "training_params": {
+      "n_estimators": 400
+    },
+    "artifact_path": "sentinelti/models/url_classifier_xgb.joblib"
   }
 }
 ```
 
-Key fields:
-
-- `label`: raw model output (`0` benign, `1` malicious)
-- `prob_malicious`: model probability the URL is malicious
-- `heuristic`: structural URL checks (score + reasons)
-- `final_label`: combined decision (`"benign" | "suspicious" | "malicious"`)
-- `risk`: human-friendly risk bucket (`"low" | "medium" | "high"`)
-- `reasons`: explanation list tying together model and heuristics
-
 ### `POST /score-urls`
 
-Batch scoring for multiple URLs.
+Authentication required.
 
-- Auth: requires `X-API-KEY`.
-- Request body:
+Request body:
 
 ```json
 {
@@ -237,167 +309,333 @@ Batch scoring for multiple URLs.
 Example `curl`:
 
 ```bash
-curl -X POST "http://localhost:8000/score-urls" ^
-  -H "Content-Type: application/json" ^
-  -H "X-API-KEY: your-secret-key" ^
+curl -X POST "http://localhost:8000/score-urls" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: your-secret-key" \
   -d "{\"urls\": [\"https://example.com\", \"https://phishy.example/login\"]}"
 ```
 
-Response:
+Example response:
 
 ```json
 {
   "results": [
-    { /* ScoreResponse for first URL */ },
-    { /* ScoreResponse for second URL */ }
+    {
+      "schema_version": "1.2",
+      "url": "https://example.com",
+      "label": 0,
+      "prob_malicious": 0.02,
+      "threshold": 0.75,
+      "heuristic": {
+        "score": 0.0,
+        "reasons": []
+      },
+      "final_label": "benign",
+      "risk": "low",
+      "reasons": [
+        "No strong malicious indicators detected by model or heuristics."
+      ],
+      "explanation": {
+        "summary": "This URL currently appears low risk, although no automated check is perfect.",
+        "why_flagged": "The machine-learning model found relatively few malicious patterns.",
+        "user_action": "Proceed carefully and still verify the domain manually before sharing sensitive information.",
+        "technical_notes": [
+          "No strong malicious indicators detected by model or heuristics."
+        ],
+        "risk": "low",
+        "final_label": "benign"
+      },
+      "model_meta": {
+        "artifact_version": "1.0",
+        "model_type": "xgb",
+        "trained_at": "2026-05-18T03:55:05Z",
+        "dataset_name": "kaggle",
+        "dataset_source": {
+          "use_real_data": true
+        },
+        "feature_version": "v2",
+        "threshold": 0.75,
+        "metrics": {
+          "roc_auc": 0.999,
+          "average_precision": 0.998
+        },
+        "class_labels": {
+          "benign": 0,
+          "malicious": 1
+        },
+        "class_counts": {
+          "train_0": 10,
+          "train_1": 5,
+          "test_0": 4,
+          "test_1": 2
+        },
+        "training_params": {
+          "n_estimators": 400
+        },
+        "artifact_path": "sentinelti/models/url_classifier_xgb.joblib"
+      }
+    },
+    {
+      "schema_version": "1.2",
+      "url": "https://phishy.example/login",
+      "label": 1,
+      "prob_malicious": 0.91,
+      "threshold": 0.75,
+      "heuristic": {
+        "score": 0.82,
+        "reasons": [
+          "Suspicious login keyword",
+          "Nested redirect parameter"
+        ]
+      },
+      "final_label": "malicious",
+      "risk": "high",
+      "reasons": [
+        "Model score above threshold",
+        "Multiple phishing indicators"
+      ],
+      "explanation": {
+        "summary": "This URL looks likely malicious and should be treated as unsafe.",
+        "why_flagged": "The machine-learning model assigned a very high malicious probability.",
+        "user_action": "Do not open the link or enter credentials.",
+        "technical_notes": [
+          "Model score above threshold",
+          "Multiple phishing indicators"
+        ],
+        "risk": "high",
+        "final_label": "malicious"
+      },
+      "model_meta": {
+        "artifact_version": "1.0",
+        "model_type": "xgb",
+        "trained_at": "2026-05-18T03:55:05Z",
+        "dataset_name": "kaggle",
+        "dataset_source": {
+          "use_real_data": true
+        },
+        "feature_version": "v2",
+        "threshold": 0.75,
+        "metrics": {
+          "roc_auc": 0.999,
+          "average_precision": 0.998
+        },
+        "class_labels": {
+          "benign": 0,
+          "malicious": 1
+        },
+        "class_counts": {
+          "train_0": 10,
+          "train_1": 5,
+          "test_0": 4,
+          "test_1": 2
+        },
+        "training_params": {
+          "n_estimators": 400
+        },
+        "artifact_path": "sentinelti/models/url_classifier_xgb.joblib"
+      }
+    }
   ]
 }
 ```
 
-Each item in `results` has the same shape as the `/score-url` response.
+### `POST /explain-score`
 
-## Concepts
+Authentication required.
 
-SentinelTi responses use a few core fields consistently:
+Request body:
 
-- `label` – raw ML prediction (`0` = benign, `1` = malicious).
-- `prob_malicious` – model probability that the URL is malicious (between 0 and 1).
-- `heuristic.score` – numeric score from rule-based checks (IP host, suspicious tokens, TLDs, etc.); higher means more suspicious.
-- `heuristic.reasons` – short text fragments describing which heuristic rules fired.
-- `final_label` – combined decision from ML + heuristics: `"benign"`, `"suspicious"`, or `"malicious"`.
-- `risk` – human-friendly risk bucket derived from `final_label` and scores: `"low"`, `"medium"`, or `"high"`.
-- `reasons` – high-level explanation list summarizing why the URL was classified that way (model confidence + key heuristic indicators).
+```json
+{
+  "url": "https://example.com"
+}
+```
 
+Example `curl`:
 
-## How it works (high level)
+```bash
+curl -X POST "http://localhost:8000/explain-score" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: your-secret-key" \
+  -d "{\"url\": \"https://example.com\"}"
+```
 
-SentinelTi combines a trained ML classifier with rule-based heuristics to decide whether a URL is benign, suspicious, or malicious.
+Example response:
 
-1. **Threat intel ingestion (URLhaus)**  
-   - SentinelTi ingests recent malicious URL data from the URLhaus feed and stores it in a local SQLite database.  
-   - The database tracks indicators (URLs, timestamps, tags, etc.) that can be used for model training, updating, and analysis.
+```json
+{
+  "summary": "This URL currently appears low risk, although no automated check is perfect.",
+  "why_flagged": "The machine-learning model found relatively few malicious patterns.",
+  "user_action": "Proceed carefully and still verify the domain manually before sharing sensitive information.",
+  "technical_notes": [
+    "No strong malicious indicators detected by model or heuristics."
+  ],
+  "risk": "low",
+  "final_label": "benign"
+}
+```
 
-2. **Machine learning URL classifier**  
-   - A Python-based ML model is trained to classify URLs as benign or malicious using labeled datasets (e.g., Kaggle benign URLs + URLhaus malicious URLs).  
-   - The model is saved to disk (for example, at `sentinelti/models/url_classifier.joblib`) and loaded by a small service layer that exposes a `score_url(url)` function returning `url`, `label`, and `prob_malicious`.
+## Rate limiting and auth
 
-3. **Heuristic analysis layer**  
-   - On top of the ML model, SentinelTi applies hand-crafted heuristics that look for patterns common in phishing and malware URLs, such as:
-     - Raw IP addresses used as hosts.  
-     - `@` in the authority part of the URL.  
-     - Suspicious tokens in the path or query (like `login`, `verify`, `account`, `paypal`, `payment`, etc.).  
-     - Uncommon or abuse-heavy TLDs (for example, `.xyz`, `.top`, `.club`, `.click`).  
-     - Unusually long domains or very deep paths.  
-   - Each heuristic contributes to a numeric heuristic score and a list of human-readable reasons explaining why the URL looks risky.
+Protected endpoints require a valid `X-API-KEY` header and are rate-limited by client IP in the application layer. The API also returns rate-limit headers such as `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` on protected requests.[web:592]
 
-4. **Central scoring and enrichment**  
-   - A central function `enrich_score(url)` combines:
-     - ML output (`label`, `prob_malicious`), and  
-     - heuristic score and reasons.  
-   - It then derives:
-     - `final_label`: `"benign"`, `"suspicious"`, or `"malicious"`,  
-     - `risk`: `"low"`, `"medium"`, or `"high"`,  
-     - a unified list of `reasons` suitable for CLI/API responses.  
-   - This enriched result is the single source of truth used by both the CLI and the HTTP API.
+## Core response fields
 
-5. **Interfaces (CLI and API)**  
-   - **CLI**: commands to initialize the DB, ingest URLhaus, and score single or multiple URLs in human-readable or JSON formats.  
-   - **FastAPI HTTP API**: endpoints like `/health`, `/score-url`, and `/score-urls` that reuse `enrich_score(url)` for programmatic access.
+SentinelTI uses a few core fields consistently across scoring responses:
 
-   ## Training the model
+- `label`: raw ML prediction, where `0` means benign and `1` means malicious
+- `prob_malicious`: model-estimated malicious probability between 0 and 1
+- `threshold`: configured malicious threshold used by the model layer
+- `heuristic.score`: numeric score from rule-based URL checks
+- `heuristic.reasons`: list of triggered heuristic explanations
+- `final_label`: final combined decision, one of `benign`, `suspicious`, or `malicious`
+- `risk`: human-friendly risk bucket, one of `low`, `medium`, or `high`
+- `reasons`: top-level explanation list
+- `explanation`: structured end-user explanation payload
+- `model_meta`: model artifact and training metadata returned by the API
 
-SentinelTi includes an ML pipeline under `sentinelti/ml/` that trains a URL classifier from either a Kaggle dataset or a combination of URLhaus + benign URLs.
+## How it works
 
-### Prerequisites
+SentinelTI combines machine learning, heuristic scoring, and threat-intelligence data into one scoring pipeline.
 
-- Dependencies installed:
+1. **Threat-intelligence ingestion**
+   - SentinelTI can ingest recent malicious URL indicators from URLhaus into a local SQLite database.
+   - This local store supports enrichment, analysis, and training workflows.
+
+2. **Machine-learning classifier**
+   - A URL classifier is trained on labeled data such as Kaggle datasets and URLhaus-derived malicious samples.
+   - The trained artifact is saved in `sentinelti/models/` and used by the prediction layer.
+
+3. **Heuristic analysis**
+   - SentinelTI applies hand-crafted URL checks for patterns often associated with phishing or malware, such as raw IP hosts, suspicious tokens, uncommon TLDs, very long domains, and deep paths.
+   - These checks contribute a heuristic score and readable reasons.
+
+4. **Central enrichment**
+   - A central scoring function combines ML output and heuristic analysis into a unified result.
+   - That result includes the final label, risk bucket, reasons, explanation payload, and model metadata.
+
+5. **Shared interfaces**
+   - The CLI and FastAPI API both rely on the same scoring logic, which helps keep outputs consistent across interfaces.[web:526]
+
+## Training the model
+
+SentinelTI includes an ML pipeline under `sentinelti/ml/` for training URL-classification models.
+
+### Training prerequisites
+
+- Install project dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-- A labeled URL CSV (for example, Kaggle “malicious and benign URLs”) placed at:
+- Provide a labeled CSV such as:
 
 ```text
 data/urldata.csv
 ```
 
-Required columns:
+Expected columns:
 
 - `url`
-- `label` with values `benign` or `malicious`
+- `label` with values like `benign` or `malicious`
 
-### Training commands
+### Example training commands
 
-Training is controlled via `--model` and `--source` flags:
-
-- Train **XGBoost** on Kaggle:
+Train XGBoost on a Kaggle CSV:
 
 ```bash
 python -m sentinelti.ml.train --model xgb --source kaggle --csv-path data/urldata.csv
 ```
 
-- Train **Logistic Regression** on Kaggle:
+Train Logistic Regression on a Kaggle CSV:
 
 ```bash
 python -m sentinelti.ml.train --model logreg --source kaggle --csv-path data/urldata.csv
 ```
 
-- Train **XGBoost** on URLhaus malicious + Kaggle benign:
+Train XGBoost on URLhaus malicious data plus benign Kaggle data:
 
 ```bash
 python -m sentinelti.ml.train --model xgb --source urlhaus --csv-path data/urldata.csv
 ```
 
-- Use the small built-in dummy dataset (for quick tests):
+Use a small built-in dummy dataset:
 
 ```bash
 python -m sentinelti.ml.train --model logreg --source dummy
 ```
 
-Model artifacts are saved to:
+### Model artifacts
 
-```text
-sentinelti/models/url_classifier.joblib
-```
+Training outputs are saved under `sentinelti/models/`. Depending on your current training and loading flow, artifacts may include model-specific files and metadata used by the API’s `model_meta` response payload.[web:596]
 
-These are loaded by the SentinelTi ML scoring service (`score_url`) and the central `enrich_score(url)` logic.
+### Metrics output
 
-### Model metrics
+Training runs can also save evaluation metrics under `docs/model_metrics/`.
 
-Each training run saves metrics to `docs/model_metrics/`:
+Typical contents include:
 
-- Filename format: `url_model_<model>_<source>_<timestamp>.json`
-- Contains:
-  - Model type (`logreg` or `xgb`)
-  - Data source (`kaggle`, `urlhaus`, or `dummy`)
-  - Train/test class counts
-  - Full `classification_report` as a JSON dict
-
-***
+- model type
+- training source
+- train/test class counts
+- classification metrics and reports
 
 ## Project structure
 
-High-level layout of the repository:
+```text
+sentinelti/
+├── api.py
+├── cli.py
+├── db.py
+├── heuristics.py
+├── scoring.py
+├── feeds/
+│   └── urlhaus.py
+├── frontend/
+│   └── ...
+├── ml/
+│   ├── predict.py
+│   ├── train.py
+│   └── ...
+├── models/
+│   └── ...
+tests/
+docs/
+data/
+```
 
-- `sentinelti/`
-  - `cli.py` – CLI entry point (init, ingest, `score-url`, `score-urls`).
-  - `heuristics.py` – rule-based URL analysis (IP hosts, suspicious tokens, TLDs, etc.).
-  - `scoring.py` – central `enrich_score(url)` that combines ML and heuristics into a final result.
-  - `ml/` – ML model loading and `score_url()` service plus training scripts.
-  - `db.py` – SQLite initialization and connection logic.
-  - `feeds/urlhaus.py` – URLhaus ingestion utilities.
-  - `api.py` – FastAPI application exposing `/health`, `/score-url`, and `/score-urls`.
-- `tests/` – pytest test suite.
-- `docs/` – progress logs, design notes, screenshots, and model metrics.
+High-level responsibilities:
 
-Author
-SentinelTi is developed and maintained by:
+- `sentinelti/api.py` — FastAPI application and response models
+- `sentinelti/cli.py` — CLI entry point
+- `sentinelti/db.py` — SQLite initialization and connection logic
+- `sentinelti/heuristics.py` — heuristic URL analysis
+- `sentinelti/scoring.py` — central score enrichment logic
+- `sentinelti/feeds/urlhaus.py` — URLhaus ingestion helpers
+- `sentinelti/ml/` — training, prediction, and model-service utilities
+- `tests/` — pytest suite
+- `docs/` — notes, metrics, and supporting documentation
 
-Name: Dong Quan Tran (Johnny)
+## Testing
 
-Role / Affiliation: Owner, Collaborator
+Run the test suite with:
 
-Contact (optional): dxt9721@mavs.uta.edu (University of Texas at Arlington)
+```bash
+python -m pytest
+```
 
-GitHub: https://github.com/dong-quan-tran
+Run a focused file:
+
+```bash
+python -m pytest tests/test_api.py -q
+```
+
+## Author
+
+SentinelTI is developed and maintained by:
+
+- **Dong Quan Tran (Johnny)**
+- Role: Owner / Collaborator
+- Email: [dxt9721@mavs.uta.edu](mailto:dxt9721@mavs.uta.edu)
+- GitHub: [dong-quan-tran](https://github.com/dong-quan-tran)
