@@ -1,56 +1,49 @@
-# Next Steps
+Finish threshold provenance wiring
 
-## Priority next session
+Add a small helper in the ML layer to compute “effective threshold + source” without needing to score a URL.
 
-### 1. Finish threshold tuning workflow
+Update /model-info to use that helper so it always reflects the actual effective threshold (metadata vs env vs default), not just the raw artifact value.
 
-- Run threshold analysis against the newest XGBoost artifact.
-- Review the generated JSON in `docs/model_metrics/`.
-- Pick the best threshold for deployment, likely optimizing for F1 or a precision-recall tradeoff that fits the project goals.
-- Update the artifact metadata or training flow so the chosen threshold becomes the default deployment threshold.
+Add or tighten tests to ensure /model-info and scoring responses stay consistent.
 
-Suggested command:
+Tidy ML predict and train tests
 
-```bash
-python -m sentinelti.ml.threshold_analysis --artifact sentinelti/models/url_classifier_xgb.joblib --optimize-for f1
-```
+Loosen overly brittle tests that assert on exact dict equality when new keys are added; focus them on required keys and invariants.
 
-### 2. Expose richer model metadata in the API
+Add one more test that round-trips: load artifact → call predict → confirm model_meta.threshold and threshold_source match expectations for env / no-env scenarios.
 
-Update `sentinelti/api.py` so `/model-info` can return additional metadata when present, especially:
+Surface more model insight in the API/UI
 
-- `top_features`
-- possibly threshold provenance later (artifact vs env)
+Extend /model-info to expose a short “model summary” block (model type, dataset name, training date, top 3 features).
 
-Then extend `tests/test_api.py` to cover the richer response payload.
+In the React UI, show a small “Model insight” panel using /model-info: current model type, threshold, and a couple of top features in plain language.
 
-### 3. Decide what to do with Logistic Regression
+Convergence warning + training ergonomics
 
-Current state:
+For Logistic Regression, either:
 
-- Logistic Regression trains successfully.
-- It throws a convergence warning with the current configuration.
+adjust max_iter and/or solver, or
 
-Evaluate one of these options:
+detect the convergence warning and surface a clean note in metrics JSON rather than raw logs.
 
-- add feature scaling for the Logistic Regression pipeline,
-- increase `max_iter`,
-- try a different solver,
-- or keep it as a secondary benchmark model if XGBoost remains clearly stronger.
+Add a short “training notes” field to metrics artifacts (e.g. “logreg did not fully converge; consider tuning”).
 
-### 4. Frontend alignment
+Evaluation and threshold tuning follow‑up
 
-Once `/model-info` is enriched, update the frontend to display:
+Use the existing threshold-analysis script to:
 
-- model type
-- threshold
-- key metrics
-- top features
+pick a public “recommended” threshold for the default model,
 
-Also harden React components against null or partial metadata.
+store that inside artifact metadata (and show it in /model-info).
 
-## Nice-to-have after that
+Consider adding a “recommended_threshold” field separate from “operational_threshold” so you can experiment without editing artifacts each time.
 
-- Add a small doc describing the ML artifact schema.
-- Add a script to write threshold recommendations back into artifact metadata.
-- Consider a future Ollama-based explanation layer only after the deterministic ML pipeline is fully settled.
+UX polish for error and metadata states
+
+Make sure API error responses for scoring and /model-info are consistent and documented (including error_type).
+
+In the UI, add friendly messages for:
+
+no model loaded / metadata unavailable,
+
+partially missing metrics (e.g., only ROC-AUC known).

@@ -1655,3 +1655,50 @@ The project is in a better state than at the start of the day:
 - Surface richer model metadata such as `top_features` in `/model-info`.
 - Consider improving Logistic Regression convergence, likely via scaling, solver adjustment, or higher iteration budget.
 - Continue frontend hardening so UI components gracefully handle missing or partial API metadata.
+
+Progress log: 2026-05-21
+
+
+ML training robustness
+
+Ran full Logistic Regression training on the Kaggle URL dataset and verified strong performance (≈0.99 accuracy and high precision/recall on the holdout set).
+
+Fixed a crash during metrics JSON serialization caused by non-JSON-serializable objects (e.g. StandardScaler) inside training_params, by hardening the conversion helper to safely stringify complex objects.
+
+Adjusted the ML training tests to match the evolved artifact and metrics schema, including support for the new top_features field and storing test splits in the artifact.
+
+Train pipeline tests and helpers
+
+Updated tests/test_ml_train.py for the new _save_artifact signature that now captures X_test and y_test along with metadata.
+
+Relaxed and extended expectations in metrics-writing tests to cover the richer metrics payload while still asserting core fields like thresholds, metrics, and feature versions.
+
+Added a dedicated test ensuring the serialization helper converts numpy scalar types to built-in numbers and stringifies non-serializable estimator-like objects.
+
+Prediction metadata and threshold provenance
+
+Extended the ML prediction layer to compute and return the classification threshold and its provenance (“metadata”, “env”, or “default”).
+
+Updated predict_url_with_metadata tests to reflect the richer response shape, including the new threshold_source field.
+
+Ensured tests explicitly validate that the default artifact-driven threshold reports the correct source, locking in the intended behavior.
+
+API: model metadata and top features
+
+Expanded the /model-info endpoint’s response to include structured top_features and wired in tests verifying that:
+
+well-formed top features are passed through,
+
+missing top_features defaults to an empty list, and
+
+malformed entries are filtered down to a clean, typed list.
+
+Added a score-response test to confirm that model_meta.top_features is present and consistent in /score-url responses as well.
+
+API: threshold provenance exposure
+
+Extended the API’s model metadata schema to include threshold_source, mirroring the ML layer’s provenance information.
+
+Updated tests to assert that the API passes through threshold_source from the underlying metadata, including env-based cases when the metadata already encodes that source.
+
+Cleaned up one overreaching test that tried to have /model-info compute env precedence itself, and instead refocused it on verifying correct passthrough of threshold and provenance values.
