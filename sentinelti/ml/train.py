@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
@@ -35,6 +36,7 @@ ARTIFACT_VERSION = "1.0"
 
 def get_model_path(model_name: str) -> Path:
     return MODELS_DIR / f"url_classifier_{model_name}.joblib"
+
 
 def load_url_model(prefer: str = "xgb"):
     """
@@ -67,6 +69,7 @@ def load_url_model(prefer: str = "xgb"):
     if last_error is not None:
         raise RuntimeError("Failed to load any URL model artifact") from last_error
     raise FileNotFoundError("No trained URL model artifacts found")
+
 
 def load_dataset_for_training(
     use_real_data: bool = False,
@@ -110,7 +113,7 @@ def _dataset_name(use_real_data: bool, use_urlhaus: bool) -> str:
 
 
 def _utc_now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _to_builtin(value: Any) -> Any:
@@ -126,10 +129,49 @@ def _to_builtin(value: Any) -> Any:
     return value
 
 
+def _safe_roc_auc(y_true, y_prob) -> float | None:
+    try:
+        return float(roc_auc_score(y_true, y_prob))
+    except ValueError:
+        return None
+
+
+def _safe_average_precision(y_true, y_prob) -> float | None:
+    try:
+        return float(average_precision_score(y_true, y_prob))
+    except ValueError:
+        return None
+
+
+def _top_feature_importances(
+    clf: Any,
+    feature_names: list[str],
+    top_k: int = 10,
+) -> list[dict[str, Any]]:
+    if not hasattr(clf, "feature_importances_"):
+        return []
+
+    importances = np.asarray(clf.feature_importances_).reshape(-1)
+    if len(importances) != len(feature_names):
+        return []
+
+    ranked = sorted(
+        zip(feature_names, importances),
+        key=lambda item: item[1],
+        reverse=True,
+    )[:top_k]
+
+    return [
+        {"feature": str(name), "importance": float(score)}
+        for name, score in ranked
+    ]
+
+
 def _build_metadata(
     *,
     model_name: str,
     clf: Any,
+    feature_names: list[str],
     use_real_data: bool,
     csv_path: str | None,
     max_samples: int | None,
@@ -141,9 +183,14 @@ def _build_metadata(
     y_pred,
     y_prob,
 ) -> dict[str, Any]:
-    report_dict = classification_report(y_test, y_pred, output_dict=True)
-    roc_auc = float(roc_auc_score(y_test, y_prob))
-    average_precision = float(average_precision_score(y_test, y_prob))
+    report_dict = classification_report(
+        y_test,
+        y_pred,
+        output_dict=True,
+        zero_division=0,
+    )
+    roc_auc = _safe_roc_auc(y_test, y_prob)
+    average_precision = _safe_average_precision(y_test, y_prob)
 
     metadata = {
         "model_type": model_name,
@@ -175,13 +222,14 @@ def _build_metadata(
             "average_precision": average_precision,
         },
         "training_params": _to_builtin(clf.get_params()),
+        "top_features": _top_feature_importances(clf, feature_names, top_k=10),
     }
     return metadata
 
 
 def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    metrics_path = METRICS_DIR / f"url_model_{model_name}_{ts}.json"
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    metrics_path = METRICS_DIR / f"url_model_{model_name}_{metadata['dataset_name']}_{ts}.json"
 
     payload = {
         "artifact_version": ARTIFACT_VERSION,
@@ -195,6 +243,7 @@ def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
         "class_counts": metadata["class_counts"],
         "metrics": metadata["metrics"],
         "training_params": metadata["training_params"],
+        "top_features": metadata.get("top_features", []),
     }
 
     with metrics_path.open("w", encoding="utf-8") as f:
@@ -207,12 +256,16 @@ def _save_artifact(
     model_name: str,
     clf: Any,
     feature_names: list[str],
+    X_test,
+    y_test,
     metadata: dict[str, Any],
 ) -> Path:
     artifact = {
         "artifact_version": ARTIFACT_VERSION,
         "model": clf,
-        "feature_names": feature_names,
+        "feature_names": list(feature_names),
+        "X_test": X_test,
+        "y_test": y_test,
         "metadata": metadata,
     }
 
@@ -221,13 +274,16 @@ def _save_artifact(
     return model_path
 
 
-def train_url_model(
-    use_real_data: bool = False,
-    csv_path: str | None = None,
-    max_samples: int | None = None,
-    use_urlhaus: bool = False,
-    urlhaus_max_malicious: int | None = 1000,
-    urlhaus_max_benign: int | None = 1000,
+def _train_and_save(
+    *,
+    model_name: str,
+    clf: Any,
+    use_real_data: bool,
+    csv_path: str | None,
+    max_samples: int | None,
+    use_urlhaus: bool,
+    urlhaus_max_malicious: int | None,
+    urlhaus_max_benign: int | None,
 ) -> None:
     X, y, feature_names = load_dataset_for_training(
         use_real_data=use_real_data,
@@ -246,18 +302,18 @@ def train_url_model(
         stratify=y,
     )
 
-    clf = LogisticRegression(max_iter=2000)
     clf.fit(X_train, y_train)
 
     y_pred = clf.predict(X_test)
     y_prob = clf.predict_proba(X_test)[:, 1]
 
-    print("Evaluation on holdout set (LogisticRegression):")
-    print(classification_report(y_test, y_pred))
+    print(f"Evaluation on holdout set ({model_name}):")
+    print(classification_report(y_test, y_pred, zero_division=0))
 
     metadata = _build_metadata(
-        model_name="logreg",
+        model_name=model_name,
         clf=clf,
+        feature_names=feature_names,
         use_real_data=use_real_data,
         csv_path=csv_path,
         max_samples=max_samples,
@@ -270,11 +326,39 @@ def train_url_model(
         y_prob=y_prob,
     )
 
-    metrics_path = _save_metrics_json("logreg", metadata)
+    metrics_path = _save_metrics_json(model_name, metadata)
     print(f"Saved metrics to {metrics_path}")
 
-    model_path = _save_artifact("logreg", clf, feature_names, metadata)
+    model_path = _save_artifact(
+        model_name=model_name,
+        clf=clf,
+        feature_names=feature_names,
+        X_test=X_test,
+        y_test=y_test,
+        metadata=metadata,
+    )
     print(f"Saved model to {model_path}")
+
+
+def train_url_model(
+    use_real_data: bool = False,
+    csv_path: str | None = None,
+    max_samples: int | None = None,
+    use_urlhaus: bool = False,
+    urlhaus_max_malicious: int | None = 1000,
+    urlhaus_max_benign: int | None = 1000,
+) -> None:
+    clf = LogisticRegression(max_iter=2000)
+    _train_and_save(
+        model_name="logreg",
+        clf=clf,
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+    )
 
 
 def train_url_model_xgb(
@@ -285,7 +369,7 @@ def train_url_model_xgb(
     urlhaus_max_malicious: int | None = 1000,
     urlhaus_max_benign: int | None = 1000,
 ) -> None:
-    X, y, feature_names = load_dataset_for_training(
+    X, y, _ = load_dataset_for_training(
         use_real_data=use_real_data,
         csv_path=csv_path,
         max_samples=max_samples,
@@ -294,7 +378,7 @@ def train_url_model_xgb(
         urlhaus_max_benign=urlhaus_max_benign,
     )
 
-    X_train, X_test, y_train, y_test = train_test_split(
+    X_train, _, y_train, _ = train_test_split(
         X,
         y,
         test_size=0.3,
@@ -302,7 +386,7 @@ def train_url_model_xgb(
         stratify=y,
     )
 
-    scale_pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
+    scale_pos_weight = float((y_train == 0).sum()) / max(float((y_train == 1).sum()), 1.0)
 
     clf = XGBClassifier(
         n_estimators=400,
@@ -316,15 +400,7 @@ def train_url_model_xgb(
         n_jobs=-1,
     )
 
-    clf.fit(X_train, y_train)
-
-    y_pred = clf.predict(X_test)
-    y_prob = clf.predict_proba(X_test)[:, 1]
-
-    print("Evaluation on holdout set (XGBoost):")
-    print(classification_report(y_test, y_pred))
-
-    metadata = _build_metadata(
+    _train_and_save(
         model_name="xgb",
         clf=clf,
         use_real_data=use_real_data,
@@ -333,21 +409,11 @@ def train_url_model_xgb(
         use_urlhaus=use_urlhaus,
         urlhaus_max_malicious=urlhaus_max_malicious,
         urlhaus_max_benign=urlhaus_max_benign,
-        y_train=y_train,
-        y_test=y_test,
-        y_pred=y_pred,
-        y_prob=y_prob,
     )
-
-    metrics_path = _save_metrics_json("xgb", metadata)
-    print(f"Saved metrics to {metrics_path}")
-
-    model_path = _save_artifact("xgb", clf, feature_names, metadata)
-    print(f"Saved model to {model_path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train SentinelTi URL model")
+    parser = argparse.ArgumentParser(description="Train SentinelTI URL model")
     parser.add_argument(
         "--model",
         choices=["logreg", "xgb"],

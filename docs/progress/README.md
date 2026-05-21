@@ -1584,3 +1584,74 @@ Crafted a commit message summarizing all these changes (metadata pipeline, artif
 
 ## Best next step
 - Resume with ML metadata sanity checks and ML predict/service tests, while continuing lighter frontend polish in parallel as needed.
+
+
+# Progress Log - 2026-05-19
+
+## Work completed
+
+Today focused on stabilizing the API contract, improving ML artifact handling, and tightening test coverage across the backend.
+
+### API and contract work
+
+- Added structured runtime error handling for scoring endpoints so backend failures return predictable JSON instead of bubbling raw exceptions.
+- Expanded API test coverage for:
+  - `/model-info`
+  - rate-limit headers
+  - partial metadata defaults
+  - structured runtime error responses
+  - top-level response key stability
+- Updated the main `README.md` so the documented API now matches the real FastAPI response models and current scoring schema.
+
+### ML and model pipeline work
+
+- Cleaned up `sentinelti/ml/train.py`.
+- Fixed broken artifact-saving logic that referenced out-of-scope variables.
+- Standardized saved artifacts to include:
+  - `artifact_version`
+  - `model`
+  - `feature_names`
+  - `X_test`
+  - `y_test`
+  - `metadata`
+- Improved training metadata to include:
+  - model type
+  - dataset name/source
+  - feature version
+  - threshold
+  - class labels/counts
+  - metrics
+  - training params
+  - top feature importances (when available)
+- Added `sentinelti/ml/threshold_analysis.py` to evaluate classifier behavior across thresholds and recommend a threshold based on a chosen optimization metric.
+- Added `tests/test_threshold_analysis.py` for threshold-analysis utility coverage.
+- Updated `sentinelti/ml/predict.py` to better normalize artifact metadata and correctly resolve thresholds across:
+  - artifact metadata
+  - environment variable fallback
+  - default fallback
+- Preserved backward compatibility for older model-loading code paths and legacy tests.
+
+### Training and verification
+
+- Ran ML prediction service tests successfully after the updates.
+- Trained fresh Kaggle-based models:
+  - XGBoost
+  - Logistic Regression
+- Confirmed model artifacts and metrics files were generated.
+- Noted that Logistic Regression still raises a convergence warning at the current settings, but training completes and metrics remain strong.
+
+## Current status
+
+The project is in a better state than at the start of the day:
+
+- API responses are more stable and frontend-safe.
+- Model artifacts are more complete and analyzable.
+- Threshold tuning now has a dedicated path instead of being a hardcoded black box.
+- The repository documentation is more aligned with the live backend behavior.
+
+## Known follow-ups
+
+- Run threshold analysis on the newly trained XGBoost artifact and decide whether to adopt a better deployment threshold than `0.75`.
+- Surface richer model metadata such as `top_features` in `/model-info`.
+- Consider improving Logistic Regression convergence, likely via scaling, solver adjustment, or higher iteration budget.
+- Continue frontend hardening so UI components gracefully handle missing or partial API metadata.
