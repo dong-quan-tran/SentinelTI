@@ -1,0 +1,133 @@
+{
+  "artifact_version": "1.0",
+  "model": "logreg",
+  "trained_at": "2026-05-21T20:17:28Z",
+  "dataset_name": "kaggle",
+  "dataset_source": {
+    "use_real_data": true,
+    "use_urlhaus": false,
+    "csv_path": "data/urldata.csv",
+    "max_samples": null,
+    "urlhaus_max_malicious": 1000,
+    "urlhaus_max_benign": 1000
+  },
+  "feature_version": "v2",
+  "threshold": 0.75,
+  "class_labels": {
+    "benign": 0,
+    "malicious": 1
+  },
+  "class_counts": {
+    "train_0": 242016,
+    "train_1": 73106,
+    "test_0": 103722,
+    "test_1": 31331
+  },
+  "metrics": {
+    "classification_report": {
+      "0": {
+        "precision": 0.9934382194934765,
+        "recall": 0.9983995680762037,
+        "f1-score": 0.9959127148229003,
+        "support": 103722.0
+      },
+      "1": {
+        "precision": 0.9946126634861909,
+        "recall": 0.9781685870224378,
+        "f1-score": 0.9863220906282183,
+        "support": 31331.0
+      },
+      "accuracy": 0.9937061746129298,
+      "macro avg": {
+        "precision": 0.9940254414898337,
+        "recall": 0.9882840775493207,
+        "f1-score": 0.9911174027255594,
+        "support": 135053.0
+      },
+      "weighted avg": {
+        "precision": 0.9937106792295485,
+        "recall": 0.9937061746129298,
+        "f1-score": 0.9936877820435945,
+        "support": 135053.0
+      }
+    },
+    "roc_auc": 0.9965824755466126,
+    "average_precision": 0.9957826335827192
+  },
+  "training_params": {
+    "memory": null,
+    "steps": [
+      [
+        "scaler",
+        "StandardScaler()"
+      ],
+      [
+        "classifier",
+        "LogisticRegression(max_iter=4000)"
+      ]
+    ],
+    "transform_input": null,
+    "verbose": false,
+    "scaler": "StandardScaler()",
+    "classifier": "LogisticRegression(max_iter=4000)",
+    "scaler__copy": true,
+    "scaler__with_mean": true,
+    "scaler__with_std": true,
+    "classifier__C": 1.0,
+    "classifier__class_weight": null,
+    "classifier__dual": false,
+    "classifier__fit_intercept": true,
+    "classifier__intercept_scaling": 1,
+    "classifier__l1_ratio": 0.0,
+    "classifier__max_iter": 4000,
+    "classifier__n_jobs": null,
+    "classifier__penalty": "deprecated",
+    "classifier__random_state": null,
+    "classifier__solver": "lbfgs",
+    "classifier__tol": 0.0001,
+    "classifier__verbose": 0,
+    "classifier__warm_start": false
+  },
+  "top_features": [
+    {
+      "feature": "is_http",
+      "importance": 16.042914360155226
+    },
+    {
+      "feature": "max_host_label_len",
+      "importance": 4.102641997280655
+    },
+    {
+      "feature": "subdomain_depth",
+      "importance": 3.5722403258682576
+    },
+    {
+      "feature": "is_https",
+      "importance": 3.4656953852633396
+    },
+    {
+      "feature": "special_count",
+      "importance": 2.3928796015604634
+    },
+    {
+      "feature": "has_ip",
+      "importance": 2.205026866792866
+    },
+    {
+      "feature": "host_len",
+      "importance": 2.075119023505611
+    },
+    {
+      "feature": "domain_len",
+      "importance": 2.0749874355013724
+    },
+    {
+      "feature": "repeated_char_ratio",
+      "importance": 1.5057858918008984
+    },
+    {
+      "feature": "alpha_ratio",
+      "importance": 1.394807653237122
+    }
+  ]
+}

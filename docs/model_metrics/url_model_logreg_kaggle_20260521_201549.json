@@ -1,0 +1,62 @@
+{
+  "artifact_version": "1.0",
+  "model": "logreg",
+  "trained_at": "2026-05-21T20:15:49Z",
+  "dataset_name": "kaggle",
+  "dataset_source": {
+    "use_real_data": true,
+    "use_urlhaus": false,
+    "csv_path": "data/urldata.csv",
+    "max_samples": null,
+    "urlhaus_max_malicious": 1000,
+    "urlhaus_max_benign": 1000
+  },
+  "feature_version": "v2",
+  "threshold": 0.75,
+  "class_labels": {
+    "benign": 0,
+    "malicious": 1
+  },
+  "class_counts": {
+    "train_0": 242016,
+    "train_1": 73106,
+    "test_0": 103722,
+    "test_1": 31331
+  },
+  "metrics": {
+    "classification_report": {
+      "0": {
+        "precision": 0.9934382194934765,
+        "recall": 0.9983995680762037,
+        "f1-score": 0.9959127148229003,
+        "support": 103722.0
+      },
+      "1": {
+        "precision": 0.9946126634861909,
+        "recall": 0.9781685870224378,
+        "f1-score": 0.9863220906282183,
+        "support": 31331.0
+      },
+      "accuracy": 0.9937061746129298,
+      "macro avg": {
+        "precision": 0.9940254414898337,
+        "recall": 0.9882840775493207,
+        "f1-score": 0.9911174027255594,
+        "support": 135053.0
+      },
+      "weighted avg": {
+        "precision": 0.9937106792295485,
+        "recall": 0.9937061746129298,
+        "f1-score": 0.9936877820435945,
+        "support": 135053.0
+      }
+    },
+    "roc_auc": 0.9965824755466126,
+    "average_precision": 0.9957826335827192
+  },
+  "training_params": {
+    "memory": null,
+    "steps": [
+      [
+        "scaler",
+        
