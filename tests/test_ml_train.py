@@ -76,6 +76,8 @@ def test_save_artifact_writes_expected_shape(temp_train_dirs):
 
     clf = {"kind": "dummy-model"}
     feature_names = ["f1", "f2"]
+    X_test = np.array([[0.1, 0.2], [0.8, 0.9]], dtype=float)
+    y_test = np.array([0, 1], dtype=int)
     metadata = {
         "model_type": "logreg",
         "trained_at": "2026-05-19T00:00:00Z",
@@ -87,9 +89,17 @@ def test_save_artifact_writes_expected_shape(temp_train_dirs):
         "class_counts": {"train_0": 3, "train_1": 3, "test_0": 1, "test_1": 1},
         "metrics": {"roc_auc": 1.0, "average_precision": 1.0},
         "training_params": {"max_iter": 2000},
+        "top_features": [],
     }
 
-    path = train_module._save_artifact("logreg", clf, feature_names, metadata)
+    path = train_module._save_artifact(
+        "logreg",
+        clf,
+        feature_names,
+        X_test,
+        y_test,
+        metadata,
+    )
 
     assert path == models_dir / "url_classifier_logreg.joblib"
     assert path.exists()
@@ -98,6 +108,8 @@ def test_save_artifact_writes_expected_shape(temp_train_dirs):
     assert artifact["artifact_version"] == train_module.ARTIFACT_VERSION
     assert artifact["model"] == clf
     assert artifact["feature_names"] == feature_names
+    assert np.array_equal(artifact["X_test"], X_test)
+    assert np.array_equal(artifact["y_test"], y_test)
     assert artifact["metadata"] == metadata
 
 
@@ -126,6 +138,7 @@ def test_save_metrics_json_writes_expected_payload(temp_train_dirs):
             "average_precision": 1.0,
         },
         "training_params": {"n_estimators": 400},
+        "top_features": [],
     }
 
     path = train_module._save_metrics_json("xgb", metadata)
@@ -159,6 +172,7 @@ def test_save_metrics_json_writes_expected_payload(temp_train_dirs):
             "average_precision": 1.0,
         },
         "training_params": {"n_estimators": 400},
+        "top_features": [],
     }
 
 
@@ -391,3 +405,27 @@ def test_load_url_model_falls_back_when_preferred_missing(temp_train_dirs):
 def test_load_url_model_raises_when_no_artifacts_exist(temp_train_dirs):
     with pytest.raises(FileNotFoundError, match="No trained URL model artifacts found"):
         train_module.load_url_model(prefer="xgb")
+
+
+class DummyEstimator:
+    def __repr__(self) -> str:
+        return "DummyEstimator(repr)"
+
+
+def test_to_builtin_stringifies_non_serializable_objects():
+    estimator = DummyEstimator()
+    payload = {
+        "name": "model",
+        "params": {
+            "estimator": estimator,
+            "max_iter": np.int64(100),
+        },
+    }
+
+    result = train_module._to_builtin(payload)
+
+    assert result["name"] == "model"
+    assert result["params"]["max_iter"] == 100
+    # Non-serializable objects should be converted to a string
+    assert isinstance(result["params"]["estimator"], str)
+    assert "DummyEstimator" in result["params"]["estimator"]
