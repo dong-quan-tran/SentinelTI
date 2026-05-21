@@ -25,6 +25,7 @@ def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
             "dataset_source": {"use_real_data": True},
             "feature_version": "v2",
             "threshold": 0.75,
+            "threshold_source": "metadata",
             "metrics": {"roc_auc": 0.999, "average_precision": 0.998},
             "class_labels": {"benign": 0, "malicious": 1},
             "class_counts": {"train_0": 10, "train_1": 5, "test_0": 4, "test_1": 2},
@@ -347,6 +348,7 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
 
     assert body["model_meta"]["model_type"] == "xgb"
     assert body["model_meta"]["threshold"] == 0.75
+    assert body["model_meta"]["threshold_source"] == "metadata"
     assert body["model_meta"]["dataset_source"] == {}
     assert body["model_meta"]["metrics"] == {
         "roc_auc": None,
@@ -551,3 +553,27 @@ def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
         {"feature": "url_length", "importance": 0.42},
         {"feature": "has_ip", "importance": 0.21},
     ]
+
+def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.6,
+            "threshold_source": "env",
+            "metrics": {},
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["threshold"] == 0.6
+    assert body["model_meta"]["threshold_source"] == "env"

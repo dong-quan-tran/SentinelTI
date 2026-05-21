@@ -183,20 +183,20 @@ def _coerce_metadata(metadata: Any, prefer: str = "xgb") -> Dict[str, Any]:
     }
 
 
-def _effective_threshold(metadata: Dict[str, Any]) -> float:
+def _effective_threshold_with_source(metadata: Dict[str, Any]) -> tuple[float, str]:
     """
-    Compute the threshold for classification, matching current tests:
+    Compute the threshold for classification, along with its provenance:
 
-    1. Prefer artifact / metadata['threshold'] when present and valid.
-    2. Otherwise, use SENTINELTI_MALICIOUS_THRESHOLD if set and valid.
-    3. Otherwise, fall back to DEFAULT_MALICIOUS_THRESHOLD.
+    Returns:
+        (threshold_value, source)
+        where source is one of: "metadata", "env", "default".
     """
     meta_value = metadata.get("threshold")
     try:
         if meta_value is not None:
             mv = float(meta_value)
             if 0.0 <= mv <= 1.0:
-                return mv
+                return mv, "metadata"
     except (TypeError, ValueError):
         pass
 
@@ -207,9 +207,9 @@ def _effective_threshold(metadata: Dict[str, Any]) -> float:
         except ValueError:
             ev = None
         if ev is not None and 0.0 <= ev <= 1.0:
-            return ev
+            return ev, "env"
 
-    return DEFAULT_MALICIOUS_THRESHOLD
+    return DEFAULT_MALICIOUS_THRESHOLD, "default"
 
 
 def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
@@ -219,13 +219,18 @@ def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
     x = _build_feature_vector(url, feature_names)
 
     prob_malicious = float(model.predict_proba(x)[0][1])
-    threshold = _effective_threshold(metadata)
+    threshold, threshold_source = _effective_threshold_with_source(metadata)
     label = int(prob_malicious >= threshold)
+
+    # also expose the effective threshold back onto metadata for API consumers
+    metadata["threshold"] = threshold
+    metadata["threshold_source"] = threshold_source
 
     return {
         "label": label,
         "prob_malicious": prob_malicious,
         "threshold": threshold,
+        "threshold_source": threshold_source,
         "model_meta": metadata,
     }
 

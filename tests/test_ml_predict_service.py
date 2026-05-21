@@ -114,10 +114,17 @@ def test_predict_url_with_metadata_returns_expected_shape(temp_models_dir, monke
 
     result = predict_module.predict_url_with_metadata("http://example.com/login")
 
-    assert set(result.keys()) == {"label", "prob_malicious", "threshold", "model_meta"}
+    assert set(result.keys()) == {
+        "label",
+        "prob_malicious",
+        "threshold",
+        "threshold_source",
+        "model_meta",
+    }
     assert result["label"] == 1
     assert result["prob_malicious"] == 0.91
     assert result["threshold"] == 0.75
+    assert result["threshold_source"] == "metadata"
     assert result["model_meta"]["model_type"] == "xgb"
 
 

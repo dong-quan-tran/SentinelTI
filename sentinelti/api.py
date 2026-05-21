@@ -104,6 +104,7 @@ class ModelMetadataResponse(BaseModel):
     dataset_source: Dict[str, Any] = Field(default_factory=dict)
     feature_version: str | None = None
     threshold: float
+    threshold_source: Literal["metadata", "env", "default"] | None = None
     metrics: ModelMetricsSummary = Field(default_factory=ModelMetricsSummary)
     class_labels: ModelClassLabels = Field(default_factory=ModelClassLabels)
     class_counts: ModelClassCounts = Field(default_factory=ModelClassCounts)
@@ -263,6 +264,11 @@ def _build_model_meta() -> Dict[str, Any]:
     metadata = get_loaded_model_metadata()
     metrics = metadata.get("metrics", {}) or {}
 
+    threshold = float(metadata.get("threshold", 0.75))
+    threshold_source = metadata.get("threshold_source")
+    if threshold_source not in ("metadata", "env", "default"):
+        threshold_source = "metadata"
+
     return {
         "artifact_version": metadata.get("artifact_version"),
         "model_type": metadata.get("model_type", "unknown"),
@@ -270,7 +276,8 @@ def _build_model_meta() -> Dict[str, Any]:
         "dataset_name": metadata.get("dataset_name"),
         "dataset_source": metadata.get("dataset_source", {}),
         "feature_version": metadata.get("feature_version"),
-        "threshold": float(metadata.get("threshold", 0.75)),
+        "threshold": threshold,
+        "threshold_source": threshold_source,
         "metrics": {
             "roc_auc": metrics.get("roc_auc"),
             "average_precision": metrics.get("average_precision"),
