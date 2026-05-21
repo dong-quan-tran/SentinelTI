@@ -29,6 +29,10 @@ def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
             "class_labels": {"benign": 0, "malicious": 1},
             "class_counts": {"train_0": 10, "train_1": 5, "test_0": 4, "test_1": 2},
             "training_params": {"n_estimators": 400},
+            "top_features": [
+                {"feature": "has_ip", "importance": 0.31},
+                {"feature": "url_length", "importance": 0.22},
+            ],
             "artifact_path": "sentinelti/models/url_classifier_xgb.joblib",
         },
     )
@@ -277,6 +281,10 @@ def test_model_info_returns_metadata_response(monkeypatch):
     assert body["model_meta"]["model_type"] == "xgb"
     assert body["model_meta"]["feature_version"] == "v2"
     assert body["model_meta"]["metrics"]["roc_auc"] == 0.999
+    assert body["model_meta"]["top_features"] == [
+        {"feature": "has_ip", "importance": 0.31},
+        {"feature": "url_length", "importance": 0.22},
+    ]
 
 
 def test_score_url_sets_rate_limit_headers(monkeypatch):
@@ -449,3 +457,97 @@ def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
         "explanation",
         "model_meta",
     }
+
+def test_score_url_includes_top_features_in_model_meta(monkeypatch):
+    _set_test_auth(monkeypatch)
+    _mock_model_meta(monkeypatch, model_type="xgb")
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 1,
+            "prob_malicious": 0.88,
+            "heuristic": {
+                "score": 0.8,
+                "reasons": ["Suspicious keyword"],
+            },
+            "final_label": "malicious",
+            "risk": "high",
+            "reasons": ["High ML score"],
+            "explanation": {
+                "summary": "This URL looks likely malicious.",
+                "why_flagged": "The model assigned a high malicious probability.",
+                "user_action": "Do not open the link.",
+                "technical_notes": ["High ML score"],
+                "risk": "high",
+                "final_label": "malicious",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://phishy.example/login"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["top_features"] == [
+        {"feature": "has_ip", "importance": 0.31},
+        {"feature": "url_length", "importance": 0.22},
+    ]
+
+def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["top_features"] == []
+
+def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "top_features": [
+                {"feature": "url_length", "importance": 0.42},
+                {"feature": "missing_importance"},
+                {"importance": 0.5},
+                "bad-entry",
+                {"feature": "has_ip", "importance": "0.21"},
+            ],
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["top_features"] == [
+        {"feature": "url_length", "importance": 0.42},
+        {"feature": "has_ip", "importance": 0.21},
+    ]
