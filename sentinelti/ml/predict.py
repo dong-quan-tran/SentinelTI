@@ -19,6 +19,13 @@ def get_model_path(model_name: str) -> Path:
 
 
 def get_malicious_threshold() -> float:
+    """
+    Public helper used by other modules (e.g. tests, API metadata).
+
+    This function keeps the original behavior: it looks only at the
+    SENTINELTI_MALICIOUS_THRESHOLD env var and falls back to the
+    DEFAULT_MALICIOUS_THRESHOLD.
+    """
     raw = os.getenv("SENTINELTI_MALICIOUS_THRESHOLD")
     if raw is None:
         return DEFAULT_MALICIOUS_THRESHOLD
@@ -40,19 +47,17 @@ def _normalize_metadata(
 ) -> Dict[str, Any]:
     nested = artifact.get("metadata", {}) if isinstance(artifact.get("metadata"), dict) else {}
 
-    threshold = nested.get(
-        "threshold",
-        artifact.get("threshold", get_malicious_threshold()),
-    )
+    threshold = nested.get("threshold")
+    if threshold is None:
+        threshold = artifact.get("threshold")
 
-    return {
+    normalized = {
         "artifact_version": artifact.get("artifact_version", "legacy"),
         "model_type": nested.get("model_type", artifact.get("model_type", model_name)),
         "trained_at": nested.get("trained_at", artifact.get("trained_at")),
         "dataset_name": nested.get("dataset_name", artifact.get("dataset_name")),
         "dataset_source": nested.get("dataset_source", artifact.get("dataset_source", {})),
         "metrics": nested.get("metrics", artifact.get("metrics", {})),
-        "threshold": float(threshold),
         "feature_version": nested.get(
             "feature_version",
             artifact.get("feature_version", DEFAULT_FEATURE_VERSION),
@@ -60,8 +65,28 @@ def _normalize_metadata(
         "class_labels": nested.get("class_labels", artifact.get("class_labels", {})),
         "class_counts": nested.get("class_counts", artifact.get("class_counts", {})),
         "training_params": nested.get("training_params", artifact.get("training_params", {})),
+        "top_features": nested.get("top_features", artifact.get("top_features", [])),
         "artifact_path": str(path),
     }
+
+    if threshold is not None:
+        try:
+            normalized["threshold"] = float(threshold)
+        except (TypeError, ValueError):
+            pass
+
+    return normalized
+
+
+def _validate_artifact(artifact: Dict[str, Any], path: Path) -> None:
+    if not isinstance(artifact, dict):
+        raise RuntimeError(f"Invalid model artifact format in {path}")
+    if "model" not in artifact:
+        raise RuntimeError(f"Model artifact missing 'model' in {path}")
+    if "feature_names" not in artifact:
+        raise RuntimeError(f"Model artifact missing 'feature_names' in {path}")
+    if not isinstance(artifact["feature_names"], list):
+        raise RuntimeError(f"Model artifact 'feature_names' must be a list in {path}")
 
 
 def _load_artifact(prefer: str = "xgb"):
@@ -78,7 +103,7 @@ def _load_artifact(prefer: str = "xgb"):
 
         try:
             artifact = joblib.load(path)
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover - defensive
             last_error = exc
             continue
 
@@ -115,6 +140,11 @@ def load_model_legacy(prefer: str = "xgb"):
 def get_loaded_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
     _model, _feature_names, metadata = load_model(prefer=prefer)
     if isinstance(metadata, dict):
+        if "threshold" not in metadata:
+            metadata = {
+                **metadata,
+                "threshold": get_malicious_threshold(),
+            }
         return metadata
     return {
         "model_type": str(metadata),
@@ -148,10 +178,38 @@ def _coerce_metadata(metadata: Any, prefer: str = "xgb") -> Dict[str, Any]:
         return metadata
     return {
         "model_type": str(metadata),
-        "threshold": get_malicious_threshold(),
         "feature_version": DEFAULT_FEATURE_VERSION,
         "metrics": {},
     }
+
+
+def _effective_threshold(metadata: Dict[str, Any]) -> float:
+    """
+    Compute the threshold for classification, matching current tests:
+
+    1. Prefer artifact / metadata['threshold'] when present and valid.
+    2. Otherwise, use SENTINELTI_MALICIOUS_THRESHOLD if set and valid.
+    3. Otherwise, fall back to DEFAULT_MALICIOUS_THRESHOLD.
+    """
+    meta_value = metadata.get("threshold")
+    try:
+        if meta_value is not None:
+            mv = float(meta_value)
+            if 0.0 <= mv <= 1.0:
+                return mv
+    except (TypeError, ValueError):
+        pass
+
+    raw_env = os.getenv("SENTINELTI_MALICIOUS_THRESHOLD")
+    if raw_env is not None:
+        try:
+            ev = float(raw_env)
+        except ValueError:
+            ev = None
+        if ev is not None and 0.0 <= ev <= 1.0:
+            return ev
+
+    return DEFAULT_MALICIOUS_THRESHOLD
 
 
 def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
@@ -161,7 +219,7 @@ def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
     x = _build_feature_vector(url, feature_names)
 
     prob_malicious = float(model.predict_proba(x)[0][1])
-    threshold = float(metadata.get("threshold", get_malicious_threshold()))
+    threshold = _effective_threshold(metadata)
     label = int(prob_malicious >= threshold)
 
     return {
@@ -179,14 +237,3 @@ def predict_url(url: str) -> Tuple[int, float]:
 
 def predict_url_with_metadata(url: str) -> Dict[str, Any]:
     return _score_url(url)
-
-
-def _validate_artifact(artifact: Dict[str, Any], path: Path) -> None:
-    if not isinstance(artifact, dict):
-        raise RuntimeError(f"Invalid model artifact format in {path}")
-    if "model" not in artifact:
-        raise RuntimeError(f"Model artifact missing 'model' in {path}")
-    if "feature_names" not in artifact:
-        raise RuntimeError(f"Model artifact missing 'feature_names' in {path}")
-    if not isinstance(artifact["feature_names"], list):
-        raise RuntimeError(f"Model artifact 'feature_names' must be a list in {path}")
