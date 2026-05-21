@@ -15,6 +15,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
 from sentinelti.ml.dataset import (
@@ -126,7 +128,11 @@ def _to_builtin(value: Any) -> Any:
             return value.item()
         except Exception:
             return str(value)
-    return value
+    # Keep JSON-primitive types as-is
+    if isinstance(value, (int, float, str, bool)) or value is None:
+        return value
+    # Fallback for non-serializable objects (e.g. StandardScaler, estimators, pipelines)
+    return str(value)
 
 
 def _safe_roc_auc(y_true, y_prob) -> float | None:
@@ -143,15 +149,30 @@ def _safe_average_precision(y_true, y_prob) -> float | None:
         return None
 
 
+def _extract_estimator(clf: Any) -> Any:
+    if isinstance(clf, Pipeline):
+        return clf.named_steps.get("classifier", clf)
+    return clf
+
+
 def _top_feature_importances(
     clf: Any,
     feature_names: list[str],
     top_k: int = 10,
 ) -> list[dict[str, Any]]:
-    if not hasattr(clf, "feature_importances_"):
+    estimator = _extract_estimator(clf)
+
+    if hasattr(estimator, "feature_importances_"):
+        importances = np.asarray(estimator.feature_importances_).reshape(-1)
+    elif hasattr(estimator, "coef_"):
+        coef = np.asarray(estimator.coef_)
+        if coef.ndim == 2:
+            importances = np.mean(np.abs(coef), axis=0)
+        else:
+            importances = np.abs(coef).reshape(-1)
+    else:
         return []
 
-    importances = np.asarray(clf.feature_importances_).reshape(-1)
     if len(importances) != len(feature_names):
         return []
 
@@ -348,7 +369,18 @@ def train_url_model(
     urlhaus_max_malicious: int | None = 1000,
     urlhaus_max_benign: int | None = 1000,
 ) -> None:
-    clf = LogisticRegression(max_iter=2000)
+    clf = Pipeline(
+        steps=[
+            ("scaler", StandardScaler()),
+            (
+                "classifier",
+                LogisticRegression(
+                    max_iter=4000,
+                    solver="lbfgs",
+                ),
+            ),
+        ]
+    )
     _train_and_save(
         model_name="logreg",
         clf=clf,
