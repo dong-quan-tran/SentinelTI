@@ -91,6 +91,11 @@ class ModelClassCounts(BaseModel):
     test_1: int | None = None
 
 
+class ModelTopFeature(BaseModel):
+    feature: str
+    importance: float
+
+
 class ModelMetadataResponse(BaseModel):
     artifact_version: str | None = None
     model_type: str
@@ -103,6 +108,7 @@ class ModelMetadataResponse(BaseModel):
     class_labels: ModelClassLabels = Field(default_factory=ModelClassLabels)
     class_counts: ModelClassCounts = Field(default_factory=ModelClassCounts)
     training_params: Dict[str, Any] = Field(default_factory=dict)
+    top_features: List[ModelTopFeature] = Field(default_factory=list)
     artifact_path: str | None = None
 
 
@@ -116,7 +122,7 @@ class ExplanationResponse(BaseModel):
 
 
 class ModelInfoResponse(BaseModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.1"] = "1.1"
     model_meta: ModelMetadataResponse
 
 
@@ -200,17 +206,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         method = request.method
         path = request.url.path
 
-        logger.info(f"Request: {method} {path} from {client_ip}")
+        logger.info("Request: %s %s from %s", method, path, client_ip)
         try:
             response = await call_next(request)
         except Exception:
-            logger.exception(f"Error handling request: {method} {path} from {client_ip}")
+            logger.exception("Error handling request: %s %s from %s", method, path, client_ip)
             raise
 
         duration_ms = int((time.time() - start) * 1000)
         logger.info(
-            f"Response: {method} {path} -> {response.status_code} "
-            f"to {client_ip} in {duration_ms}ms"
+            "Response: %s %s -> %s to %s in %sms",
+            method,
+            path,
+            response.status_code,
+            client_ip,
+            duration_ms,
         )
         return response
 
@@ -223,6 +233,30 @@ class SPAStaticFiles(StaticFiles):
             if ex.status_code == 404:
                 return await super().get_response("index.html", scope)
             raise ex
+
+
+def _coerce_top_features(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+
+    cleaned: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        feature = item.get("feature")
+        importance = item.get("importance")
+        if feature is None or importance is None:
+            continue
+        try:
+            cleaned.append(
+                {
+                    "feature": str(feature),
+                    "importance": float(importance),
+                }
+            )
+        except (TypeError, ValueError):
+            continue
+    return cleaned
 
 
 def _build_model_meta() -> Dict[str, Any]:
@@ -244,6 +278,9 @@ def _build_model_meta() -> Dict[str, Any]:
         "class_labels": metadata.get("class_labels", {}),
         "class_counts": metadata.get("class_counts", {}),
         "training_params": metadata.get("training_params", {}),
+        "top_features": _coerce_top_features(
+            metadata.get("top_features", metadata.get("top_feature_importance", []))
+        ),
         "artifact_path": metadata.get("artifact_path"),
     }
 
@@ -309,7 +346,7 @@ async def health():
 )
 async def model_info():
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "model_meta": _build_model_meta(),
     }
 

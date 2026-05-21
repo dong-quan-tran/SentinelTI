@@ -273,7 +273,7 @@ def test_model_info_returns_metadata_response(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["schema_version"] == "1.0"
+    assert body["schema_version"] == "1.1"
     assert body["model_meta"]["model_type"] == "xgb"
     assert body["model_meta"]["feature_version"] == "v2"
     assert body["model_meta"]["metrics"]["roc_auc"] == 0.999
