@@ -646,3 +646,117 @@ def test_model_info_returns_recommended_threshold_fields(monkeypatch):
     body = response.json()
     assert body["model_meta"]["recommended_threshold"] == 0.82
     assert body["model_meta"]["recommended_threshold_source"] == "artifact"
+
+
+def test_model_info_includes_recommended_threshold(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "artifact_version": "1.0",
+            "model_type": "xgb",
+            "trained_at": "2026-05-18T03:55:05Z",
+            "dataset_name": "kaggle",
+            "dataset_source": {"use_real_data": True},
+            "feature_version": "v2",
+            "threshold": 0.8,
+            "threshold_source": "metadata",
+            "recommended_threshold": 0.3,
+            "recommended_threshold_source": "calibrated-grid",
+            "metrics": {"roc_auc": 0.99, "average_precision": 0.98},
+            "class_labels": {"benign": 0, "malicious": 1},
+            "class_counts": {"train_0": 10, "train_1": 5, "test_0": 4, "test_1": 2},
+            "training_params": {"n_estimators": 400},
+            "top_features": [],
+            "artifact_path": "sentinelti/models/url_classifier_xgb.joblib",
+            "feature_count": 42,
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["schema_version"] == "1.1"
+    assert body["model_meta"]["model_type"] == "xgb"
+    assert body["model_meta"]["threshold"] == 0.8
+    assert body["model_meta"]["threshold_source"] == "metadata"
+    assert body["model_meta"]["recommended_threshold"] == 0.3
+    assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
+    assert body["model_meta"]["feature_version"] == "v2"
+
+
+def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "artifact_version": "1.0",
+            "model_type": "xgb",
+            "trained_at": "2026-05-18T03:55:05Z",
+            "dataset_name": "kaggle",
+            "dataset_source": {"use_real_data": True},
+            "feature_version": "v2",
+            "threshold": 0.8,
+            "threshold_source": "metadata",
+            "recommended_threshold": 0.3,
+            "recommended_threshold_source": "calibrated-grid",
+            "metrics": {"roc_auc": 0.99, "average_precision": 0.98},
+            "class_labels": {"benign": 0, "malicious": 1},
+            "class_counts": {"train_0": 10, "train_1": 5, "test_0": 4, "test_1": 2},
+            "training_params": {"n_estimators": 400},
+            "top_features": [],
+            "artifact_path": "sentinelti/models/url_classifier_xgb.joblib",
+            "feature_count": 1,
+        },
+    )
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.70,
+            "heuristic": {
+                "score": 0.15,
+                "reasons": [],
+            },
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": ["Probability remains below effective model threshold"],
+            "explanation": {
+                "summary": "This URL currently appears low risk, although no automated check is perfect.",
+                "why_flagged": "The effective threshold remains higher than the advisory recommended threshold.",
+                "user_action": "Proceed carefully and verify the destination independently.",
+                "technical_notes": ["Probability remains below effective model threshold"],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "http://example.com"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["threshold"] == 0.8
+    assert body["label"] == 0
+    assert body["prob_malicious"] == 0.70
+    assert body["model_meta"]["threshold"] == 0.8
+    assert body["model_meta"]["threshold_source"] == "metadata"
+    assert body["model_meta"]["recommended_threshold"] == 0.3
+    assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
