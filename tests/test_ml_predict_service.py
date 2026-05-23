@@ -16,6 +16,7 @@ class DummyModel:
     def predict_proba(self, x):
         return [[1.0 - self.prob, self.prob] for _ in range(len(x))]
 
+
 class CapturingModel:
     def __init__(self):
         self.seen_x = None
@@ -23,6 +24,7 @@ class CapturingModel:
     def predict_proba(self, x):
         self.seen_x = x
         return [[0.2, 0.8] for _ in range(len(x))]
+
 
 @pytest.fixture
 def temp_models_dir(tmp_path, monkeypatch):
@@ -266,6 +268,8 @@ def test_build_feature_vector_respects_feature_name_order(monkeypatch):
     assert result["label"] == 1
     assert model.seen_x.shape == (1, 3)
     assert model.seen_x.tolist() == [[30.0, 10.0, 20.0]]
+
+
 def test_get_loaded_model_metadata_returns_normalized_metadata(temp_models_dir):
     artifact = {
         "artifact_version": "1.0",
@@ -360,6 +364,7 @@ def test_load_model_raises_for_invalid_artifact_format(temp_models_dir):
 
     with pytest.raises(RuntimeError, match="Invalid model artifact format"):
         predict_module.load_model(prefer="xgb")
+
 
 @pytest.mark.parametrize(
     "artifact, expected_message",
@@ -539,3 +544,70 @@ def test_get_loaded_model_metadata_uses_env_threshold_when_metadata_missing(
     assert result["threshold"] == 0.60
     assert result["threshold_source"] == "env"
     assert result["feature_count"] == 3
+
+
+def test_recommended_threshold_is_advisory_and_does_not_affect_label(temp_models_dir, monkeypatch):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.70),
+        "feature_names": ["f1"],
+        "metadata": {
+            "model_type": "xgb",
+            "threshold": 0.8,
+            "recommended_threshold": 0.3,
+            "recommended_threshold_source": "calibrated-grid",
+            "feature_version": "v2",
+        },
+    }
+    write_artifact(temp_models_dir, "xgb", artifact)
+
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {"f1": 1.0},
+    )
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", "0.2")
+
+    result = predict_module.predict_url_with_metadata("http://example.com")
+
+    # Effective threshold should still be the metadata threshold (0.8), not the
+    # recommended threshold (0.3) or env (0.2)
+    assert result["prob_malicious"] == 0.70
+    assert result["threshold"] == 0.8
+    assert result["threshold_source"] == "metadata"
+    assert result["label"] == 0
+
+    # Recommended threshold is present in metadata for observability only
+    assert result["model_meta"]["recommended_threshold"] == 0.3
+    assert result["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
+
+
+@pytest.mark.parametrize(
+    "recommended_value",
+    ["not-a-number", -0.1, 1.1],
+)
+def test_invalid_recommended_threshold_values_are_ignored_in_metadata(
+    temp_models_dir, recommended_value
+):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.50),
+        "feature_names": ["f1"],
+        "metadata": {
+            "model_type": "xgb",
+            "threshold": 0.5,
+            "recommended_threshold": recommended_value,
+            "recommended_threshold_source": "external",
+            "feature_version": "v2",
+        },
+    }
+    write_artifact(temp_models_dir, "xgb", artifact)
+
+    metadata = predict_module.get_loaded_model_metadata(prefer="xgb")
+
+    assert metadata["threshold"] == 0.5
+    assert metadata["threshold_source"] == "metadata"
+    # Invalid recommended_threshold should be dropped and defaulted to None
+    assert metadata["recommended_threshold"] is None
+    # Source is still exposed as it may help debugging how the bad value appeared
+    assert metadata["recommended_threshold_source"] == "external"

@@ -45,6 +45,19 @@ def _normalize_metadata(
     model_name: str,
     path: Path,
 ) -> Dict[str, Any]:
+    """
+    Normalize raw artifact metadata into a consistent dict.
+
+    Notes on thresholds:
+    - `threshold` is the model's suggested decision boundary and is the first
+      candidate for the effective classification threshold, as long as it is
+      a valid float between 0.0 and 1.0.
+    - `recommended_threshold` is advisory-only metadata which may come from
+      external analysis or grid search; it does *not* affect the effective
+      threshold used for classification.
+    - Invalid values for either field (wrong type or out of range) are
+      ignored and omitted from the normalized result.
+    """
     nested = artifact.get("metadata", {}) if isinstance(artifact.get("metadata"), dict) else {}
 
     threshold = nested.get("threshold")
@@ -59,7 +72,7 @@ def _normalize_metadata(
     if recommended_threshold_source is None:
         recommended_threshold_source = artifact.get("recommended_threshold_source")
 
-    normalized = {
+    normalized: Dict[str, Any] = {
         "artifact_version": artifact.get("artifact_version", "legacy"),
         "model_type": nested.get("model_type", artifact.get("model_type", model_name)),
         "trained_at": nested.get("trained_at", artifact.get("trained_at")),
@@ -80,15 +93,19 @@ def _normalize_metadata(
 
     if threshold is not None:
         try:
-            normalized["threshold"] = float(threshold)
+            tv = float(threshold)
         except (TypeError, ValueError):
-            pass
+            tv = None
+        if tv is not None and 0.0 <= tv <= 1.0:
+            normalized["threshold"] = tv
 
     if recommended_threshold is not None:
         try:
-            normalized["recommended_threshold"] = float(recommended_threshold)
+            rv = float(recommended_threshold)
         except (TypeError, ValueError):
-            pass
+            rv = None
+        if rv is not None and 0.0 <= rv <= 1.0:
+            normalized["recommended_threshold"] = rv
 
     return normalized
 
@@ -137,6 +154,10 @@ def load_model(prefer: str = "xgb"):
 
     Returns:
         tuple[model, feature_names, metadata]
+
+    The returned `metadata` is the normalized artifact metadata and may
+    include advisory fields such as `recommended_threshold` in addition
+    to core fields like `model_type`, `metrics`, and `threshold`.
     """
     return _load_artifact(prefer=prefer)
 
@@ -166,9 +187,13 @@ def _effective_threshold_with_source(metadata: Dict[str, Any]) -> tuple[float, s
     """
     Compute the effective threshold for classification, with provenance.
 
-    Returns:
-        (threshold_value, source)
-        where source is one of: "metadata", "env", "default".
+    Precedence:
+    1. Valid `threshold` in model metadata (0.0 <= t <= 1.0).
+    2. Valid SENTINELTI_MALICIOUS_THRESHOLD env var.
+    3. DEFAULT_MALICIOUS_THRESHOLD.
+
+    Note:
+        `recommended_threshold` is *not* used here and remains advisory-only.
     """
     meta_value = metadata.get("threshold")
     try:
@@ -192,6 +217,19 @@ def _effective_threshold_with_source(metadata: Dict[str, Any]) -> tuple[float, s
 
 
 def get_effective_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
+    """
+    Load the currently active model and return enriched metadata.
+
+    The returned dict includes:
+    - `threshold`: the effective classification threshold after applying
+      metadata/env/default precedence.
+    - `threshold_source`: one of "metadata", "env", or "default".
+    - `recommended_threshold`: advisory threshold if present and valid,
+      otherwise None.
+    - `recommended_threshold_source`: provenance for the advisory threshold,
+      if provided by the artifact.
+    - `feature_count`: number of features expected by the model.
+    """
     _model, feature_names, metadata = load_model(prefer=prefer)
     metadata = _coerce_metadata(metadata, prefer=prefer)
 
@@ -222,6 +260,16 @@ def get_loaded_model_type(prefer: str = "xgb") -> str:
 
 
 def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
+    """
+    Build a feature vector for the given URL.
+
+    Contract:
+        - `extract_features(url)` must return values for all feature names
+          listed in `feature_names`.
+        - It may return additional keys, which are ignored.
+        - If any expected feature is missing, this function raises
+          RuntimeError with a clear message.
+    """
     feat_dict = extract_features(url)
     missing_features = [name for name in feature_names if name not in feat_dict]
     if missing_features:
@@ -234,6 +282,17 @@ def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
 
 
 def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
+    """
+    Score a single URL using the preferred model.
+
+    Notes:
+        - The classification label is determined solely by the effective
+          `threshold` computed from model metadata, environment overrides,
+          and defaults.
+        - Any `recommended_threshold` present in model metadata is included
+          in `model_meta` for observability but does not influence the
+          label or score.
+    """
     model, feature_names, _metadata = load_model(prefer=prefer)
     metadata = get_effective_model_metadata(prefer=prefer)
 
