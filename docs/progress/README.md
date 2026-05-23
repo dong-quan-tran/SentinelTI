@@ -1702,3 +1702,32 @@ Extended the API’s model metadata schema to include threshold_source, mirrorin
 Updated tests to assert that the API passes through threshold_source from the underlying metadata, including env-based cases when the metadata already encodes that source.
 
 Cleaned up one overreaching test that tried to have /model-info compute env precedence itself, and instead refocused it on verifying correct passthrough of threshold and provenance values.
+
+
+Progress log: 05/22/2026
+
+On the ML side, you refactored sentinelti/ml/predict.py to normalize artifact metadata more defensively and to treat recommended_threshold as advisory-only. Threshold values (both primary and recommended) are now coerced to floats and required to lie in 
+[
+0.0
+,
+1.0
+]
+[0.0,1.0]; invalid values are quietly dropped instead of poisoning metadata. You added _effective_threshold_with_source and get_effective_model_metadata, which compute the effective classification threshold with clear precedence (metadata → env → default) and attach a threshold_source explaining where it came from. You also documented the feature‑extraction contract and the fact that the classifier’s decision boundary depends solely on this effective threshold.
+
+In the tests for the ML layer, you extended tests/test_ml_predict_service.py with scenarios that prove the new behavior. There are now tests that:
+
+Confirm recommended_threshold is carried through as metadata but does not affect labels or thresholds used for scoring.
+
+Verify that invalid recommended_threshold inputs (wrong type or out of range) are ignored and show up as None, while still preserving a human‑useful recommended_threshold_source.
+
+Check that effective thresholds and sources behave as expected when metadata is present, missing, or overridden by the environment.
+
+On the API side, you updated tests/test_api.py to align with the new metadata shape and to assert that the API is exposing the richer information correctly. The helper _mock_model_meta now includes recommended_threshold and its source, metrics, and top features, and existing tests for /model-info, /score-url, and /score-urls were kept in sync. You then added focused tests that:
+
+Confirm /model-info includes advisory threshold fields and still reports the effective threshold and threshold_source.
+
+Confirm /score-url responses echo the effective threshold and label driven by it, while only surfacing recommended_threshold via the nested model_meta.
+
+Along the way you also fixed an initial test issue where new tests tried to use a client fixture that didn’t exist. You reconciled everything with the existing pattern of a module‑level TestClient and patched symbols directly on the API module, keeping the test suite consistent with how the app is actually wired.
+
+Overall, today moved the project from “thresholds are implied and tangled with implementation details” to “threshold behavior is explicit, documented, and pinned down by tests,” and partially covered the “surface more model insight in the API” and “UX polish for error and metadata states” tracks.
