@@ -577,3 +577,30 @@ def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
     body = response.json()
     assert body["model_meta"]["threshold"] == 0.6
     assert body["model_meta"]["threshold_source"] == "env"
+
+
+def test_model_info_uses_effective_threshold_metadata(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.6,
+            "threshold_source": "env",
+            "feature_version": "v2",
+            "metrics": {},
+            "top_features": [],
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["threshold"] == 0.6
+    assert body["model_meta"]["threshold_source"] == "env"

@@ -431,12 +431,13 @@ def test_get_loaded_model_metadata_coerces_legacy_string_metadata(monkeypatch):
 
     metadata = predict_module.get_loaded_model_metadata(prefer="logreg")
 
-    assert metadata == {
-        "model_type": "logreg",
-        "threshold": 0.66,
-        "feature_version": "v2",
-        "metrics": {},
-    }
+    assert metadata["model_type"] == "logreg"
+    assert metadata["threshold"] == 0.66
+    assert metadata["feature_version"] == "v2"
+    assert metadata["metrics"] == {}
+    # New fields added by the refactor
+    assert metadata["threshold_source"] == "env"
+    assert metadata["feature_count"] == 1
 
 
 def test_get_loaded_model_type_handles_legacy_string_metadata(monkeypatch):
@@ -490,3 +491,51 @@ def test_load_model_falls_back_to_secondary_model_when_preferred_missing(temp_mo
 def test_load_model_raises_file_not_found_when_no_artifacts_exist(temp_models_dir):
     with pytest.raises(FileNotFoundError, match="No trained URL model artifacts found"):
         predict_module.load_model(prefer="xgb")
+
+
+def test_get_loaded_model_metadata_applies_env_threshold_override(temp_models_dir, monkeypatch):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.91),
+        "feature_names": ["f1", "f2", "f3"],
+        "metadata": {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "feature_version": "v2",
+            "metrics": {"roc_auc": 0.99},
+        },
+    }
+    write_artifact(temp_models_dir, "xgb", artifact)
+
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", "0.60")
+
+    result = predict_module.get_loaded_model_metadata(prefer="xgb")
+
+    assert result["model_type"] == "xgb"
+    assert result["threshold"] == 0.75
+    assert result["threshold_source"] == "metadata"
+    assert result["feature_count"] == 3
+
+
+def test_get_loaded_model_metadata_uses_env_threshold_when_metadata_missing(
+    temp_models_dir, monkeypatch
+):
+    artifact = {
+        "artifact_version": "1.0",
+        "model": DummyModel(0.91),
+        "feature_names": ["f1", "f2", "f3"],
+        "metadata": {
+            "model_type": "xgb",
+            "feature_version": "v2",
+            "metrics": {"roc_auc": 0.99},
+        },
+    }
+    write_artifact(temp_models_dir, "xgb", artifact)
+
+    monkeypatch.setenv("SENTINELTI_MALICIOUS_THRESHOLD", "0.60")
+
+    result = predict_module.get_loaded_model_metadata(prefer="xgb")
+
+    assert result["threshold"] == 0.60
+    assert result["threshold_source"] == "env"
+    assert result["feature_count"] == 3

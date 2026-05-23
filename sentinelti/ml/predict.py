@@ -137,45 +137,9 @@ def load_model_legacy(prefer: str = "xgb"):
     return model, feature_names, str(metadata.get("model_type", prefer))
 
 
-def get_loaded_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
-    _model, _feature_names, metadata = load_model(prefer=prefer)
-    if isinstance(metadata, dict):
-        if "threshold" not in metadata:
-            metadata = {
-                **metadata,
-                "threshold": get_malicious_threshold(),
-            }
-        return metadata
-    return {
-        "model_type": str(metadata),
-        "threshold": get_malicious_threshold(),
-        "feature_version": DEFAULT_FEATURE_VERSION,
-        "metrics": {},
-    }
-
-
-def get_loaded_model_type(prefer: str = "xgb") -> str:
-    _model, _feature_names, metadata = load_model(prefer=prefer)
-    if isinstance(metadata, dict):
-        return str(metadata.get("model_type", prefer))
-    return str(metadata)
-
-
-def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
-    feat_dict = extract_features(url)
-    missing_features = [name for name in feature_names if name not in feat_dict]
-    if missing_features:
-        raise RuntimeError(
-            "Feature extraction is missing expected model features: "
-            + ", ".join(missing_features)
-        )
-
-    return np.array([[feat_dict[name] for name in feature_names]], dtype=float)
-
-
 def _coerce_metadata(metadata: Any, prefer: str = "xgb") -> Dict[str, Any]:
     if isinstance(metadata, dict):
-        return metadata
+        return dict(metadata)
     return {
         "model_type": str(metadata),
         "feature_version": DEFAULT_FEATURE_VERSION,
@@ -185,7 +149,7 @@ def _coerce_metadata(metadata: Any, prefer: str = "xgb") -> Dict[str, Any]:
 
 def _effective_threshold_with_source(metadata: Dict[str, Any]) -> tuple[float, str]:
     """
-    Compute the threshold for classification, along with its provenance:
+    Compute the effective threshold for classification, with provenance.
 
     Returns:
         (threshold_value, source)
@@ -212,19 +176,52 @@ def _effective_threshold_with_source(metadata: Dict[str, Any]) -> tuple[float, s
     return DEFAULT_MALICIOUS_THRESHOLD, "default"
 
 
-def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
-    model, feature_names, metadata = load_model(prefer=prefer)
+def get_effective_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
+    _model, feature_names, metadata = load_model(prefer=prefer)
     metadata = _coerce_metadata(metadata, prefer=prefer)
+
+    threshold, threshold_source = _effective_threshold_with_source(metadata)
+
+    enriched = dict(metadata)
+    enriched["threshold"] = threshold
+    enriched["threshold_source"] = threshold_source
+    enriched["feature_count"] = len(feature_names)
+    return enriched
+
+
+def get_loaded_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
+    return get_effective_model_metadata(prefer=prefer)
+
+
+def get_loaded_model_type(prefer: str = "xgb") -> str:
+    _model, _feature_names, metadata = load_model(prefer=prefer)
+    if isinstance(metadata, dict):
+        return str(metadata.get("model_type", prefer))
+    return str(metadata)
+
+
+def _build_feature_vector(url: str, feature_names: list[str]) -> np.ndarray:
+    feat_dict = extract_features(url)
+    missing_features = [name for name in feature_names if name not in feat_dict]
+    if missing_features:
+        raise RuntimeError(
+            "Feature extraction is missing expected model features: "
+            + ", ".join(missing_features)
+        )
+
+    return np.array([[feat_dict[name] for name in feature_names]], dtype=float)
+
+
+def _score_url(url: str, prefer: str = "xgb") -> Dict[str, Any]:
+    model, feature_names, _metadata = load_model(prefer=prefer)
+    metadata = get_effective_model_metadata(prefer=prefer)
 
     x = _build_feature_vector(url, feature_names)
 
     prob_malicious = float(model.predict_proba(x)[0][1])
-    threshold, threshold_source = _effective_threshold_with_source(metadata)
+    threshold = float(metadata["threshold"])
+    threshold_source = str(metadata["threshold_source"])
     label = int(prob_malicious >= threshold)
-
-    # also expose the effective threshold back onto metadata for API consumers
-    metadata["threshold"] = threshold
-    metadata["threshold_source"] = threshold_source
 
     return {
         "label": label,
