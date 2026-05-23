@@ -51,6 +51,14 @@ def _normalize_metadata(
     if threshold is None:
         threshold = artifact.get("threshold")
 
+    recommended_threshold = nested.get("recommended_threshold")
+    if recommended_threshold is None:
+        recommended_threshold = artifact.get("recommended_threshold")
+
+    recommended_threshold_source = nested.get("recommended_threshold_source")
+    if recommended_threshold_source is None:
+        recommended_threshold_source = artifact.get("recommended_threshold_source")
+
     normalized = {
         "artifact_version": artifact.get("artifact_version", "legacy"),
         "model_type": nested.get("model_type", artifact.get("model_type", model_name)),
@@ -67,11 +75,18 @@ def _normalize_metadata(
         "training_params": nested.get("training_params", artifact.get("training_params", {})),
         "top_features": nested.get("top_features", artifact.get("top_features", [])),
         "artifact_path": str(path),
+        "recommended_threshold_source": recommended_threshold_source,
     }
 
     if threshold is not None:
         try:
             normalized["threshold"] = float(threshold)
+        except (TypeError, ValueError):
+            pass
+
+    if recommended_threshold is not None:
+        try:
+            normalized["recommended_threshold"] = float(recommended_threshold)
         except (TypeError, ValueError):
             pass
 
@@ -186,6 +201,12 @@ def get_effective_model_metadata(prefer: str = "xgb") -> Dict[str, Any]:
     enriched["threshold"] = threshold
     enriched["threshold_source"] = threshold_source
     enriched["feature_count"] = len(feature_names)
+
+    if "recommended_threshold" not in enriched:
+        enriched["recommended_threshold"] = None
+    if "recommended_threshold_source" not in enriched:
+        enriched["recommended_threshold_source"] = None
+
     return enriched
 
 

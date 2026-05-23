@@ -128,10 +128,8 @@ def _to_builtin(value: Any) -> Any:
             return value.item()
         except Exception:
             return str(value)
-    # Keep JSON-primitive types as-is
     if isinstance(value, (int, float, str, bool)) or value is None:
         return value
-    # Fallback for non-serializable objects (e.g. StandardScaler, estimators, pipelines)
     return str(value)
 
 
@@ -186,6 +184,13 @@ def _top_feature_importances(
         {"feature": str(name), "importance": float(score)}
         for name, score in ranked
     ]
+
+
+def _recommended_threshold_metadata() -> dict[str, Any]:
+    return {
+        "recommended_threshold": DEFAULT_THRESHOLD,
+        "recommended_threshold_source": "artifact",
+    }
 
 
 def _build_metadata(
@@ -244,6 +249,7 @@ def _build_metadata(
         },
         "training_params": _to_builtin(clf.get_params()),
         "top_features": _top_feature_importances(clf, feature_names, top_k=10),
+        **_recommended_threshold_metadata(),
     }
     return metadata
 
@@ -260,6 +266,8 @@ def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
         "dataset_source": metadata["dataset_source"],
         "feature_version": metadata["feature_version"],
         "threshold": metadata["threshold"],
+        "recommended_threshold": metadata.get("recommended_threshold"),
+        "recommended_threshold_source": metadata.get("recommended_threshold_source"),
         "class_labels": metadata["class_labels"],
         "class_counts": metadata["class_counts"],
         "metrics": metadata["metrics"],

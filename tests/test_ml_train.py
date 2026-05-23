@@ -90,6 +90,8 @@ def test_save_artifact_writes_expected_shape(temp_train_dirs):
         "metrics": {"roc_auc": 1.0, "average_precision": 1.0},
         "training_params": {"max_iter": 2000},
         "top_features": [],
+        "recommended_threshold": 0.75,
+        "recommended_threshold_source": "artifact",
     }
 
     path = train_module._save_artifact(
@@ -139,6 +141,8 @@ def test_save_metrics_json_writes_expected_payload(temp_train_dirs):
         },
         "training_params": {"n_estimators": 400},
         "top_features": [],
+        "recommended_threshold": 0.75,
+        "recommended_threshold_source": "artifact",
     }
 
     path = train_module._save_metrics_json("xgb", metadata)
@@ -164,6 +168,8 @@ def test_save_metrics_json_writes_expected_payload(temp_train_dirs):
         },
         "feature_version": "v2",
         "threshold": 0.75,
+        "recommended_threshold": 0.75,
+        "recommended_threshold_source": "artifact",
         "class_labels": {"benign": 0, "malicious": 1},
         "class_counts": {"train_0": 3, "train_1": 3, "test_0": 1, "test_1": 1},
         "metrics": {
@@ -305,6 +311,8 @@ def test_train_url_model_writes_metrics_and_artifact(
     assert metadata["dataset_name"] == "dummy"
     assert metadata["feature_version"] == train_module.FEATURE_VERSION
     assert metadata["threshold"] == train_module.DEFAULT_THRESHOLD
+    assert metadata["recommended_threshold"] == train_module.DEFAULT_THRESHOLD
+    assert metadata["recommended_threshold_source"] == "artifact"
     assert metadata["class_labels"] == {"benign": 0, "malicious": 1}
     assert set(metadata["class_counts"].keys()) == {"train_0", "train_1", "test_0", "test_1"}
     assert "roc_auc" in metadata["metrics"]
@@ -321,6 +329,8 @@ def test_train_url_model_writes_metrics_and_artifact(
     assert payload["dataset_name"] == "dummy"
     assert payload["feature_version"] == train_module.FEATURE_VERSION
     assert payload["threshold"] == train_module.DEFAULT_THRESHOLD
+    assert payload["recommended_threshold"] == train_module.DEFAULT_THRESHOLD
+    assert payload["recommended_threshold_source"] == "artifact"
 
 
 def test_train_url_model_xgb_writes_metrics_and_artifact(
@@ -348,6 +358,8 @@ def test_train_url_model_xgb_writes_metrics_and_artifact(
     assert metadata["dataset_name"] == "dummy"
     assert metadata["feature_version"] == train_module.FEATURE_VERSION
     assert metadata["threshold"] == train_module.DEFAULT_THRESHOLD
+    assert metadata["recommended_threshold"] == train_module.DEFAULT_THRESHOLD
+    assert metadata["recommended_threshold_source"] == "artifact"
     assert metadata["class_labels"] == {"benign": 0, "malicious": 1}
     assert set(metadata["class_counts"].keys()) == {"train_0", "train_1", "test_0", "test_1"}
     assert "roc_auc" in metadata["metrics"]
@@ -364,6 +376,8 @@ def test_train_url_model_xgb_writes_metrics_and_artifact(
     assert payload["dataset_name"] == "dummy"
     assert payload["feature_version"] == train_module.FEATURE_VERSION
     assert payload["threshold"] == train_module.DEFAULT_THRESHOLD
+    assert payload["recommended_threshold"] == train_module.DEFAULT_THRESHOLD
+    assert payload["recommended_threshold_source"] == "artifact"
 
 
 def test_load_url_model_reads_saved_logreg_artifact(
@@ -426,6 +440,5 @@ def test_to_builtin_stringifies_non_serializable_objects():
 
     assert result["name"] == "model"
     assert result["params"]["max_iter"] == 100
-    # Non-serializable objects should be converted to a string
     assert isinstance(result["params"]["estimator"], str)
     assert "DummyEstimator" in result["params"]["estimator"]

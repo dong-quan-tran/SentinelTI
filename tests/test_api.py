@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 import sentinelti.api as api_module
 
-
 client = TestClient(api_module.app)
 
 
@@ -26,6 +25,8 @@ def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
             "feature_version": "v2",
             "threshold": 0.75,
             "threshold_source": "metadata",
+            "recommended_threshold": 0.8,
+            "recommended_threshold_source": "artifact",
             "metrics": {"roc_auc": 0.999, "average_precision": 0.998},
             "class_labels": {"benign": 0, "malicious": 1},
             "class_counts": {"train_0": 10, "train_1": 5, "test_0": 4, "test_1": 2},
@@ -130,6 +131,9 @@ def test_score_url_returns_typed_response_with_explanation(monkeypatch):
     assert body["model_meta"]["model_type"] == "xgb"
     assert body["model_meta"]["feature_version"] == "v2"
     assert body["model_meta"]["threshold"] == 0.75
+    assert body["model_meta"]["threshold_source"] == "metadata"
+    assert body["model_meta"]["recommended_threshold"] == 0.8
+    assert body["model_meta"]["recommended_threshold_source"] == "artifact"
     assert body["model_meta"]["metrics"]["roc_auc"] == 0.999
     assert body["model_meta"]["metrics"]["average_precision"] == 0.998
 
@@ -176,6 +180,8 @@ def test_score_urls_returns_results_list_with_explanations(monkeypatch):
     assert len(body["results"]) == 2
     assert body["results"][0]["schema_version"] == "1.2"
     assert body["results"][0]["model_meta"]["model_type"] == "logreg"
+    assert body["results"][0]["model_meta"]["recommended_threshold"] == 0.8
+    assert body["results"][0]["model_meta"]["recommended_threshold_source"] == "artifact"
     assert body["results"][0]["explanation"]["final_label"] == "benign"
     assert body["results"][1]["url"] == "https://example.org"
 
@@ -281,6 +287,8 @@ def test_model_info_returns_metadata_response(monkeypatch):
     assert body["schema_version"] == "1.1"
     assert body["model_meta"]["model_type"] == "xgb"
     assert body["model_meta"]["feature_version"] == "v2"
+    assert body["model_meta"]["recommended_threshold"] == 0.8
+    assert body["model_meta"]["recommended_threshold_source"] == "artifact"
     assert body["model_meta"]["metrics"]["roc_auc"] == 0.999
     assert body["model_meta"]["top_features"] == [
         {"feature": "has_ip", "importance": 0.31},
@@ -349,6 +357,8 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
     assert body["model_meta"]["model_type"] == "xgb"
     assert body["model_meta"]["threshold"] == 0.75
     assert body["model_meta"]["threshold_source"] == "metadata"
+    assert body["model_meta"]["recommended_threshold"] is None
+    assert body["model_meta"]["recommended_threshold_source"] is None
     assert body["model_meta"]["dataset_source"] == {}
     assert body["model_meta"]["metrics"] == {
         "roc_auc": None,
@@ -460,6 +470,7 @@ def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
         "model_meta",
     }
 
+
 def test_score_url_includes_top_features_in_model_meta(monkeypatch):
     _set_test_auth(monkeypatch)
     _mock_model_meta(monkeypatch, model_type="xgb")
@@ -502,6 +513,7 @@ def test_score_url_includes_top_features_in_model_meta(monkeypatch):
         {"feature": "url_length", "importance": 0.22},
     ]
 
+
 def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
     _set_test_auth(monkeypatch)
 
@@ -522,6 +534,7 @@ def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["model_meta"]["top_features"] == []
+
 
 def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
     _set_test_auth(monkeypatch)
@@ -553,6 +566,7 @@ def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
         {"feature": "url_length", "importance": 0.42},
         {"feature": "has_ip", "importance": 0.21},
     ]
+
 
 def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
     _set_test_auth(monkeypatch)
@@ -604,3 +618,31 @@ def test_model_info_uses_effective_threshold_metadata(monkeypatch):
     body = response.json()
     assert body["model_meta"]["threshold"] == 0.6
     assert body["model_meta"]["threshold_source"] == "env"
+
+
+def test_model_info_returns_recommended_threshold_fields(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+            "recommended_threshold": 0.82,
+            "recommended_threshold_source": "artifact",
+            "metrics": {},
+            "top_features": [],
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["recommended_threshold"] == 0.82
+    assert body["model_meta"]["recommended_threshold_source"] == "artifact"

@@ -105,6 +105,8 @@ class ModelMetadataResponse(BaseModel):
     feature_version: str | None = None
     threshold: float
     threshold_source: Literal["metadata", "env", "default"] | None = None
+    recommended_threshold: float | None = None
+    recommended_threshold_source: str | None = None
     metrics: ModelMetricsSummary = Field(default_factory=ModelMetricsSummary)
     class_labels: ModelClassLabels = Field(default_factory=ModelClassLabels)
     class_counts: ModelClassCounts = Field(default_factory=ModelClassCounts)
@@ -278,6 +280,8 @@ def _build_model_meta() -> Dict[str, Any]:
         "feature_version": metadata.get("feature_version"),
         "threshold": threshold,
         "threshold_source": threshold_source,
+        "recommended_threshold": metadata.get("recommended_threshold"),
+        "recommended_threshold_source": metadata.get("recommended_threshold_source"),
         "metrics": {
             "roc_auc": metrics.get("roc_auc"),
             "average_precision": metrics.get("average_precision"),
