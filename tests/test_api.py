@@ -810,6 +810,104 @@ def test_model_info_includes_recommended_threshold(monkeypatch):
     assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
     assert body["model_meta"]["feature_version"] == "v2"
 
+def test_model_info_includes_model_summary(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "dataset_name": "urlhaus",
+            "trained_at": "2026-05-23T12:00:00Z",
+            "top_features": [
+                {"feature": "url_length", "importance": 0.9},
+                {"feature": "has_ip", "importance": 0.8},
+                {"feature": "num_dots", "importance": 0.7},
+                {"feature": "num_hyphens", "importance": 0.6},
+            ],
+            "metrics": {},
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    summary = body["model_meta"]["model_summary"]
+
+    assert summary["model_type"] == "xgb"
+    assert summary["dataset_name"] == "urlhaus"
+    assert summary["trained_at"] == "2026-05-23T12:00:00Z"
+    assert summary["top_features"] == [
+        {"feature": "url_length", "importance": 0.9},
+        {"feature": "has_ip", "importance": 0.8},
+        {"feature": "num_dots", "importance": 0.7},
+    ]
+
+
+def test_score_url_includes_model_summary(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "logreg",
+            "threshold": 0.75,
+            "dataset_name": "dummy",
+            "trained_at": "2026-05-23T12:00:00Z",
+            "top_features": [
+                {"feature": "url_length", "importance": 0.5},
+                {"feature": "has_ip", "importance": 0.4},
+            ],
+            "metrics": {},
+        },
+    )
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.11,
+            "heuristic": {"score": 0.0, "reasons": []},
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": ["No major indicators found"],
+            "explanation": {
+                "summary": "This URL currently appears low risk.",
+                "why_flagged": "The model found relatively few malicious patterns.",
+                "user_action": "Proceed carefully.",
+                "technical_notes": ["No major indicators found"],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    summary = body["model_meta"]["model_summary"]
+
+    assert summary["model_type"] == "logreg"
+    assert summary["dataset_name"] == "dummy"
+    assert summary["trained_at"] == "2026-05-23T12:00:00Z"
+    assert summary["top_features"] == [
+        {"feature": "url_length", "importance": 0.5},
+        {"feature": "has_ip", "importance": 0.4},
+    ]
 
 def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     _set_test_auth(monkeypatch)
