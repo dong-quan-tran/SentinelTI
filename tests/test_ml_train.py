@@ -446,3 +446,43 @@ def test_to_builtin_stringifies_non_serializable_objects():
     assert result["params"]["max_iter"] == 100
     assert isinstance(result["params"]["estimator"], str)
     assert "DummyEstimator" in result["params"]["estimator"]
+
+
+def test_train_url_model_persists_training_notes_in_metrics_and_payload(
+    temp_train_dirs, monkeypatch, tiny_training_dataset
+):
+    models_dir, metrics_dir = temp_train_dirs
+
+    # Force a simple dataset so training is cheap.
+    monkeypatch.setattr(
+        train_module,
+        "load_dataset_for_training",
+        lambda **kwargs: tiny_training_dataset,
+    )
+
+    captured_metadata = {}
+
+    original_build_metadata = train_module._build_metadata
+
+    def fake_build_metadata(*, training_notes=None, **kwargs):
+        # Call through to keep everything else intact.
+        meta = original_build_metadata(training_notes=training_notes, **kwargs)
+        captured_metadata.update(meta)
+        return meta
+
+    monkeypatch.setattr(train_module, "_build_metadata", fake_build_metadata)
+
+    # Run training; training_notes will be whatever _train_and_save passes down.
+    train_module.train_url_model(use_real_data=False)
+
+    # We don't assert exact content of notes here (they depend on sklearn),
+    # only that notes are wired through to metadata and persisted.
+    notes = captured_metadata["metrics"].get("training_notes", [])
+    assert isinstance(notes, list)
+
+    # Metrics JSON should carry the same list at top level.
+    metrics_files = list(metrics_dir.glob("url_model_logreg_*.json"))
+    assert len(metrics_files) == 1
+
+    payload = json.loads(metrics_files[0].read_text(encoding="utf-8"))
+    assert payload["training_notes"] == notes

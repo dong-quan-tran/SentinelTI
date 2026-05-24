@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import joblib
 import numpy as np
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
@@ -208,6 +210,7 @@ def _build_metadata(
     y_test,
     y_pred,
     y_prob,
+    training_notes: list[str] | None = None,
 ) -> dict[str, Any]:
     report_dict = classification_report(
         y_test,
@@ -217,6 +220,8 @@ def _build_metadata(
     )
     roc_auc = _safe_roc_auc(y_test, y_prob)
     average_precision = _safe_average_precision(y_test, y_prob)
+
+    notes = [n for n in (training_notes or []) if isinstance(n, str) and n.strip()]
 
     metadata = {
         "model_type": model_name,
@@ -246,6 +251,7 @@ def _build_metadata(
             "classification_report": _to_builtin(report_dict),
             "roc_auc": roc_auc,
             "average_precision": average_precision,
+            "training_notes": notes,
         },
         "training_params": _to_builtin(clf.get_params()),
         "top_features": _top_feature_importances(clf, feature_names, top_k=10),
@@ -257,6 +263,8 @@ def _build_metadata(
 def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     metrics_path = METRICS_DIR / f"url_model_{model_name}_{metadata['dataset_name']}_{ts}.json"
+
+    metrics = metadata.get("metrics", {}) or {}
 
     payload = {
         "artifact_version": ARTIFACT_VERSION,
@@ -270,11 +278,11 @@ def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
         "recommended_threshold_source": metadata.get("recommended_threshold_source"),
         "class_labels": metadata["class_labels"],
         "class_counts": metadata["class_counts"],
-        "metrics": metadata["metrics"],
+        "metrics": metrics,
         "training_params": metadata["training_params"],
         "top_features": metadata.get("top_features", []),
-        # New field: a place to surface convergence or other training notes.
-        "training_notes": metadata.get("metrics", {}).get("training_notes", []),
+        # Expose training notes at top-level for convenience.
+        "training_notes": metrics.get("training_notes", []),
     }
 
     with metrics_path.open("w", encoding="utf-8") as f:
@@ -333,13 +341,26 @@ def _train_and_save(
         stratify=y,
     )
 
-    clf.fit(X_train, y_train)
+    # Capture potential convergence warnings (especially for logreg) so we can
+    # surface them as structured training notes instead of only noisy logs.
+    training_notes: list[str] = []
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", category=ConvergenceWarning)
+        clf.fit(X_train, y_train)
+
+        for w in caught:
+            if issubclass(w.category, ConvergenceWarning):
+                msg = str(w.message).strip()
+                if msg:
+                    training_notes.append(msg)
 
     y_pred = clf.predict(X_test)
     y_prob = clf.predict_proba(X_test)[:, 1]
 
     print(f"Evaluation on holdout set ({model_name}):")
     print(classification_report(y_test, y_pred, zero_division=0))
+    for note in training_notes:
+        print(f"[training-note] {note}")
 
     metadata = _build_metadata(
         model_name=model_name,
@@ -355,6 +376,7 @@ def _train_and_save(
         y_test=y_test,
         y_pred=y_pred,
         y_prob=y_prob,
+        training_notes=training_notes,
     )
 
     metrics_path = _save_metrics_json(model_name, metadata)
