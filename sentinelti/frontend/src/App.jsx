@@ -1,37 +1,25 @@
 import { useEffect, useState } from "react";
-import { fetchModelInfo, scoreUrl } from "./api/client";
+import { scoreUrl } from "./api/client";
 import UrlForm from "./components/UrlForm";
 import VerdictCard from "./components/VerdictCard";
 import DetailPanel from "./components/DetailPanel";
 import ModelInsightPanel from "./components/ModelInsightPanel";
+import useModelInfo from "./hooks/useModelInfo";
 
 export default function App() {
-  const [modelInfo, setModelInfo] = useState(null);
+  const { modelInfo, loadingModel, modelInfoError } = useModelInfo();
+
   const [result, setResult] = useState(null);
-  const [loadingModel, setLoadingModel] = useState(true);
   const [loadingScan, setLoadingScan] = useState(false);
   const [status, setStatus] = useState("");
   const [statusKind, setStatusKind] = useState("idle");
-  const [modelInfoError, setModelInfoError] = useState("");
 
   useEffect(() => {
-    async function loadModelInfo() {
-      try {
-        setModelInfoError("");
-        const data = await fetchModelInfo();
-        setModelInfo(data);
-      } catch (error) {
-        const message = `Could not load model info: ${error.message}`;
-        setModelInfoError(message);
-        setStatus(message);
-        setStatusKind("error");
-      } finally {
-        setLoadingModel(false);
-      }
+    if (modelInfoError) {
+      setStatus(modelInfoError);
+      setStatusKind("error");
     }
-
-    loadModelInfo();
-  }, []);
+  }, [modelInfoError]);
 
   async function handleScan(url) {
     setLoadingScan(true);
