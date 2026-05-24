@@ -1749,3 +1749,53 @@ Overall, today moved the project from “thresholds are implied and tangled with
 - The UI is now in a good stopping place for the night.
 - The next logical phase is structural cleanup before adding AI features.
 - AI should be integrated as an additive layer on top of deterministic scoring, not as a replacement for it.
+
+
+Progress log: 05/24/2026
+
+Backend structure and metadata
+Extracted model metadata shaping into a dedicated service module, so /model-info and scoring endpoints now consume a single, normalized model_meta structure instead of duplicating logic in the API layer.
+
+Added tests for the new model metadata service, including:
+
+coercion and filtering of top_features and training_notes
+
+defaulting behavior for minimal metadata
+
+correct handling of threshold_source, recommended_threshold, and the compact model_summary block.
+
+Ensured the new model_summary field is present and stable on both /model-info and /score-url responses, with tests pinning that contract.
+
+API error contracts and docs
+Added structured error-contract tests around runtime failures for /score-url, /score-urls, and /explain-score, asserting that they return a consistent JSON shape with detail and error_type.
+
+Updated the API to document 500-level scoring errors in OpenAPI for all scoring endpoints, including a shared error model and descriptions for the internal scoring failure case.
+
+Refreshed the main README.md to:
+
+reflect the richer model_meta payload (effective vs. recommended thresholds, training notes, top features, model summary)
+
+document structured error responses (401, 422, and the custom 500 scoring error)
+
+add frontend dev instructions and updated project structure (including the new services/model_metadata.py).
+
+Frontend behavior
+Introduced a useModelInfo custom hook to load /model-info in a reusable, testable way, moving loading/error state out of App.jsx.
+
+Updated the React app to rely on the hook for model metadata and to keep the status line in sync with model-info load failures.
+
+Left the “Model insight” panel wired to the enriched model_meta shape, so UI now surfaces effective thresholds, top features, metrics, and training notes consistently.
+
+Overall impact
+The scoring and metadata paths now have clearer separation of concerns:
+
+deterministic scoring logic
+
+metadata normalization in a service layer
+
+API contracts with explicit error shapes
+
+UI consumption via a focused hook and a dedicated insight panel.
+
+The public docs (README and OpenAPI) are aligned with the actual behavior, which lowers surprise for clients and sets a solid baseline for the next phase (AI-assisted explanation and further UX polish).
+

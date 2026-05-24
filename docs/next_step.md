@@ -19,7 +19,7 @@
 ### Model insight in API and UI
 - [x] Ensure `/model-info` returns richer metadata including `recommended_threshold`, `recommended_threshold_source`, metrics, top features, and training notes.
 - [x] Add API tests that assert `/model-info` and `/score-url` pass through advisory threshold metadata while using the effective threshold for decisions.
-- [ ] Add or refine an explicit short `model_summary` block in `/model-info` with model type, dataset name, training date, and top 3 features.
+- [x] Add or refine an explicit short `model_summary` block in `/model-info` with model type, dataset name, training date, and top 3 features.
 - [x] Add a React “Model insight” panel showing the current model, effective threshold, model quality signals, and top features in plain language.
 - [x] Add friendly UI states for model metadata loading, unavailable metadata, and partially missing metrics.
 
@@ -34,25 +34,25 @@
 - [x] Keep a clear separation between effective classification threshold and advisory `recommended_threshold`.
 
 ### UX and API error handling
-- [ ] Ensure API scoring error responses are consistently structured with `detail` and `error_type`, and add tests for runtime error paths.
+- [x] Ensure API scoring error responses are consistently structured with `detail` and `error_type`, and add tests for runtime error paths.
 - [x] Ensure `/model-info` handles partial or minimal metadata gracefully and fills sensible defaults.
 - [x] In the UI, add friendly messages for missing model metadata.
 - [x] In the UI, add friendly messages for partially missing metrics such as ROC-AUC or average precision.
-- [ ] Document API error shapes and metadata defaults in a user-visible place such as the README or API docs.
+- [x] Document API error shapes and metadata defaults in a user-visible place such as the README or API docs.
 
 ## Structural improvements
 
 ### Backend structure
-- [ ] Split scoring, model metadata, and explanation concerns more cleanly in the API layer.
-- [ ] Add a dedicated service/helper layer for model metadata normalization so API handlers stay thin.
-- [ ] Normalize response shaping in one place so `/model-info`, `/score-url`, and `/score-urls` stay consistent by construction.
+- [x] Split scoring, model metadata, and explanation concerns more cleanly in the API layer by introducing a metadata service and central score response builder.
+- [x] Add a dedicated service/helper layer for model metadata normalization so API handlers stay thin.
+- [x] Normalize response shaping in one place so `/model-info`, `/score-url`, and `/score-urls` stay consistent by construction.
 - [ ] Review current tests and group them more clearly by API, predict, train, and UI contract behavior.
 
 ### Frontend structure
 - [ ] Split frontend API access into clearer domains such as `modelApi` and `scanApi`.
-- [ ] Add a `useModelInfo` hook for model metadata loading, status, and retry logic.
+- [x] Add a `useModelInfo` hook for model metadata loading, status, and retry logic.
 - [ ] Add response normalization on the frontend so components consume stable shapes.
-- [ ] Continue moving component-specific styles into colocated CSS files where it improves maintainability.
+- [x] Continue moving component-specific styles into colocated CSS files where it improves maintainability.
 - [ ] Remove remaining dead frontend files and stale starter code after confirming nothing imports them.
 
 ## AI integration roadmap
