@@ -1731,3 +1731,21 @@ Confirm /score-url responses echo the effective threshold and label driven by it
 Along the way you also fixed an initial test issue where new tests tried to use a client fixture that didn’t exist. You reconciled everything with the existing pattern of a module‑level TestClient and patched symbols directly on the API module, keeping the test suite consistent with how the app is actually wired.
 
 Overall, today moved the project from “thresholds are implied and tangled with implementation details” to “threshold behavior is explicit, documented, and pinned down by tests,” and partially covered the “surface more model insight in the API” and “UX polish for error and metadata states” tracks.
+
+
+## Progress log : 2026-05-23
+#### Completed
+- [x] Finished effective threshold provenance wiring so metadata can report both the threshold value and its source.
+- [x] Tightened API behavior around effective threshold versus advisory recommended threshold.
+- [x] Improved predict and train test coverage for metadata behavior and threshold invariants.
+- [x] Added support for `training_notes` in model artifacts and metrics payloads.
+- [x] Captured Logistic Regression convergence warnings into structured training metadata.
+- [x] Surfaced richer model metadata through the API, including metrics, top features, recommended threshold metadata, and training notes.
+- [x] Replaced the old frontend model info display with a richer “Model insight” panel.
+- [x] Added plain-language model feature descriptions, loading states, error states, and partial-metadata handling in the UI.
+- [x] Cleaned up frontend CSS structure by moving toward reset/base in `index.css`, shared app styles in `styles.css`, and component-level styling for `ModelInsightPanel`.
+
+#### Notes
+- The UI is now in a good stopping place for the night.
+- The next logical phase is structural cleanup before adding AI features.
+- AI should be integrated as an additive layer on top of deterministic scoring, not as a replacement for it.

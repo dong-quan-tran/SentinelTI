@@ -1,59 +1,80 @@
-Finish threshold provenance wiring
+# SentinelTI Todo
 
-Add a helper in the ML layer to compute “effective threshold + source” without needing to score a URL (_effective_threshold_with_source + get_effective_model_metadata).
+## Current priorities
 
-Update /model-info wiring so it can reflect the effective threshold (metadata vs env vs default), not just the raw artifact value.
+### Threshold provenance
+- [x] Add ML-side effective threshold provenance helpers so effective threshold and `threshold_source` can be derived without scoring a URL.
+- [x] Update `/model-info` wiring so it reflects the effective threshold source (`metadata`, `env`, or `default`) instead of only the raw artifact threshold.
+- [x] Add and tighten tests to ensure `/model-info` and scoring responses stay consistent.
+- [x] Ensure `recommended_threshold` stays advisory-only and is never used as the live decision threshold.
+- [x] Double-check React UI threshold display so it uses enriched metadata correctly.
 
-Add/tighten tests to ensure /model-info and scoring responses stay consistent, and that recommended_threshold is advisory-only.
+### Predict and train test hardening
+- [ ] Add tests that enforce the feature extraction contract, especially that missing features raise a clear `RuntimeError`.
+- [x] Add tests that cover threshold and `threshold_source` behavior in env and no-env scenarios.
+- [x] Add tests asserting invalid `recommended_threshold` values are ignored and surfaced as `None` while preserving a source string.
+- [x] Loosen brittle tests that relied on exact full-dict equality when new metadata keys are added.
+- [ ] Mirror any remaining predict-side metadata coverage on the training side so artifacts and consumers stay in sync.
 
-Double‑check React UI components (if any) that surface threshold info to make sure they use the enriched metadata correctly.
+### Model insight in API and UI
+- [x] Ensure `/model-info` returns richer metadata including `recommended_threshold`, `recommended_threshold_source`, metrics, top features, and training notes.
+- [x] Add API tests that assert `/model-info` and `/score-url` pass through advisory threshold metadata while using the effective threshold for decisions.
+- [ ] Add or refine an explicit short `model_summary` block in `/model-info` with model type, dataset name, training date, and top 3 features.
+- [x] Add a React “Model insight” panel showing the current model, effective threshold, model quality signals, and top features in plain language.
+- [x] Add friendly UI states for model metadata loading, unavailable metadata, and partially missing metrics.
 
-Tidy ML predict and train tests
+### Training ergonomics
+- [x] Detect Logistic Regression convergence warnings and store them as structured training notes instead of leaving them as log-only noise.
+- [x] Add a `training_notes` field to metrics artifacts and flow it through `/model-info`.
+- [ ] Decide whether Logistic Regression should also be retuned (`max_iter`, solver, scaling strategy) to reduce chronic non-convergence.
 
-Add tests that enforce the contract around feature extraction (missing features give a clear RuntimeError).
+### Evaluation and threshold tuning
+- [ ] Run the threshold-analysis flow against the default public model and pick a recommended threshold.
+- [ ] Store that chosen threshold inside artifact metadata.
+- [x] Keep a clear separation between effective classification threshold and advisory `recommended_threshold`.
 
-Add tests that round‑trip: load artifact → compute effective metadata → ensure threshold and threshold_source behave correctly in env / no-env scenarios.
+### UX and API error handling
+- [ ] Ensure API scoring error responses are consistently structured with `detail` and `error_type`, and add tests for runtime error paths.
+- [x] Ensure `/model-info` handles partial or minimal metadata gracefully and fills sensible defaults.
+- [x] In the UI, add friendly messages for missing model metadata.
+- [x] In the UI, add friendly messages for partially missing metrics such as ROC-AUC or average precision.
+- [ ] Document API error shapes and metadata defaults in a user-visible place such as the README or API docs.
 
-Add tests asserting invalid recommended_threshold values are ignored and surfaced as None while keeping a source string.
+## Structural improvements
 
-Loosen any remaining overly brittle tests that assert exact dict equality when new keys are added; focus them on required keys and invariants.
+### Backend structure
+- [ ] Split scoring, model metadata, and explanation concerns more cleanly in the API layer.
+- [ ] Add a dedicated service/helper layer for model metadata normalization so API handlers stay thin.
+- [ ] Normalize response shaping in one place so `/model-info`, `/score-url`, and `/score-urls` stay consistent by construction.
+- [ ] Review current tests and group them more clearly by API, predict, train, and UI contract behavior.
 
-Mirror some of the predict-side coverage on the training side (if needed) so artifacts and consumers stay in sync.
+### Frontend structure
+- [ ] Split frontend API access into clearer domains such as `modelApi` and `scanApi`.
+- [ ] Add a `useModelInfo` hook for model metadata loading, status, and retry logic.
+- [ ] Add response normalization on the frontend so components consume stable shapes.
+- [ ] Continue moving component-specific styles into colocated CSS files where it improves maintainability.
+- [ ] Remove remaining dead frontend files and stale starter code after confirming nothing imports them.
 
-Surface more model insight in the API/UI
+## AI integration roadmap
 
-Ensure /model-info returns richer metadata including recommended_threshold, recommended_threshold_source, metrics, and top features.
+### Foundation
+- [ ] Define where AI fits in SentinelTI: explanation enhancement, URL investigation assistance, analyst summaries, or triage suggestions.
+- [ ] Keep deterministic scoring as the source of truth, with AI as optional augmentation rather than the decision engine.
+- [ ] Introduce an AI abstraction layer so the core app does not depend directly on one provider or model.
+- [ ] Define clear request and response contracts for AI-assisted explanation endpoints before implementation.
 
-Add API tests that assert /model-info and /score-url pass through advisory threshold metadata while using the effective threshold for decisions.
+### First AI features
+- [ ] Add an AI-assisted explanation mode that rewrites technical results into clearer user guidance while preserving the original deterministic scoring output.
+- [ ] Add an analyst-facing summary feature that can summarize model reasons, heuristics, and metadata into a short investigation note.
+- [ ] Add an optional enrichment workflow for suspicious URLs, gated behind configuration and clear labeling.
 
-Extend /model-info to expose a short “model summary” block explicitly (model type, dataset name, training date, top 3 features) if not already done.
+### Safety and operations
+- [ ] Add feature flags or config toggles so AI features can be enabled without affecting core scoring.
+- [ ] Add logging, timeout handling, and graceful fallback behavior when AI providers fail.
+- [ ] Document prompt boundaries, redaction rules, and what data is allowed to leave the app.
+- [ ] Add tests around fallback behavior so AI failures never break normal scoring.
 
-In the React UI, add a “Model insight” panel using /model-info: current model type, effective threshold, and a couple of top features in plain language.
-
-Convergence warning + training ergonomics
-
-For Logistic Regression: either tune max_iter / solver to avoid chronic non‑convergence, or detect convergence warnings and encode them into metrics instead of logs.
-
-Add a “training notes” field to metrics artifacts (e.g. “logreg did not fully converge; consider tuning”) and ensure it flows through /model-info.
-
-Evaluation and threshold tuning follow‑up
-
-Use the existing threshold-analysis script to pick a public “recommended” threshold for the default model.
-
-Store that threshold inside artifact metadata (and make sure it appears as recommended_threshold in /model-info).
-
-Introduce a clear separation between the effective classification threshold and an advisory recommended_threshold, so you can experiment without editing artifacts each time.
-
-UX polish for error and metadata states
-
-Ensure API error responses for scoring are structured with detail and error_type, and have tests for runtime error paths.
-
-Ensure /model-info handles partial or minimal metadata gracefully and fills in sensible defaults, with tests to pin this.
-
-In the UI, add friendly messages for:
-
-no model loaded / metadata unavailable,
-
-partially missing metrics (e.g., only ROC‑AUC known).
-
-Document API error shapes and metadata defaults somewhere user‑visible (API docs or README).
+## Cleanup
+- [ ] Delete dead frontend files that were replaced during the UI refactor, such as `ModelInfoCard.jsx`, once confirmed unused.
+- [ ] Remove any stale imports of old components or CSS files.
+- [ ] Consider adding a dead-code check tool later for frontend cleanup.
