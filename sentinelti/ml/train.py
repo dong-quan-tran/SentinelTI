@@ -273,6 +273,8 @@ def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
         "metrics": metadata["metrics"],
         "training_params": metadata["training_params"],
         "top_features": metadata.get("top_features", []),
+        # New field: a place to surface convergence or other training notes.
+        "training_notes": metadata.get("metrics", {}).get("training_notes", []),
     }
 
     with metrics_path.open("w", encoding="utf-8") as f:

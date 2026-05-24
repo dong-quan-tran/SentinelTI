@@ -153,33 +153,32 @@ def test_save_metrics_json_writes_expected_payload(temp_train_dirs):
     assert path.suffix == ".json"
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload == {
-        "artifact_version": train_module.ARTIFACT_VERSION,
-        "model": "xgb",
-        "trained_at": "2026-05-19T00:00:00Z",
-        "dataset_name": "dummy",
-        "dataset_source": {
-            "use_real_data": False,
-            "use_urlhaus": False,
-            "csv_path": None,
-            "max_samples": None,
-            "urlhaus_max_malicious": 1000,
-            "urlhaus_max_benign": 1000,
-        },
-        "feature_version": "v2",
-        "threshold": 0.75,
-        "recommended_threshold": 0.75,
-        "recommended_threshold_source": "artifact",
-        "class_labels": {"benign": 0, "malicious": 1},
-        "class_counts": {"train_0": 3, "train_1": 3, "test_0": 1, "test_1": 1},
-        "metrics": {
-            "classification_report": {"0": {"precision": 1.0}, "1": {"precision": 1.0}},
-            "roc_auc": 1.0,
-            "average_precision": 1.0,
-        },
-        "training_params": {"n_estimators": 400},
-        "top_features": [],
+
+    # Core invariants
+    assert payload["artifact_version"] == train_module.ARTIFACT_VERSION
+    assert payload["model"] == "xgb"
+    assert payload["trained_at"] == "2026-05-19T00:00:00Z"
+    assert payload["dataset_name"] == "dummy"
+    assert payload["dataset_source"] == {
+        "use_real_data": False,
+        "use_urlhaus": False,
+        "csv_path": None,
+        "max_samples": None,
+        "urlhaus_max_malicious": 1000,
+        "urlhaus_max_benign": 1000,
     }
+    assert payload["feature_version"] == "v2"
+    assert payload["threshold"] == 0.75
+    assert payload["recommended_threshold"] == 0.75
+    assert payload["recommended_threshold_source"] == "artifact"
+    assert payload["class_labels"] == {"benign": 0, "malicious": 1}
+    assert payload["class_counts"] == {"train_0": 3, "train_1": 3, "test_0": 1, "test_1": 1}
+    assert payload["metrics"] == metadata["metrics"]
+    assert payload["training_params"] == metadata["training_params"]
+    assert payload["top_features"] == []
+    # New field should exist and be a list (empty by default)
+    assert "training_notes" in payload
+    assert isinstance(payload["training_notes"], list)
 
 
 def test_load_dataset_for_training_uses_dummy_builder(monkeypatch, tiny_training_dataset):
@@ -331,6 +330,9 @@ def test_train_url_model_writes_metrics_and_artifact(
     assert payload["threshold"] == train_module.DEFAULT_THRESHOLD
     assert payload["recommended_threshold"] == train_module.DEFAULT_THRESHOLD
     assert payload["recommended_threshold_source"] == "artifact"
+    # New field exists and is a list (empty by default)
+    assert "training_notes" in payload
+    assert isinstance(payload["training_notes"], list)
 
 
 def test_train_url_model_xgb_writes_metrics_and_artifact(
@@ -378,6 +380,8 @@ def test_train_url_model_xgb_writes_metrics_and_artifact(
     assert payload["threshold"] == train_module.DEFAULT_THRESHOLD
     assert payload["recommended_threshold"] == train_module.DEFAULT_THRESHOLD
     assert payload["recommended_threshold_source"] == "artifact"
+    assert "training_notes" in payload
+    assert isinstance(payload["training_notes"], list)
 
 
 def test_load_url_model_reads_saved_logreg_artifact(
