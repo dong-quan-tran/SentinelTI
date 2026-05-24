@@ -11,6 +11,7 @@ export default function App() {
   const [loadingModel, setLoadingModel] = useState(true);
   const [loadingScan, setLoadingScan] = useState(false);
   const [status, setStatus] = useState("");
+  const [statusKind, setStatusKind] = useState("idle");
   const [modelInfoError, setModelInfoError] = useState("");
 
   useEffect(() => {
@@ -20,8 +21,10 @@ export default function App() {
         const data = await fetchModelInfo();
         setModelInfo(data);
       } catch (error) {
-        setModelInfoError(`Could not load model info: ${error.message}`);
-        setStatus(`Could not load model info: ${error.message}`);
+        const message = `Could not load model info: ${error.message}`;
+        setModelInfoError(message);
+        setStatus(message);
+        setStatusKind("error");
       } finally {
         setLoadingModel(false);
       }
@@ -33,14 +36,17 @@ export default function App() {
   async function handleScan(url) {
     setLoadingScan(true);
     setStatus("Analyzing URL...");
+    setStatusKind("working");
     setResult(null);
 
     try {
       const data = await scoreUrl(url);
       setResult(data);
       setStatus("Scan complete.");
+      setStatusKind("success");
     } catch (error) {
       setStatus(`Scan failed: ${error.message}`);
+      setStatusKind("error");
     } finally {
       setLoadingScan(false);
     }
@@ -58,9 +64,9 @@ export default function App() {
       </section>
 
       <section className="top-grid">
-        <div>
+        <div className="scan-column">
           <UrlForm onSubmit={handleScan} loading={loadingScan} />
-          <div className="status-line">
+          <div className={`status-line status-line--${statusKind}`}>
             {loadingModel ? "Loading model info..." : status}
           </div>
         </div>

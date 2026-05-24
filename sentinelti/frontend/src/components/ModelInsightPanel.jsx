@@ -1,3 +1,5 @@
+import "./ModelInsightPanel.css";
+
 function formatThresholdSource(source) {
   if (source === "metadata") return "from model metadata";
   if (source === "env") return "from environment override";
@@ -29,43 +31,69 @@ function featurePlainLanguage(featureName) {
     has_redirect: "Contains redirect-style patterns that can hide the final destination.",
     num_dots: "Uses many subdomains or dot-separated sections, which can look deceptive.",
     num_hyphens: "Contains many hyphens, which can sometimes indicate impersonation.",
-    has_https_token_in_path: "Mentions HTTPS-like text in the wrong place, which can mislead users.",
-    suspicious_words: "Contains words commonly associated with login, account, or urgent actions.",
+    has_https_token_in_path:
+      "Mentions HTTPS-like text in the wrong place, which can mislead users.",
+    suspicious_words:
+      "Contains words commonly associated with login, account, or urgent actions.",
   };
 
-  return known[key] || `${formatFeatureName(featureName)} was one of the stronger signals used by the model.`;
+  return (
+    known[key] ||
+    `${formatFeatureName(featureName)} was one of the stronger signals used by the model.`
+  );
+}
+
+function LoadingState() {
+  return (
+    <aside className="panel-card model-insight-panel">
+      <div className="panel-label">Model insight</div>
+      <h2>Loading model details...</h2>
+      <p className="muted-copy">
+        Fetching the active model configuration and metadata.
+      </p>
+
+      <div className="insight-summary insight-summary--loading">
+        <div className="summary-item skeleton-block" />
+        <div className="summary-item skeleton-block" />
+        <div className="summary-item skeleton-block" />
+      </div>
+
+      <div className="panel-section">
+        <div className="skeleton-line skeleton-line--lg" />
+        <div className="skeleton-line" />
+        <div className="skeleton-line skeleton-line--sm" />
+      </div>
+    </aside>
+  );
+}
+
+function ErrorState({ errorMessage }) {
+  return (
+    <aside className="panel-card model-insight-panel">
+      <div className="panel-label panel-label--warning">Model insight</div>
+      <h2>Model info unavailable</h2>
+      <p className="muted-copy">{errorMessage}</p>
+      <div className="panel-note">
+        The scanner can still work, but this panel cannot describe the active model right now.
+      </div>
+    </aside>
+  );
 }
 
 export default function ModelInsightPanel({ modelInfo, loading, errorMessage }) {
   const modelMeta = modelInfo?.model_meta;
 
   if (loading) {
-    return (
-      <aside className="panel-card">
-        <div className="panel-label">Model insight</div>
-        <h2>Loading model details...</h2>
-        <p className="muted-copy">
-          Fetching the active model configuration and metadata.
-        </p>
-      </aside>
-    );
+    return <LoadingState />;
   }
 
   if (errorMessage) {
-    return (
-      <aside className="panel-card">
-        <div className="panel-label">Model insight</div>
-        <h2>Model info unavailable</h2>
-        <p className="muted-copy">
-          {errorMessage}
-        </p>
-      </aside>
-    );
+    return <ErrorState errorMessage={errorMessage} />;
   }
 
   if (!modelMeta) {
     return (
-      <aside className="panel-card">
+      <aside className="panel-card model-insight-panel">
         <div className="panel-label">Model insight</div>
         <h2>No model metadata available</h2>
         <p className="muted-copy">
@@ -90,11 +118,9 @@ export default function ModelInsightPanel({ modelInfo, loading, errorMessage }) 
   return (
     <aside className="panel-card model-insight-panel">
       <div className="panel-label">Model insight</div>
-      <h2>
-        {modelMeta.model_type?.toUpperCase?.() || "Unknown"} model
-      </h2>
+      <h2>{modelMeta.model_type?.toUpperCase?.() || "Unknown"} model</h2>
       <p className="muted-copy">
-        Using the <strong>effective</strong> decision threshold of{" "}
+        Using the **effective** decision threshold of{" "}
         <span className="metric-value">{modelMeta.threshold}</span>{" "}
         ({formatThresholdSource(modelMeta.threshold_source)}).
       </p>
