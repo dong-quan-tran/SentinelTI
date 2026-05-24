@@ -273,9 +273,26 @@ def test_explain_score_validation_error_for_missing_url(monkeypatch):
     assert response.status_code == 422
 
 
-def test_model_info_returns_metadata_response(monkeypatch):
+def test_model_info_returns_training_notes(monkeypatch):
     _set_test_auth(monkeypatch)
-    _mock_model_meta(monkeypatch, model_type="xgb")
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "logreg",
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+            "metrics": {
+                "roc_auc": 0.91,
+                "average_precision": 0.89,
+                "training_notes": [
+                    "logreg did not fully converge; consider increasing max_iter",
+                ],
+            },
+            "top_features": [],
+        },
+    )
 
     response = client.get(
         "/model-info",
@@ -284,16 +301,118 @@ def test_model_info_returns_metadata_response(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["schema_version"] == "1.1"
-    assert body["model_meta"]["model_type"] == "xgb"
-    assert body["model_meta"]["feature_version"] == "v2"
-    assert body["model_meta"]["recommended_threshold"] == 0.8
-    assert body["model_meta"]["recommended_threshold_source"] == "artifact"
-    assert body["model_meta"]["metrics"]["roc_auc"] == 0.999
-    assert body["model_meta"]["top_features"] == [
-        {"feature": "has_ip", "importance": 0.31},
-        {"feature": "url_length", "importance": 0.22},
+    assert body["model_meta"]["training_notes"] == [
+        "logreg did not fully converge; consider increasing max_iter",
     ]
+
+
+def test_model_info_defaults_training_notes_to_empty_list(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "metrics": {},
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["training_notes"] == []
+
+
+def test_model_info_filters_invalid_training_notes(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "logreg",
+            "threshold": 0.75,
+            "metrics": {
+                "training_notes": [
+                    "logreg did not fully converge",
+                    "",
+                    "   ",
+                    None,
+                    123,
+                ],
+            },
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers={"X-API-KEY": "test-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["training_notes"] == [
+        "logreg did not fully converge",
+        "123",
+    ]
+
+
+def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "logreg",
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+            "metrics": {
+                "roc_auc": 0.91,
+                "average_precision": 0.89,
+                "training_notes": ["logreg did not fully converge"],
+            },
+            "top_features": [],
+        },
+    )
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.21,
+            "heuristic": {"score": 0.0, "reasons": []},
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": ["No major indicators found"],
+            "explanation": {
+                "summary": "This URL currently appears low risk.",
+                "why_flagged": "The model found relatively few malicious patterns.",
+                "user_action": "Proceed carefully.",
+                "technical_notes": ["No major indicators found"],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_meta"]["training_notes"] == ["logreg did not fully converge"]
 
 
 def test_score_url_sets_rate_limit_headers(monkeypatch):

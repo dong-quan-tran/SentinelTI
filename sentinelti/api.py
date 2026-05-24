@@ -111,6 +111,7 @@ class ModelMetadataResponse(BaseModel):
     class_labels: ModelClassLabels = Field(default_factory=ModelClassLabels)
     class_counts: ModelClassCounts = Field(default_factory=ModelClassCounts)
     training_params: Dict[str, Any] = Field(default_factory=dict)
+    training_notes: List[str] = Field(default_factory=list)
     top_features: List[ModelTopFeature] = Field(default_factory=list)
     artifact_path: str | None = None
 
@@ -262,6 +263,19 @@ def _coerce_top_features(raw: Any) -> list[dict[str, Any]]:
     return cleaned
 
 
+def _coerce_training_notes(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    cleaned: list[str] = []
+    for item in raw:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
 def _build_model_meta() -> Dict[str, Any]:
     metadata = get_loaded_model_metadata()
     metrics = metadata.get("metrics", {}) or {}
@@ -289,6 +303,9 @@ def _build_model_meta() -> Dict[str, Any]:
         "class_labels": metadata.get("class_labels", {}),
         "class_counts": metadata.get("class_counts", {}),
         "training_params": metadata.get("training_params", {}),
+        "training_notes": _coerce_training_notes(
+            metadata.get("training_notes", metrics.get("training_notes", []))
+        ),
         "top_features": _coerce_top_features(
             metadata.get("top_features", metadata.get("top_feature_importance", []))
         ),
