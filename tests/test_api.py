@@ -977,3 +977,118 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     assert body["model_meta"]["threshold_source"] == "metadata"
     assert body["model_meta"]["recommended_threshold"] == 0.3
     assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
+
+def test_score_url_runtime_error_returns_structured_error(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    def boom(_url):
+        raise RuntimeError("feature extraction failed")
+
+    monkeypatch.setattr(api_module, "enrich_score", boom)
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Internal scoring error",
+        "error_type": "runtime_error",
+    }
+
+
+def test_score_urls_runtime_error_returns_structured_error(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    def boom(_url):
+        raise RuntimeError("feature extraction failed")
+
+    monkeypatch.setattr(api_module, "enrich_score", boom)
+
+    response = client.post(
+        "/score-urls",
+        headers={"X-API-KEY": "test-key"},
+        json={"urls": ["https://example.com", "https://example.org"]},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Internal scoring error",
+        "error_type": "runtime_error",
+    }
+
+
+def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    def boom(_url):
+        raise RuntimeError("explanation failed")
+
+    monkeypatch.setattr(api_module, "enrich_score", boom)
+
+    response = client.post(
+        "/explain-score",
+        headers={"X-API-KEY": "test-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Internal scoring error",
+        "error_type": "runtime_error",
+    }
+
+
+def test_score_url_unauthorized_when_api_key_missing():
+    response = client.post(
+        "/score-url",
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unauthorized"
+
+
+def test_score_url_unauthorized_when_api_key_invalid():
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "wrong-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unauthorized"
+
+
+def test_score_url_validation_error_for_missing_url(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "test-key"},
+        json={},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert "detail" in body
+    assert isinstance(body["detail"], list)
+    assert body["detail"][0]["type"]
+
+
+def test_score_urls_validation_error_for_missing_urls(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    response = client.post(
+        "/score-urls",
+        headers={"X-API-KEY": "test-key"},
+        json={},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert "detail" in body
+    assert isinstance(body["detail"], list)
+    assert body["detail"][0]["type"]
