@@ -3,7 +3,7 @@ import { fetchModelInfo, scoreUrl } from "./api/client";
 import UrlForm from "./components/UrlForm";
 import VerdictCard from "./components/VerdictCard";
 import DetailPanel from "./components/DetailPanel";
-import ModelInfoCard from "./components/ModelInfoCard";
+import ModelInsightPanel from "./components/ModelInsightPanel";
 
 export default function App() {
   const [modelInfo, setModelInfo] = useState(null);
@@ -11,13 +11,16 @@ export default function App() {
   const [loadingModel, setLoadingModel] = useState(true);
   const [loadingScan, setLoadingScan] = useState(false);
   const [status, setStatus] = useState("");
+  const [modelInfoError, setModelInfoError] = useState("");
 
   useEffect(() => {
     async function loadModelInfo() {
       try {
+        setModelInfoError("");
         const data = await fetchModelInfo();
         setModelInfo(data);
       } catch (error) {
+        setModelInfoError(`Could not load model info: ${error.message}`);
         setStatus(`Could not load model info: ${error.message}`);
       } finally {
         setLoadingModel(false);
@@ -61,7 +64,12 @@ export default function App() {
             {loadingModel ? "Loading model info..." : status}
           </div>
         </div>
-        <ModelInfoCard modelInfo={modelInfo} />
+
+        <ModelInsightPanel
+          modelInfo={modelInfo}
+          loading={loadingModel}
+          errorMessage={modelInfoError}
+        />
       </section>
 
       {result && (
