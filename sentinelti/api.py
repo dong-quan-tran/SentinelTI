@@ -197,6 +197,17 @@ class ScoreUrlsRequest(BaseModel):
 class ScoreUrlsResponse(BaseModel):
     results: List[ScoreResponse]
 
+class ScoringErrorResponse(BaseModel):
+    detail: str = Field(
+        ...,
+        description="High-level error message.",
+        examples=["Internal scoring error"],
+    )
+    error_type: str = Field(
+        ...,
+        description="Machine-readable error category.",
+        examples=["runtime_error"],
+    )
 
 API_KEY_NAME = "X-API-KEY"
 API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
@@ -318,10 +329,15 @@ async def model_info():
         "model_meta": _build_model_meta(),
     }
 
-
 @app.post(
     "/score-url",
     response_model=ScoreResponse,
+    responses={
+        500: {
+            "model": ScoringErrorResponse,
+            "description": "Internal scoring error while processing the URL.",
+        }
+    },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def score_url(body: ScoreUrlRequest):
@@ -331,6 +347,12 @@ async def score_url(body: ScoreUrlRequest):
 @app.post(
     "/score-urls",
     response_model=ScoreUrlsResponse,
+    responses={
+        500: {
+            "model": ScoringErrorResponse,
+            "description": "Internal scoring error while processing one or more URLs.",
+        }
+    },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def score_urls(body: ScoreUrlsRequest):
@@ -340,12 +362,17 @@ async def score_urls(body: ScoreUrlsRequest):
 @app.post(
     "/explain-score",
     response_model=ExplanationResponse,
+    responses={
+        500: {
+            "model": ScoringErrorResponse,
+            "description": "Internal scoring error while generating an explanation.",
+        }
+    },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def explain_score(body: ScoreUrlRequest):
     result = enrich_score(body.url)
     return result["explanation"]
-
 
 if FRONTEND_DIST_DIR.exists():
     app.mount(
