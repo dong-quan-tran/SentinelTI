@@ -170,3 +170,167 @@ def test_predict_url_raises_if_features_missing(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="Feature extraction is missing expected model features"):
         predict.predict_url("http://example.com")
+
+
+import pytest
+
+import sentinelti.ml.predict as predict_module
+
+
+class DummyModel:
+    def __init__(self, prob=0.9):
+        self.prob = prob
+
+    def predict_proba(self, x):
+        return [[1.0 - self.prob, self.prob]]
+
+
+def test_build_feature_vector_raises_runtime_error_for_missing_features(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {
+            "url_length": 42,
+            "has_ip": 0,
+        },
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        predict_module._build_feature_vector(
+            "https://example.com",
+            ["url_length", "has_ip", "num_dots"],
+        )
+
+    message = str(excinfo.value)
+    assert "missing expected model features" in message.lower()
+    assert "num_dots" in message
+
+
+def test_build_feature_vector_ignores_extra_features(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {
+            "url_length": 42,
+            "has_ip": 0,
+            "num_dots": 3,
+            "unused_extra_feature": 999,
+        },
+    )
+
+    vector = predict_module._build_feature_vector(
+        "https://example.com",
+        ["url_length", "has_ip", "num_dots"],
+    )
+
+    assert vector.shape == (1, 3)
+    assert vector.tolist() == [[42.0, 0.0, 3.0]]
+
+
+def test_score_url_propagates_feature_extraction_runtime_error(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            DummyModel(prob=0.95),
+            ["url_length", "has_ip", "num_dots"],
+            {
+                "model_type": "xgb",
+                "threshold": 0.75,
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        predict_module,
+        "get_effective_model_metadata",
+        lambda prefer="xgb": {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+            "recommended_threshold": None,
+            "recommended_threshold_source": None,
+            "feature_count": 3,
+        },
+    )
+
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {
+            "url_length": 42,
+            "has_ip": 0,
+        },
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        predict_module._score_url("https://example.com")
+
+    message = str(excinfo.value)
+    assert "missing expected model features" in message.lower()
+    assert "num_dots" in message
+
+
+def test_score_url_uses_effective_threshold_not_recommended_threshold(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            DummyModel(prob=0.80),
+            ["url_length"],
+            {
+                "model_type": "xgb",
+                "threshold": 0.75,
+                "recommended_threshold": 0.95,
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        predict_module,
+        "get_effective_model_metadata",
+        lambda prefer="xgb": {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+            "recommended_threshold": 0.95,
+            "recommended_threshold_source": "artifact_metadata",
+            "feature_count": 1,
+        },
+    )
+
+    monkeypatch.setattr(
+        predict_module,
+        "extract_features",
+        lambda url: {"url_length": 42},
+    )
+
+    result = predict_module._score_url("https://example.com")
+
+    assert result["prob_malicious"] == 0.80
+    assert result["threshold"] == 0.75
+    assert result["label"] == 1
+    assert result["model_meta"]["recommended_threshold"] == 0.95
+
+
+def test_get_effective_model_metadata_sets_missing_recommended_fields(monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "load_model",
+        lambda prefer="xgb": (
+            DummyModel(prob=0.80),
+            ["url_length", "has_ip"],
+            {
+                "model_type": "xgb",
+                "threshold": 0.75,
+            },
+        ),
+    )
+
+    metadata = predict_module.get_effective_model_metadata()
+
+    assert metadata["threshold"] == 0.75
+    assert metadata["threshold_source"] == "metadata"
+    assert metadata["feature_count"] == 2
+    assert metadata["recommended_threshold"] is None
+    assert metadata["recommended_threshold_source"] is None
