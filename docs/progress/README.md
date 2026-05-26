@@ -1799,3 +1799,62 @@ UI consumption via a focused hook and a dedicated insight panel.
 
 The public docs (README and OpenAPI) are aligned with the actual behavior, which lowers surprise for clients and sets a solid baseline for the next phase (AI-assisted explanation and further UX polish).
 
+### 2026-05-25 — Progress log
+
+#### ML contract hardening
+- Reviewed `sentinelti/ml/predict.py` and confirmed the predict path is now in a strong state:
+  - effective threshold precedence is explicit and testable
+  - advisory `recommended_threshold` remains separate from the live decision threshold
+  - metadata enrichment includes threshold provenance and feature counts
+  - `_build_feature_vector()` already enforces a clear runtime contract for missing features.
+- Added/merged predict-side tests to lock down the remaining ML contract behavior:
+  - missing expected features raise a clear `RuntimeError`
+  - extra extracted features are ignored safely
+  - scoring propagates feature-contract failures rather than failing cryptically later
+  - effective threshold is used for classification even when `recommended_threshold` exists.
+- Verified `sentinelti/ml/train.py` is already in a good state for this phase:
+  - Logistic Regression is wrapped in a `StandardScaler` pipeline
+  - `max_iter=4000` is already set
+  - convergence warnings are captured into structured `training_notes`.
+
+#### Frontend cleanup and structure
+- Reviewed the frontend `src/` tree after the recent UI refactor and confirmed the structure is mostly clean.
+- Identified `App.css` as the likely dead file and validated the current component layout around:
+  - `ModelInsightPanel`
+  - `VerdictCard`
+  - `DetailPanel`
+  - `UrlForm`
+  - `useModelInfo`.
+- Confirmed the hooks folder is intentionally minimal with `useModelInfo.js` only.
+
+#### Frontend API layering
+- Planned and defined a cleaner frontend API boundary:
+  - `baseClient.js`
+  - `modelApi.js`
+  - `scanApi.js`
+- Moved toward a feature/domain split instead of a single generic API client so hooks and views depend on narrower modules.
+- This sets up a clean path for later adding `aiApi.js` without mixing model metadata, scanning, and AI concerns.
+
+#### Frontend response normalization
+- Planned and defined a normalization layer for frontend API payloads so components can render stable shapes even when nested fields are partial or missing.
+- Added the design for:
+  - `normalizeModelMeta`
+  - `normalizeModelInfoResponse`
+  - `normalizeScoreResponse`.
+- This reduces defensive null-check clutter in UI components and makes the client contract more resilient to partial metadata.
+
+#### AI direction and architecture
+- Closed out the “ML first” phase and explicitly shifted focus to AI as optional augmentation rather than as the scoring decision engine.
+- Chose the first AI feature: an AI-assisted explanation flow layered on top of deterministic scoring.
+- Designed the first backend AI architecture:
+  - provider-agnostic service module
+  - `AIExplanationError`
+  - prompt builder from deterministic score payloads
+  - stubbed AI rewrite function
+  - planned `POST /ai-explain-score` endpoint.
+- Defined the intended API response shape so deterministic explanation and AI-generated text remain clearly separated.
+
+#### Docs and workflow
+- Added cleanup guidance for test collection issues caused by duplicate `from __future__ import annotations` in `tests/test_predict.py`.
+- Prepared conventional commit guidance for the test fix and for the upcoming AI feature work.
+- Established the next execution path: implement the AI service module and endpoint first, then add AI-specific API/service tests, then wire the frontend AI experience.

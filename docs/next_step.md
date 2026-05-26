@@ -2,79 +2,84 @@
 
 ## Current priorities
 
-### Threshold provenance
-- [x] Add ML-side effective threshold provenance helpers so effective threshold and `threshold_source` can be derived without scoring a URL.
-- [x] Update `/model-info` wiring so it reflects the effective threshold source (`metadata`, `env`, or `default`) instead of only the raw artifact threshold.
-- [x] Add and tighten tests to ensure `/model-info` and scoring responses stay consistent.
-- [x] Ensure `recommended_threshold` stays advisory-only and is never used as the live decision threshold.
-- [x] Double-check React UI threshold display so it uses enriched metadata correctly.
+### AI foundation
+- [ ] Add a backend AI explanation service module (provider-agnostic) so AI logic lives outside API routes.
+- [ ] Define a first AI contract for `/ai-explain-score` that returns deterministic explanation data separately from AI-generated text.
+- [ ] Keep deterministic scoring as the source of truth and ensure AI output never changes `label`, `risk`, `threshold`, or `prob_malicious`.
+- [ ] Introduce an `AIExplanationError` path and document how AI failures degrade gracefully.
+- [ ] Add env-based configuration for AI enablement and provider credentials.
+- [ ] Decide on initial provider strategy: stub only, local model, or hosted API.
+- [ ] Add a small prompt builder that uses deterministic score data, reasons, heuristic info, and model metadata.
+- [ ] Define what fields are safe to send to an external AI provider and what should stay local.
 
-### Predict and train test hardening
-- [ ] Add tests that enforce the feature extraction contract, especially that missing features raise a clear `RuntimeError`.
-- [x] Add tests that cover threshold and `threshold_source` behavior in env and no-env scenarios.
-- [x] Add tests asserting invalid `recommended_threshold` values are ignored and surfaced as `None` while preserving a source string.
-- [x] Loosen brittle tests that relied on exact full-dict equality when new metadata keys are added.
-- [ ] Mirror any remaining predict-side metadata coverage on the training side so artifacts and consumers stay in sync.
+### AI API implementation
+- [ ] Add `POST /ai-explain-score` with auth, rate limiting, and OpenAPI docs.
+- [ ] Add a response model that clearly separates deterministic explanation from AI rewrite output.
+- [ ] Add structured error responses for AI failures, ideally distinguishing scoring failures from AI-provider failures.
+- [ ] Decide whether `/ai-explain-score` should call `enrich_score()` directly or reuse a shared response-building service.
+- [ ] Add an optional feature flag so the endpoint can be disabled without affecting normal scoring routes.
+- [ ] Add request/response examples to OpenAPI for the new AI endpoint.
 
-### Model insight in API and UI
-- [x] Ensure `/model-info` returns richer metadata including `recommended_threshold`, `recommended_threshold_source`, metrics, top features, and training notes.
-- [x] Add API tests that assert `/model-info` and `/score-url` pass through advisory threshold metadata while using the effective threshold for decisions.
-- [x] Add or refine an explicit short `model_summary` block in `/model-info` with model type, dataset name, training date, and top 3 features.
-- [x] Add a React “Model insight” panel showing the current model, effective threshold, model quality signals, and top features in plain language.
-- [x] Add friendly UI states for model metadata loading, unavailable metadata, and partially missing metrics.
+### AI testing
+- [ ] Add service-level tests for prompt building from deterministic score payloads.
+- [ ] Add tests for the stubbed AI rewrite service success path.
+- [ ] Add tests for empty or malformed score payloads raising `AIExplanationError`.
+- [ ] Add API tests for `/ai-explain-score` happy path.
+- [ ] Add API tests ensuring deterministic explanation fields are passed through unchanged.
+- [ ] Add API tests for AI failure paths and graceful structured 500 responses.
+- [ ] Add tests that prove AI output does not alter deterministic labels or thresholds.
+- [ ] Consider snapshot-style tests for AI contract shape, but avoid brittle tests on wording.
 
-### Training ergonomics
-- [x] Detect Logistic Regression convergence warnings and store them as structured training notes instead of leaving them as log-only noise.
-- [x] Add a `training_notes` field to metrics artifacts and flow it through `/model-info`.
-- [ ] Decide whether Logistic Regression should also be retuned (`max_iter`, solver, scaling strategy) to reduce chronic non-convergence.
+### API improvements
+- [ ] Split AI, scoring, and explanation concerns more cleanly in the API layer.
+- [ ] Reuse a shared service/helper for building score payloads before API shaping.
+- [ ] Add a dedicated error response model for AI-specific failures if generic scoring errors become too vague.
+- [ ] Review status-code behavior across all endpoints for consistency (`401`, `422`, `429`, `500`).
+- [ ] Add integration tests for rate-limit headers on scoring and AI routes.
+- [ ] Add README documentation for AI-assisted explanation endpoints and caveats.
+- [ ] Consider versioning or tagging AI endpoints separately in OpenAPI.
 
-### Evaluation and threshold tuning
-- [ ] Run the threshold-analysis flow against the default public model and pick a recommended threshold.
-- [ ] Store that chosen threshold inside artifact metadata.
-- [x] Keep a clear separation between effective classification threshold and advisory `recommended_threshold`.
+### Frontend AI and UX
+- [ ] Add a frontend API module for AI endpoints, e.g. `aiApi.js`.
+- [ ] Add a UI action to request an AI-assisted explanation after deterministic scoring succeeds.
+- [ ] Keep the deterministic explanation visible as primary, with AI text visually labeled as assistant-generated.
+- [ ] Add loading, disabled, and retry states for AI explanation requests.
+- [ ] Add friendly fallback UI when AI is unavailable or disabled.
+- [ ] Add UI copy explaining that AI summaries are advisory and do not change the underlying model verdict.
+- [ ] Consider an expandable "AI summary" section rather than making AI the default explanation view.
+- [ ] Add component tests for AI explanation UI states if frontend tests are introduced.
 
-### UX and API error handling
-- [x] Ensure API scoring error responses are consistently structured with `detail` and `error_type`, and add tests for runtime error paths.
-- [x] Ensure `/model-info` handles partial or minimal metadata gracefully and fills sensible defaults.
-- [x] In the UI, add friendly messages for missing model metadata.
-- [x] In the UI, add friendly messages for partially missing metrics such as ROC-AUC or average precision.
-- [x] Document API error shapes and metadata defaults in a user-visible place such as the README or API docs.
+### ML follow-ups
+- [x] Enforce the predict-side feature extraction contract so missing expected features raise a clear `RuntimeError`.
+- [ ] Run threshold-analysis on the default public model and decide on a more principled `recommended_threshold`.
+- [ ] Store the chosen recommended threshold in artifact metadata rather than relying on a default constant forever.
+- [ ] Evaluate whether the current threshold is optimized for your actual tradeoff between phishing recall and benign precision.
+- [ ] Consider probability calibration if score confidence appears poorly calibrated before threshold tuning.
+- [ ] Compare current XGBoost and Logistic Regression artifacts on the same evaluation workflow.
+- [ ] Decide whether to keep both models as first-class artifacts or designate one as the stable production default.
 
-## Structural improvements
+### Heuristics and scoring
+- [ ] Audit current heuristic signals used in `enrich_score()` and document what each reason means in plain language.
+- [ ] Add tests that ensure heuristic reasons are stable, non-empty, and user-readable.
+- [ ] Review whether any heuristic weights are overly dominant compared with model probability.
+- [ ] Add explicit coverage for borderline cases: suspicious-but-not-malicious, short URLs, IP-host URLs, lookalike domains, and noisy benign URLs.
+- [ ] Consider separating heuristic evidence into categories such as lexical, structural, and reputation-style indicators.
+- [ ] Improve explanation text so it maps reasons to concrete user actions more clearly.
+- [ ] Consider a confidence or evidence-strength concept distinct from the binary label.
 
-### Backend structure
-- [x] Split scoring, model metadata, and explanation concerns more cleanly in the API layer by introducing a metadata service and central score response builder.
-- [x] Add a dedicated service/helper layer for model metadata normalization so API handlers stay thin.
-- [x] Normalize response shaping in one place so `/model-info`, `/score-url`, and `/score-urls` stay consistent by construction.
-- [ ] Review current tests and group them more clearly by API, predict, train, and UI contract behavior.
+### Frontend structure and polish
+- [x] Split frontend API access by domain (`modelApi`, `scanApi`).
+- [x] Add frontend response normalization before rendering.
+- [ ] Add `aiApi.js` and normalize AI explanation responses before components consume them.
+- [ ] Delete any remaining dead frontend files like unused legacy CSS/components after final confirmation.
+- [ ] Add an error boundary for major UI sections so failures don’t blank the whole app.
+- [ ] Add component-level loading and empty-state consistency across verdict, detail, and model insight panels.
+- [ ] Improve mobile layout and spacing for the results/detail view.
+- [ ] Consider adding timestamps or request IDs in the UI for easier debugging.
 
-### Frontend structure
-- [ ] Split frontend API access into clearer domains such as `modelApi` and `scanApi`.
-- [x] Add a `useModelInfo` hook for model metadata loading, status, and retry logic.
-- [ ] Add response normalization on the frontend so components consume stable shapes.
-- [x] Continue moving component-specific styles into colocated CSS files where it improves maintainability.
-- [ ] Remove remaining dead frontend files and stale starter code after confirming nothing imports them.
-
-## AI integration roadmap
-
-### Foundation
-- [ ] Define where AI fits in SentinelTI: explanation enhancement, URL investigation assistance, analyst summaries, or triage suggestions.
-- [ ] Keep deterministic scoring as the source of truth, with AI as optional augmentation rather than the decision engine.
-- [ ] Introduce an AI abstraction layer so the core app does not depend directly on one provider or model.
-- [ ] Define clear request and response contracts for AI-assisted explanation endpoints before implementation.
-
-### First AI features
-- [ ] Add an AI-assisted explanation mode that rewrites technical results into clearer user guidance while preserving the original deterministic scoring output.
-- [ ] Add an analyst-facing summary feature that can summarize model reasons, heuristics, and metadata into a short investigation note.
-- [ ] Add an optional enrichment workflow for suspicious URLs, gated behind configuration and clear labeling.
-
-### Safety and operations
-- [ ] Add feature flags or config toggles so AI features can be enabled without affecting core scoring.
-- [ ] Add logging, timeout handling, and graceful fallback behavior when AI providers fail.
-- [ ] Document prompt boundaries, redaction rules, and what data is allowed to leave the app.
-- [ ] Add tests around fallback behavior so AI failures never break normal scoring.
-
-## Cleanup
-- [ ] Delete dead frontend files that were replaced during the UI refactor, such as `ModelInfoCard.jsx`, once confirmed unused.
-- [ ] Remove any stale imports of old components or CSS files.
-- [ ] Consider adding a dead-code check tool later for frontend cleanup.
+### Quality and testing structure
+- [ ] Split tests more clearly by concern: `test_api.py`, `test_api_ai.py`, `test_predict.py`, `test_train.py`, `test_model_metadata_service.py`.
+- [ ] Add a lightweight frontend test setup for hooks and response normalizers.
+- [ ] Add CI checks for backend tests and frontend build.
+- [ ] Add lint/format enforcement if not already in place.
+- [ ] Consider simple coverage reporting so the AI layer does not become undertested.
