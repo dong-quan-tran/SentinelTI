@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchModelInfo } from "../api/client";
+import { fetchModelInfo } from "../api/modelApi";
 
 export default function useModelInfo() {
   const [modelInfo, setModelInfo] = useState(null);

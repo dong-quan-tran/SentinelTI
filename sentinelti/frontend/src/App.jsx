@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { scoreUrl } from "./api/client";
+import { scoreUrl } from "./api/scanApi";
 import UrlForm from "./components/UrlForm";
 import VerdictCard from "./components/VerdictCard";
 import DetailPanel from "./components/DetailPanel";
