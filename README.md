@@ -556,6 +556,88 @@ Example response:
   "final_label": "benign"
 }
 ```
+## AI-assisted explanation
+
+SentinelTI includes an optional AI-assisted explanation endpoint:
+
+- `POST /ai-explain-score`
+
+This endpoint returns:
+
+- the existing deterministic explanation generated from the model score and heuristic analysis
+- a separate AI-generated rewrite intended to make the result easier to understand
+
+### Important behavior
+
+The deterministic score remains the source of truth.
+
+AI output does **not** change any of the following fields:
+
+- `label`
+- `risk`
+- `threshold`
+- `prob_malicious`
+- `final_label`
+
+The AI summary is advisory only and should be treated as a readability enhancement, not a decision engine.
+
+### Example response
+
+```json
+{
+  "deterministic_explanation": {
+    "summary": "This URL appears suspicious.",
+    "why_flagged": "Several phishing-like signals were detected.",
+    "user_action": "Avoid opening the link until it is verified.",
+    "technical_notes": [
+      "Contains suspicious lexical patterns."
+    ],
+    "risk": "high",
+    "final_label": "malicious"
+  },
+  "ai": {
+    "summary": "This link shows several warning signs and should be treated as high risk.",
+    "guidance": "Use the deterministic verdict as the primary decision signal. The AI summary is only a helper explanation."
+  }
+}
+```
+
+### AI feature flag
+
+AI-assisted explanations can be enabled or disabled with:
+
+- `SENTINELTI_AI_ENABLED=true`
+- `SENTINELTI_AI_ENABLED=false`
+
+When AI is disabled, `POST /ai-explain-score` returns:
+
+- HTTP `503 Service Unavailable`
+- error payload:
+  ```json
+  {
+    "detail": "AI-assisted explanations are currently disabled.",
+    "error_type": "ai_disabled"
+  }
+  ```
+
+### AI error behavior
+
+If deterministic scoring succeeds but the AI explanation step fails, the endpoint returns:
+
+- HTTP `500 Internal Server Error`
+- error payload:
+  ```json
+  {
+    "detail": "AI provider unavailable",
+    "error_type": "ai_explanation_error"
+  }
+  ```
+
+This failure does not affect the standard scoring endpoints such as:
+
+- `POST /score-url`
+- `POST /score-urls`
+- `POST /explain-score`
 
 ## Error responses
 
@@ -796,3 +878,4 @@ SentinelTI is developed and maintained by:
 - Role: Owner / Collaborator
 - Email: [dxt9721@mavs.uta.edu](mailto:dxt9721@mavs.uta.edu)
 - GitHub: [dong-quan-tran](https://github.com/dong-quan-tran)
+
