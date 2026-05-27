@@ -19,6 +19,8 @@ from .ml.predict import get_loaded_model_metadata
 from .scoring import enrich_score
 from .services.model_metadata import build_model_meta
 
+from .services.ai_explanations import ai_rewrite_explanation, AIExplanationError
+
 origins = [
     "http://localhost",
     "http://localhost:3000",
@@ -400,6 +402,37 @@ if FRONTEND_DIST_DIR.exists():
 else:
     logger.info("Frontend dist not found at %s; serving API only.", FRONTEND_DIST_DIR)
 
+@app.post(
+    "/ai-explain-score",
+    response_model=AIExplainScoreResponse,
+    responses={
+        500: {
+            "model": ScoringErrorResponse,
+            "description": "Internal error while generating AI-assisted explanation.",
+        }
+    },
+    dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
+)
+async def ai_explain_score(body: ScoreUrlRequest):
+    """
+    Return both deterministic and AI-assisted explanations for a URL.
+
+    The deterministic explanation remains the source of truth; the AI summary
+    is an optional helper layer.
+    """
+    try:
+        deterministic = enrich_score(body.url)
+        ai_payload = ai_rewrite_explanation(deterministic)
+    except AIExplanationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "deterministic_explanation": deterministic["explanation"],
+        "ai": ai_payload,
+    }
 
 if __name__ == "__main__":
     import uvicorn
