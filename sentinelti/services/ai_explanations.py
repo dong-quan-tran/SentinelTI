@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import os
+
+
+def ai_enabled() -> bool:
+    raw = os.getenv("SENTINELTI_AI_ENABLED", "false").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 class AIExplanationError(RuntimeError):
     """Raised when an AI explanation cannot be generated safely."""

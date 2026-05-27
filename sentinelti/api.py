@@ -19,7 +19,11 @@ from .ml.predict import get_loaded_model_metadata
 from .scoring import enrich_score
 from .services.model_metadata import build_model_meta
 
-from .services.ai_explanations import ai_rewrite_explanation, AIExplanationError
+from .services.ai_explanations import (
+    AIExplanationError,
+    ai_enabled,
+    ai_rewrite_explanation,
+)
 
 origins = [
     "http://localhost",
@@ -400,25 +404,36 @@ async def explain_score(body: ScoreUrlRequest):
         500: {
             "model": ScoringErrorResponse,
             "description": "Internal error while generating AI-assisted explanation.",
-        }
+        },
+        503: {
+            "model": ScoringErrorResponse,
+            "description": "AI-assisted explanations are currently disabled.",
+        },
     },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def ai_explain_score(body: ScoreUrlRequest):
-    """
-    Return both deterministic and AI-assisted explanations for a URL.
+    if not ai_enabled():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "AI-assisted explanations are currently disabled.",
+                "error_type": "ai_disabled",
+            },
+        )
 
-    The deterministic explanation remains the source of truth; the AI summary
-    is an optional helper layer.
-    """
+    deterministic = enrich_score(body.url)
+
     try:
-        deterministic = enrich_score(body.url)
         ai_payload = ai_rewrite_explanation(deterministic)
     except AIExplanationError as exc:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
-        ) from exc
+            content={
+                "detail": str(exc),
+                "error_type": "ai_explanation_error",
+            },
+        )
 
     return {
         "deterministic_explanation": deterministic["explanation"],
