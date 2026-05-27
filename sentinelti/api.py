@@ -393,15 +393,6 @@ async def explain_score(body: ScoreUrlRequest):
     result = enrich_score(body.url)
     return result["explanation"]
 
-if FRONTEND_DIST_DIR.exists():
-    app.mount(
-        "/",
-        SPAStaticFiles(directory=str(FRONTEND_DIST_DIR), html=True),
-        name="frontend",
-    )
-else:
-    logger.info("Frontend dist not found at %s; serving API only.", FRONTEND_DIST_DIR)
-
 @app.post(
     "/ai-explain-score",
     response_model=AIExplainScoreResponse,
@@ -433,6 +424,16 @@ async def ai_explain_score(body: ScoreUrlRequest):
         "deterministic_explanation": deterministic["explanation"],
         "ai": ai_payload,
     }
+
+if FRONTEND_DIST_DIR.exists():
+    app.mount(
+        "/",
+        SPAStaticFiles(directory=str(FRONTEND_DIST_DIR), html=True),
+        name="frontend",
+    )
+else:
+    logger.info("Frontend dist not found at %s; serving API only.", FRONTEND_DIST_DIR)
+
 
 if __name__ == "__main__":
     import uvicorn
