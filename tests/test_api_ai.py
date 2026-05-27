@@ -5,9 +5,11 @@ from fastapi.testclient import TestClient
 import sentinelti.api as api_module
 
 
-def _make_client(monkeypatch) -> TestClient:
+def _make_client(monkeypatch, *, ai_enabled: bool = True) -> TestClient:
     monkeypatch.setenv("SENTINELTI_API_KEY", "test-key")
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true" if ai_enabled else "false")
     api_module.API_KEY = "test-key"
+    api_module._rate_limit_store.clear()
     return TestClient(api_module.app)
 
 
@@ -16,7 +18,7 @@ def _auth_headers() -> dict[str, str]:
 
 
 def test_ai_explain_score_success(monkeypatch):
-    client = _make_client(monkeypatch)
+    client = _make_client(monkeypatch, ai_enabled=True)
 
     deterministic_payload = {
         "url": "https://example.com",
@@ -62,13 +64,12 @@ def test_ai_explain_score_success(monkeypatch):
 
     assert "deterministic_explanation" in data
     assert "ai" in data
-
     assert data["deterministic_explanation"] == deterministic_payload["explanation"]
     assert data["ai"] == ai_payload
 
 
 def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
-    client = _make_client(monkeypatch)
+    client = _make_client(monkeypatch, ai_enabled=True)
 
     deterministic_payload = {
         "url": "https://phishy.example/login",
@@ -116,7 +117,7 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
 
 
 def test_ai_explain_score_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
+    client = _make_client(monkeypatch, ai_enabled=True)
 
     response = client.post(
         "/ai-explain-score",
@@ -127,8 +128,24 @@ def test_ai_explain_score_requires_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
+def test_ai_explain_score_returns_503_when_ai_disabled(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=False)
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "AI-assisted explanations are currently disabled.",
+        "error_type": "ai_disabled",
+    }
+
+
 def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
-    client = _make_client(monkeypatch)
+    client = _make_client(monkeypatch, ai_enabled=True)
 
     deterministic_payload = {
         "url": "https://example.com",
@@ -167,4 +184,7 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
     )
 
     assert response.status_code == 500
-    assert response.json() == {"detail": "AI provider unavailable"}
+    assert response.json() == {
+        "detail": "AI provider unavailable",
+        "error_type": "ai_explanation_error",
+    }
