@@ -1858,3 +1858,67 @@ The public docs (README and OpenAPI) are aligned with the actual behavior, which
 - Added cleanup guidance for test collection issues caused by duplicate `from __future__ import annotations` in `tests/test_predict.py`.
 - Prepared conventional commit guidance for the test fix and for the upcoming AI feature work.
 - Established the next execution path: implement the AI service module and endpoint first, then add AI-specific API/service tests, then wire the frontend AI experience.
+
+### 2026-05-26 — Progress log
+
+#### AI backend foundation
+- Added the initial AI explanation architecture as a separate backend concern rather than embedding AI logic directly in API routes.
+- Defined a provider-agnostic AI service module pattern with:
+  - `AIExplanationError`
+  - AI prompt-building logic
+  - stubbed AI rewrite behavior.
+- Kept deterministic scoring as the source of truth and treated AI as a secondary explanation layer only.
+
+#### AI API contract
+- Added the `POST /ai-explain-score` endpoint.
+- Defined a response shape that clearly separates:
+  - `deterministic_explanation`
+  - `ai`
+- Ensured the AI endpoint follows the same auth and rate-limit dependency style as the rest of the API.
+- Added structured failure behavior for AI-specific problems and introduced AI-disabled handling behind environment configuration.
+
+#### AI API testing
+- Created `tests/test_api_ai.py`.
+- Added endpoint-level coverage for:
+  - success path
+  - deterministic explanation passthrough
+  - missing API key behavior
+  - AI disabled behavior
+  - AI service failure behavior.
+- Iterated through initial route/test failures and corrected the endpoint/test alignment.
+
+#### Frontend AI integration
+- Added frontend AI request flow to the main app.
+- Wired in `fetchAIExplanation()` from a dedicated AI API module.
+- Added local UI state for:
+  - `aiExplanation`
+  - `loadingAI`
+  - `aiError`
+- Ensured a new scan clears prior AI state so summaries do not leak across results.
+
+#### Frontend AI UX
+- Added an AI summary section to the results view.
+- Kept the deterministic verdict and details primary while presenting AI text as clearly secondary and advisory.
+- Added button-driven AI generation with loading and error states.
+- Added explanatory copy telling users that the AI summary does not change the score, threshold, risk, or final label.
+
+#### Frontend resilience
+- Added a React error boundary around the results area so rendering failures in verdict/detail/AI panels do not blank the entire app.
+- Limited the boundary scope to the result section instead of the whole app, preserving the scan form and top-level layout if a result-pane bug occurs.
+
+#### App integration cleanup
+- Updated `App.jsx` to integrate:
+  - AI summary state
+  - AI request handling
+  - result reset behavior
+  - error boundary usage.
+- Reviewed the updated `App.jsx` structure to confirm the imports, state handling, and result-section wrapping were consistent.
+
+#### Planning and tracking
+- Updated the project direction away from ML-heavy work and toward the first AI delivery slice.
+- Re-prioritized the backlog around:
+  - AI service tests
+  - API cleanup
+  - frontend fallback behavior
+  - heuristic/scoring improvements
+  - remaining ML calibration tasks.
