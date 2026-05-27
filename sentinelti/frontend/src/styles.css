@@ -616,3 +616,12 @@ h1 {
     width: 100%;
   }
 }
+
+.error-boundary-card {
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 0.75rem;
+}

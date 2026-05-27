@@ -5,6 +5,7 @@ import UrlForm from "./components/UrlForm";
 import VerdictCard from "./components/VerdictCard";
 import DetailPanel from "./components/DetailPanel";
 import ModelInsightPanel from "./components/ModelInsightPanel";
+import ErrorBoundary from "./components/ErrorBoundary";
 import useModelInfo from "./hooks/useModelInfo";
 
 export default function App() {
@@ -91,47 +92,50 @@ export default function App() {
       </section>
 
       {result && (
-        <section className="result-grid">
-          <div className="result-main-column">
-            <VerdictCard result={result} />
-            <div className="ai-summary-card">
-              <div className="section-header-row">
-                <h3>AI summary</h3>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleGenerateAISummary}
-                  disabled={loadingAI || !result?.url}
-                >
-                  {loadingAI ? "Generating..." : "Generate AI summary"}
-                </button>
-              </div>
+        <ErrorBoundary>
+          <section className="result-grid">
+            <div className="result-main-column">
+              <VerdictCard result={result} />
 
-              <p className="ai-summary-note">
-                This is an assistant-generated rewrite of the deterministic
-                explanation. It does not change the score, threshold, risk, or
-                final label.
-              </p>
-
-              {aiError ? <p className="status-error">{aiError}</p> : null}
-
-              {!aiExplanation && !loadingAI && !aiError ? (
-                <p className="status-muted">
-                  Generate a plain-language AI summary for this result.
-                </p>
-              ) : null}
-
-              {aiExplanation ? (
-                <div className="ai-summary-content">
-                  <p>{aiExplanation.summary}</p>
-                  <p>{aiExplanation.guidance}</p>
+              <div className="ai-summary-card">
+                <div className="section-header-row">
+                  <h3>AI summary</h3>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleGenerateAISummary}
+                    disabled={loadingAI || !result?.url}
+                  >
+                    {loadingAI ? "Generating..." : "Generate AI summary"}
+                  </button>
                 </div>
-              ) : null}
-            </div>
-          </div>
 
-          <DetailPanel result={result} />
-        </section>
+                <p className="ai-summary-note">
+                  This is an assistant-generated rewrite of the deterministic
+                  explanation. It does not change the score, threshold, risk, or
+                  final label.
+                </p>
+
+                {aiError ? <p className="status-error">{aiError}</p> : null}
+
+                {!aiExplanation && !loadingAI && !aiError ? (
+                  <p className="status-muted">
+                    Generate a plain-language AI summary for this result.
+                  </p>
+                ) : null}
+
+                {aiExplanation ? (
+                  <div className="ai-summary-content">
+                    <p>{aiExplanation.summary}</p>
+                    <p>{aiExplanation.guidance}</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <DetailPanel result={result} />
+          </section>
+        </ErrorBoundary>
       )}
     </main>
   );
