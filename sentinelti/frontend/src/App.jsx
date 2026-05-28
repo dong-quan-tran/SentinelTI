@@ -101,13 +101,17 @@ export default function App() {
             <div className="result-main-column">
               <VerdictCard result={result} />
 
-              <section className="ai-summary-card card" aria-labelledby="ai-summary-heading">
+              <section
+                className="ai-summary-card card"
+                aria-labelledby="ai-summary-heading"
+              >
                 <div className="section-header-row ai-summary-header">
                   <div>
                     <h3 id="ai-summary-heading">AI summary</h3>
                     <p className="ai-summary-note">
-                      Optional plain-language rewrite of the deterministic explanation.
-                      It does not change the score, threshold, risk, or final label.
+                      Optional plain-language rewrite of the deterministic
+                      explanation. It does not change the score, threshold, risk,
+                      or final label.
                     </p>
                   </div>
 
@@ -146,17 +150,23 @@ export default function App() {
                     ) : null}
 
                     {aiError ? (
-                      <div className="ai-fallback-message" role="status" aria-live="polite">
+                      <div
+                        className="ai-fallback-message"
+                        role="status"
+                        aria-live="polite"
+                      >
                         <p className="status-error">{aiError}</p>
                         <p className="status-muted">
-                          You can still rely on the deterministic verdict and detailed reasons.
+                          You can still rely on the deterministic verdict and
+                          detailed reasons.
                         </p>
                       </div>
                     ) : null}
 
                     {!aiExplanation && !loadingAI && !aiError ? (
                       <p className="status-muted">
-                        Generate a plain-language AI summary for this result when you want a simpler explanation.
+                        Generate a plain-language AI summary for this result when
+                        you want a simpler explanation.
                       </p>
                     ) : null}
 

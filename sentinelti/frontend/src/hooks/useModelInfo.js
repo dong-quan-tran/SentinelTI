@@ -14,7 +14,8 @@ export default function useModelInfo() {
       setModelInfo(data);
       return { ok: true, data };
     } catch (error) {
-      const message = `Could not load model info: ${error.message}`;
+      const message =
+        error?.message || "Could not load model information right now.";
       setModelInfoError(message);
       setModelInfo(null);
       return { ok: false, error: message };

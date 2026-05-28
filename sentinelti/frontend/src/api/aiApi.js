@@ -32,11 +32,15 @@ function normalizeAIError(error) {
   const detail = String(error?.detail || error?.message || "");
 
   if (errorType === "ai_disabled") {
-    return new Error("AI summary is currently unavailable. Your deterministic verdict is still valid.");
+    return new Error(
+      "AI summary is currently unavailable. Your deterministic verdict is still valid."
+    );
   }
 
   if (errorType === "ai_explanation_error") {
-    return new Error("AI summary could not be generated right now. Your deterministic verdict is still valid.");
+    return new Error(
+      "AI summary could not be generated right now. Your deterministic verdict is still valid."
+    );
   }
 
   if (error?.status === 401) {
