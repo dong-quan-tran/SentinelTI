@@ -106,3 +106,18 @@ def test_ai_rewrite_explanation_does_not_modify_input_payload(score_payload):
     assert score_payload == original
     assert score_payload["final_label"] == original["final_label"]
     assert score_payload["risk"] == original["risk"]
+
+
+@pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", ""])
+def test_ai_enabled_false_values(monkeypatch, value):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", value)
+    assert ai_enabled() is False
+
+
+def test_build_ai_explanation_prompt_without_recommended_threshold(score_payload):
+    payload = copy.deepcopy(score_payload)
+    payload["model_meta"] = {"threshold": 0.75}
+
+    prompt = build_ai_explanation_prompt(payload)
+
+    assert "Advisory recommended threshold:" not in prompt
