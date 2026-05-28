@@ -1922,3 +1922,43 @@ The public docs (README and OpenAPI) are aligned with the actual behavior, which
   - frontend fallback behavior
   - heuristic/scoring improvements
   - remaining ML calibration tasks.
+
+Progress log: 05/27/2026
+
+Backend AI layer and tests
+
+Reviewed and documented the current ai_explanations service design and the /ai-explain-score FastAPI endpoint, including error semantics (ai_disabled and ai_explanation_error) and how they’re wired into the route.
+
+Identified the next backend work as adding service-level tests for ai_explanations (prompt building, malformed payload handling, and invariants about not changing deterministic labels/thresholds), but did not yet implement those tests.
+
+Frontend AI UX
+
+Refined the app-level state handling in App.jsx so a new scan always clears any previous AI summary/error state and resets the AI panel expansion flag.
+
+Changed the AI summary UI from a static card into a collapsible “secondary” panel with a dedicated show/hide control, keeping the deterministic verdict visually primary.
+
+Added explicit, friendly fallback messaging for when AI is disabled or fails, emphasizing that the deterministic verdict and detail panel remain the source of truth.
+
+Improved accessibility of the AI section by using a proper button with aria-expanded and aria-controls to control the collapsible AI panel.
+
+Frontend API and error handling
+
+Updated the shared API client to preserve structured error information from the backend (HTTP status, detail, and error_type) on thrown errors so feature APIs can distinguish AI-disabled vs AI-provider failures.
+
+Updated the AI API module to:
+
+Normalize AI explanation responses into a stable shape for components.
+
+Normalize AI-specific errors using error_type, mapping them into short, user-friendly messages while keeping deterministic results as the recommended source of truth.
+
+Kept scanApi and useModelInfo largely intact, with a small refinement to useModelInfo’s error message so it surfaces clean, non-redundant text.
+
+Project description and planning
+
+Expanded and updated the SentinelTI project description to reflect the deterministic + AI-assisted architecture, React frontend, feature-flagged AI endpoints, and testing focus.
+
+Chose and drafted concrete commit messages for:
+
+Introducing the AI explanation service and tests.
+
+Refining the frontend AI UX and error normalization.
