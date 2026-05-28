@@ -1,92 +1,133 @@
-AI foundation
-Decide on initial provider strategy: stub only, local model, or hosted API.
+AI foundation & provider strategy
+Decide initial AI provider setup (stub vs local model vs external hosted API).
 
-Define what fields are safe to send to an external AI provider and what should stay local.
+Define a strict schema for what deterministic fields may be sent to any external AI provider (e.g., explanation text, risk/label, but not raw logs or user identifiers).
 
-AI API implementation
-Decide whether /ai-explain-score should call enrich_score() directly or reuse a shared response-building service.
+Implement configuration/feature-flag plumbing so AI provider choice and credentials are controlled via env vars.
 
-Add request/response examples to OpenAPI for the new AI endpoint.
+AI API implementation & testing
+AI service module tests
 
-AI testing
-Add service-level tests for prompt building from deterministic score payloads.
+Add unit tests for AI prompt/payload construction (given a deterministic explanation payload, assert the AI request body matches expectations).
 
-Add tests for the stubbed AI rewrite service success path.
+Test handling of empty or malformed deterministic payloads (should raise AIExplanationError cleanly).
 
-Add tests for empty or malformed score payloads raising AIExplanationError.
+Test successful stub rewrite independent of HTTP: given a deterministic explanation, ensure a well-formed {"summary", "guidance"} object comes back.
 
-Add tests that prove AI output does not alter deterministic labels or thresholds.
+Confirm invariants that AI output does not modify deterministic final_label, risk, threshold, or prob_malicious.
 
-Consider snapshot-style tests for AI contract shape, but avoid brittle tests on wording.
+HTTP endpoint / integration
 
-API improvements
-Split AI, scoring, and explanation concerns more cleanly in the API layer.
+Ensure /ai-explain-score is using shared scoring/explanation helpers where appropriate to avoid duplication.
 
-Reuse a shared service/helper for building score payloads before API shaping.
+Add/verify OpenAPI request/response examples (already partially in place for ai_explain_score).
 
-Add a dedicated error response model for AI-specific failures if generic scoring errors become too vague.
+Add integration tests for rate-limit headers on the AI route (similar to /score-url).
 
-Review status-code behavior across all endpoints for consistency (401, 422, 429, 500, 503).
+Scoring & model architecture
+Add LightGBM model
 
-Add integration tests for rate-limit headers on scoring and AI routes.
+Train a LightGBM model on the existing URL feature set, using the same train/validation splits as XGBoost for fair comparison.
 
-Add README documentation for AI-assisted explanation endpoints and caveats, if not fully written yet.
+Export the trained model as an artifact and version it (url_classifier_lgbm.joblib or similar).
 
-Consider versioning or tagging AI endpoints separately in OpenAPI.
+Extend the model-loading logic and metadata so model_type can be "lightgbm" and include its thresholds, metrics, feature_count, etc.
 
-Frontend AI and UX
-Add friendly fallback UI when AI is unavailable or disabled.
+Update get_loaded_model_metadata and build_model_meta_response to handle LightGBM metadata and tests that assert the fields are populated correctly.
 
-Consider an expandable "AI summary" section rather than making AI the default explanation view.
+Run the existing evaluation pipeline to compare XGBoost vs LightGBM vs Logistic Regression on ROC AUC, average precision, and calibration; document results in model metadata or a short markdown note.
 
-Add component tests for AI explanation UI states if frontend tests are introduced.
+Decide which model is the default production artifact, but keep the others available for offline evaluation.
 
-ML follow-ups
-Run threshold-analysis on the default public model and decide on a more principled recommended_threshold.
+Thresholds & calibration
 
-Store the chosen recommended threshold in artifact metadata rather than relying on a default constant forever.
+Run threshold analysis on the default model to choose a principled recommended_threshold (optimize phishing recall vs benign precision).
 
-Evaluate whether the current threshold is optimized for your actual tradeoff between phishing recall and benign precision.
+Store the chosen recommended threshold in the model artifact and surface it in model_meta (already supported structurally).
 
-Consider probability calibration if score confidence appears poorly calibrated before threshold tuning.
+Evaluate probability calibration (e.g., reliability curves) and, if needed, add post-calibration (Platt, isotonic) before threshold tuning.
 
-Compare current XGBoost and Logistic Regression artifacts on the same evaluation workflow.
+Heuristics & explanations
+Audit the current heuristic features used in enrich_score() and document each heuristic’s meaning in plain language.
 
-Decide whether to keep both models as first-class artifacts or designate one as the stable production default.
+Ensure heuristic reasons:
 
-Heuristics and scoring
-Audit current heuristic signals used in enrich_score() and document what each reason means in plain language.
+Are stable and deterministic for the same URL.
 
-Add tests that ensure heuristic reasons are stable, non-empty, and user-readable.
+Are non-empty when heuristics contribute to the verdict.
 
-Review whether any heuristic weights are overly dominant compared with model probability.
+Are user-readable and map to understandable concepts (e.g., “Login keyword in path” instead of “feature_17 > 0.5”).
 
-Add explicit coverage for borderline cases: suspicious-but-not-malicious, short URLs, IP-host URLs, lookalike domains, and noisy benign URLs.
+Add tests that cover borderline URLs (suspicious but not clearly malicious, short URLs, IP-based URLs, lookalike domains, noisy but benign).
 
-Consider separating heuristic evidence into categories such as lexical, structural, and reputation-style indicators.
+Consider categorizing heuristic evidence (lexical / structural / reputation-style) and exposing that categorization in explanations.
 
-Improve explanation text so it maps reasons to concrete user actions more clearly.
+Explore a separate “confidence” or “evidence strength” field distinct from the binary label.
 
-Consider a confidence or evidence-strength concept distinct from the binary label.
+API structure, docs, and quality
+Keep refining separation of concerns:
 
-Frontend structure and polish
-Add aiApi logic and normalize AI explanation responses before components consume them.
+scoring_service for deterministic scoring + explanations.
 
-Delete any remaining dead frontend files like unused legacy CSS/components after final confirmation.
+ai_score_service for AI-assisted rewrites.
 
-Add component-level loading and empty-state consistency across verdict, detail, and model insight panels.
+Optionally introduce a dedicated AI error response model if current generic error structure becomes confusing.
 
-Improve mobile layout and spacing for the results/detail view.
+Review status codes across all endpoints (401, 422, 429, 500, 503) for consistency and ensure docs match real behavior.
 
-Consider adding timestamps or request IDs in the UI for easier debugging.
+Confirm README and OpenAPI docs clearly describe:
 
-Quality and testing structure
-Split tests more clearly by concern: test_api.py, test_api_ai.py, test_predict.py, test_train.py, test_model_metadata_service.py.
+Deterministic vs AI layers.
 
-Add a lightweight frontend test setup for hooks and response normalizers.
+Error types (runtime_error, ai_disabled, ai_explanation_error).
 
-Add CI checks for backend tests and frontend build.
+Rate limiting behavior and headers.
 
-Add lint/format enforcement if not already in place.
+Frontend AI & UX
+AI availability and error UX
 
-Consider simple coverage reporting so the AI layer does not become undertested.
+Implement friendly UI messages for ai_disabled (503) and AI provider failures (500), e.g., “AI summary is unavailable; your deterministic verdict is still valid.”
+
+Make the AI summary visually secondary: collapsible section, smaller card, or “Show AI summary” toggle so deterministic explanation remains primary.
+
+Component-level behavior
+
+Ensure that starting a new scan clears any previous AI summary and AI errors (to avoid stale AI text).
+
+Normalize AI responses in aiApi.js so components always see a stable shape ({ summary, guidance } with safe defaults).
+
+Testing (when frontend tests are added)
+
+Add tests for AI loading state (button disabled, “Generating…” text).
+
+Add tests for AI error state rendering.
+
+Add tests for AI success state, verifying both summary and guidance appear.
+
+Frontend structure & polish
+Make loading/empty states consistent across Verdict card, Detail panel, Model insight panel, and AI summary card.
+
+Improve responsive/mobile layout (stacking order, spacing, readability for small screens).
+
+Consider adding timestamps or request IDs for each scan to make debugging easier.
+
+Remove dead frontend code (unused components, CSS).
+
+Testing, tooling, CI
+Backend tests
+
+Keep organizing tests by concern (test_api.py, test_api_ai.py, test_predict.py, test_train.py, test_model_metadata_service.py, etc.).
+
+Add service-level tests for scoring_service and ai_score_service (not just API layer tests).
+
+Frontend tests
+
+Set up a lightweight test runner (e.g., Vitest + React Testing Library) for hooks and API normalizer functions.
+
+CI & quality
+
+Add CI to run backend tests and build the frontend on every push/PR.
+
+Add linting/formatting (e.g., ruff/flake8 + black for Python; ESLint + Prettier for JS).
+
+Add basic coverage reporting to catch untested changes, especially around AI and scoring services.

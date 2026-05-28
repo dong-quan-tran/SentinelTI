@@ -1962,3 +1962,66 @@ Chose and drafted concrete commit messages for:
 Introducing the AI explanation service and tests.
 
 Refining the frontend AI UX and error normalization.
+
+Progress log: 2026-05-28
+Project: SentinelTI – deterministic URL scoring with optional AI explanations
+
+What we implemented/changed today
+
+Service architecture alignment
+
+Confirmed architecture where deterministic scoring is handled by scoring_service, and AI explanations are handled by ai_score_service, with clear error types (AIEndpointDisabledError, AIExplanationError).
+
+AI endpoint behavior
+
+Finalized /ai-explain-score response shape: returns deterministic_explanation plus an ai block with summary and guidance.
+
+Ensured that deterministic label, risk, thresholds, and scores remain unchanged even if AI text is contradictory.
+
+API tests refactor
+
+Updated tests/test_api_ai.py so tests monkeypatch sentinelti.services.ai_score_service instead of the API module, aligning tests with the new service-layer design.
+
+Likewise, updated tests/test_api.py to patch sentinelti.services.scoring_service for enrich_score and get_loaded_model_metadata so tests control the real scoring paths.
+
+Kept high-level tests for:
+
+Auth failures (missing/invalid API key).
+
+AI disabled (503 with error_type: "ai_disabled").
+
+AI failure (500 with error_type: "ai_explanation_error").
+
+Invariants that deterministic label/risk/threshold are unchanged by AI.
+
+OpenAPI documentation & tags
+
+Added descriptive OpenAPI tags and attached them to routes:
+
+health → /health
+
+model-info → /model-info
+
+scoring → /score-url, /score-urls, /explain-score
+
+ai → /ai-explain-score
+
+Extended the FastAPI app description with a clear explanation of deterministic vs AI layers and the AI endpoint’s behavior and error semantics.
+
+Planning for ML improvements
+
+Discussed adding a new model (e.g., LightGBM) alongside XGBoost, and added “Add LightGBM model” as a concrete backlog item under ML/scoring follow-ups.
+
+What we clarified (design decisions)
+
+Deterministic scoring remains the canonical source of truth; AI is strictly advisory and cannot change labels or thresholds.
+
+Error semantics for AI are explicit and separate from generic runtime errors.
+
+The codebase will move toward clearly separated service modules for scoring vs AI to keep the API layer thin and well-tested.
+
+Next likely steps
+
+Implement service-level tests for ai_score_service to lock down prompt/payload behavior and error handling.
+
+Start the LightGBM experiment: train, export an artifact, and integrate it into model metadata/loading so it can be compared against existing XGBoost and logistic regression models.
