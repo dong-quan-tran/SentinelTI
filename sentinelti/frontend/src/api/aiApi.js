@@ -28,28 +28,24 @@ function normalizeAIExplainResponse(value) {
 }
 
 function normalizeAIError(error) {
-  const message = String(error?.message || "");
-  const normalized = message.toLowerCase();
+  const errorType = String(error?.errorType || "").toLowerCase();
+  const detail = String(error?.detail || error?.message || "");
 
-  if (normalized.includes("ai_disabled")) {
-    return new Error("AI summary is currently unavailable.");
+  if (errorType === "ai_disabled") {
+    return new Error("AI summary is currently unavailable. Your deterministic verdict is still valid.");
   }
 
-  if (normalized.includes("ai-assisted explanations are currently disabled")) {
-    return new Error("AI summary is currently unavailable.");
+  if (errorType === "ai_explanation_error") {
+    return new Error("AI summary could not be generated right now. Your deterministic verdict is still valid.");
   }
 
-  if (normalized.includes("ai_explanation_error")) {
-    return new Error("AI summary could not be generated right now.");
+  if (error?.status === 401) {
+    return new Error("AI summary request was not authorized.");
   }
 
-  if (normalized.includes("ai provider unavailable")) {
-    return new Error("AI summary could not be generated right now.");
-  }
-
-  return error instanceof Error
-    ? error
-    : new Error("Could not generate AI summary.");
+  return new Error(
+    detail || "Could not generate AI summary. Your deterministic verdict is still valid."
+  );
 }
 
 export async function fetchAIExplanation(url) {

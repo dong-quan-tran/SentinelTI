@@ -10,12 +10,21 @@ async function parseJsonResponse(response) {
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const detail =
+    const error = new Error(
       typeof payload === "object" && payload !== null
-        ? payload.detail || payload.error || JSON.stringify(payload)
-        : payload || `Request failed with status ${response.status}`;
+        ? payload.detail || payload.error || `Request failed with status ${response.status}`
+        : payload || `Request failed with status ${response.status}`
+    );
 
-    throw new Error(detail);
+    error.status = response.status;
+    error.payload = payload;
+
+    if (typeof payload === "object" && payload !== null) {
+      error.detail = payload.detail || "";
+      error.errorType = payload.error_type || "";
+    }
+
+    throw error;
   }
 
   return payload;
