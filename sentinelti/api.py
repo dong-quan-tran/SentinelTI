@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-
 import logging
 import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Literal
-
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,18 +15,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
-
-from .ml.predict import get_loaded_model_metadata
-from .scoring import enrich_score
-from .services.model_metadata import build_model_meta
-
-
-from .services.ai_explanations import (
-    AIExplanationError,
-    ai_enabled,
-    ai_rewrite_explanation,
+from .services.ai_explanations import AIExplanationError
+from .services.ai_score_service import (
+    AIEndpointDisabledError,
+    build_ai_explanation_response,
 )
-
+from .services.scoring_service import (
+    build_explanation_response,
+    build_model_meta_response,
+    build_score_response,
+)
 
 origins = [
     "http://localhost",
@@ -39,22 +35,18 @@ origins = [
     "http://127.0.0.1:5174",
 ]
 
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("sentinelti.api")
 
-
 RATE_LIMIT_REQUESTS = 60
 RATE_LIMIT_WINDOW = 60
 _rate_limit_store: dict[str, list[float]] = {}
 
-
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
-
 
 AI_EXPLAIN_SCORE_REQUEST_EXAMPLES = {
     "benign_example": {
@@ -68,7 +60,6 @@ AI_EXPLAIN_SCORE_REQUEST_EXAMPLES = {
         "value": {"url": "https://secure-account-check.example/login/verify"},
     },
 }
-
 
 AI_EXPLAIN_SCORE_SUCCESS_EXAMPLE = {
     "deterministic_explanation": {
@@ -88,12 +79,10 @@ AI_EXPLAIN_SCORE_SUCCESS_EXAMPLE = {
     },
 }
 
-
 AI_EXPLAIN_SCORE_DISABLED_EXAMPLE = {
     "detail": "AI-assisted explanations are currently disabled.",
     "error_type": "ai_disabled",
 }
-
 
 AI_EXPLAIN_SCORE_ERROR_EXAMPLE = {
     "detail": "AI provider unavailable",
@@ -106,14 +95,11 @@ async def check_rate_limit(request: Request, response: Response):
     now = time.time()
     window_start = now - RATE_LIMIT_WINDOW
 
-
     timestamps = _rate_limit_store.get(client_ip, [])
     timestamps = [t for t in timestamps if t > window_start]
 
-
     used = len(timestamps)
     remaining = max(RATE_LIMIT_REQUESTS - used, 0)
-
 
     if used >= RATE_LIMIT_REQUESTS:
         response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
@@ -124,10 +110,8 @@ async def check_rate_limit(request: Request, response: Response):
             detail="Rate limit exceeded. Try again later.",
         )
 
-
     timestamps.append(now)
     _rate_limit_store[client_ip] = timestamps
-
 
     response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
     response.headers["X-RateLimit-Remaining"] = str(remaining - 1 if remaining > 0 else 0)
@@ -224,7 +208,6 @@ class ScoreUrlRequest(BaseModel):
         description="URL to score",
     )
 
-
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
@@ -244,7 +227,6 @@ class ScoreUrlsRequest(BaseModel):
         ],
         description="List of URLs to score",
     )
-
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -280,7 +262,6 @@ class ScoringErrorResponse(BaseModel):
 API_KEY_NAME = "X-API-KEY"
 API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
 
-
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
@@ -299,14 +280,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         method = request.method
         path = request.url.path
 
-
         logger.info("Request: %s %s from %s", method, path, client_ip)
         try:
             response = await call_next(request)
         except Exception:
             logger.exception("Error handling request: %s %s from %s", method, path, client_ip)
             raise
-
 
         duration_ms = int((time.time() - start) * 1000)
         logger.info(
@@ -349,48 +328,19 @@ class AIExplainScoreResponse(BaseModel):
     ai: AIRewriteExplanation
 
 
-def _build_model_meta() -> Dict[str, Any]:
-    metadata = get_loaded_model_metadata()
-    return build_model_meta(metadata)
-
-
-def _build_score_response(url: str) -> Dict[str, Any]:
-    result = enrich_score(url)
-    model_meta = _build_model_meta()
-
-
-    return {
-        "schema_version": "1.2",
-        "url": result["url"],
-        "label": result["label"],
-        "prob_malicious": result["prob_malicious"],
-        "threshold": model_meta["threshold"],
-        "heuristic": result["heuristic"],
-        "final_label": result["final_label"],
-        "risk": result["risk"],
-        "reasons": result["reasons"],
-        "explanation": result["explanation"],
-        "model_meta": model_meta,
-    }
-
-
 app = FastAPI(
     title="SentinelTI",
     version="0.1.0",
     description="""
 SentinelTI provides deterministic URL scoring, heuristic analysis, and optional AI-assisted explanations.
 
-
 ## Core behavior
-
 
 - Deterministic scoring is the source of truth.
 - AI-assisted explanations are optional and advisory only.
 - AI output never changes the underlying score, threshold, risk, or final label.
 
-
 ## AI endpoint
-
 
 - `POST /ai-explain-score` returns the deterministic explanation alongside a separate AI-generated rewrite.
 - If AI is disabled, the endpoint returns `503` with `error_type: "ai_disabled"`.
@@ -423,7 +373,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 app.add_middleware(RequestLoggingMiddleware)
 
 
@@ -440,7 +389,7 @@ async def health():
 async def model_info():
     return {
         "schema_version": "1.1",
-        "model_meta": _build_model_meta(),
+        "model_meta": build_model_meta_response(),
     }
 
 
@@ -456,7 +405,7 @@ async def model_info():
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def score_url(body: ScoreUrlRequest):
-    return _build_score_response(body.url)
+    return build_score_response(body.url)
 
 
 @app.post(
@@ -471,7 +420,7 @@ async def score_url(body: ScoreUrlRequest):
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def score_urls(body: ScoreUrlsRequest):
-    return {"results": [_build_score_response(url) for url in body.urls]}
+    return {"results": [build_score_response(url) for url in body.urls]}
 
 
 @app.post(
@@ -486,8 +435,7 @@ async def score_urls(body: ScoreUrlsRequest):
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def explain_score(body: ScoreUrlRequest):
-    result = enrich_score(body.url)
-    return result["explanation"]
+    return build_explanation_response(body.url)
 
 
 @app.post(
@@ -526,21 +474,16 @@ async def explain_score(body: ScoreUrlRequest):
 async def ai_explain_score(
     body: ScoreUrlRequest = Body(..., openapi_examples=AI_EXPLAIN_SCORE_REQUEST_EXAMPLES)
 ):
-    if not ai_enabled():
+    try:
+        return build_ai_explanation_response(body.url)
+    except AIEndpointDisabledError as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
-                "detail": "AI-assisted explanations are currently disabled.",
+                "detail": str(exc),
                 "error_type": "ai_disabled",
             },
         )
-
-
-    deterministic = enrich_score(body.url)
-
-
-    try:
-        ai_payload = ai_rewrite_explanation(deterministic)
     except AIExplanationError as exc:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -549,12 +492,6 @@ async def ai_explain_score(
                 "error_type": "ai_explanation_error",
             },
         )
-
-
-    return {
-        "deterministic_explanation": deterministic["explanation"],
-        "ai": ai_payload,
-    }
 
 
 if FRONTEND_DIST_DIR.exists():
@@ -569,6 +506,5 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-
 
     uvicorn.run("sentinelti.api:app", host="0.0.0.0", port=8000, reload=True)

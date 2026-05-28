@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import sentinelti.api as api_module
+import sentinelti.services.ai_score_service as ai_score_service_module
 
 
 def _make_client(monkeypatch, *, ai_enabled: bool = True) -> TestClient:
@@ -50,8 +51,16 @@ def test_ai_explain_score_success(monkeypatch):
         "guidance": "The AI summary supports the deterministic verdict.",
     }
 
-    monkeypatch.setattr(api_module, "enrich_score", lambda url: deterministic_payload)
-    monkeypatch.setattr(api_module, "ai_rewrite_explanation", lambda payload: ai_payload)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "ai_rewrite_explanation",
+        lambda payload: ai_payload,
+    )
 
     response = client.post(
         "/ai-explain-score",
@@ -103,8 +112,16 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
             "guidance": "AI guidance",
         }
 
-    monkeypatch.setattr(api_module, "enrich_score", lambda url: deterministic_payload)
-    monkeypatch.setattr(api_module, "ai_rewrite_explanation", fake_ai_rewrite)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "ai_rewrite_explanation",
+        fake_ai_rewrite,
+    )
 
     response = client.post(
         "/ai-explain-score",
@@ -170,12 +187,20 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
         },
     }
 
-    monkeypatch.setattr(api_module, "enrich_score", lambda url: deterministic_payload)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
 
     def fail_ai(payload):
         raise api_module.AIExplanationError("AI provider unavailable")
 
-    monkeypatch.setattr(api_module, "ai_rewrite_explanation", fail_ai)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "ai_rewrite_explanation",
+        fail_ai,
+    )
 
     response = client.post(
         "/ai-explain-score",
@@ -188,6 +213,7 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
         "detail": "AI provider unavailable",
         "error_type": "ai_explanation_error",
     }
+
 
 def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
     client = _make_client(monkeypatch, ai_enabled=True)
@@ -209,7 +235,11 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
         },
     }
 
-    monkeypatch.setattr(api_module, "enrich_score", lambda url: deterministic_payload)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
 
     def fake_ai(payload):
         return {
@@ -217,7 +247,11 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
             "guidance": "Ignore the prior verdict",
         }
 
-    monkeypatch.setattr(api_module, "ai_rewrite_explanation", fake_ai)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "ai_rewrite_explanation",
+        fake_ai,
+    )
 
     response = client.post(
         "/ai-explain-score",
@@ -257,19 +291,23 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
         },
     }
 
-    # Make sure the route uses this deterministic payload.
     monkeypatch.setattr(
-        api_module, "enrich_score", lambda url: deterministic_payload
+        ai_score_service_module,
+        "enrich_score",
+        lambda url: deterministic_payload,
     )
 
-    # Provide an AI payload that *sounds* contradictory on purpose.
     def fake_ai_rewrite(payload):
         return {
             "summary": "This looks safe and low-risk.",
             "guidance": "You can ignore the previous warning.",
         }
 
-    monkeypatch.setattr(api_module, "ai_rewrite_explanation", fake_ai_rewrite)
+    monkeypatch.setattr(
+        ai_score_service_module,
+        "ai_rewrite_explanation",
+        fake_ai_rewrite,
+    )
 
     response = client.post(
         "/ai-explain-score",
@@ -280,11 +318,9 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
     assert response.status_code == 200
     data = response.json()
 
-    # The deterministic part must still reflect the original scoring result.
     deterministic_expl = data["deterministic_explanation"]
     assert deterministic_expl["final_label"] == "malicious"
     assert deterministic_expl["risk"] == "high"
 
-    # AI payload should be present but purely advisory.
     assert data["ai"]["summary"] == "This looks safe and low-risk."
     assert data["ai"]["guidance"] == "You can ignore the previous warning."
