@@ -8,28 +8,6 @@ import ModelInsightPanel from "./components/ModelInsightPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import useModelInfo from "./hooks/useModelInfo";
 
-function getFriendlyAIError(message) {
-  const normalized = String(message || "").toLowerCase();
-
-  if (normalized.includes("ai-assisted explanations are currently disabled")) {
-    return "AI summary is currently unavailable. Your deterministic verdict is still valid.";
-  }
-
-  if (normalized.includes("ai provider unavailable")) {
-    return "AI summary could not be generated right now. Your deterministic verdict is still valid.";
-  }
-
-  if (normalized.includes("ai_explanation_error")) {
-    return "AI summary could not be generated right now. Your deterministic verdict is still valid.";
-  }
-
-  if (normalized.includes("ai_disabled")) {
-    return "AI summary is currently unavailable. Your deterministic verdict is still valid.";
-  }
-
-  return "Could not generate an AI summary right now. Your deterministic verdict is still valid.";
-}
-
 export default function App() {
   const { modelInfo, loadingModel, modelInfoError } = useModelInfo();
 
@@ -84,7 +62,7 @@ export default function App() {
       setAIExplanation(data.ai);
     } catch (error) {
       setAIExplanation(null);
-      setAIError(getFriendlyAIError(error.message));
+      setAIError(error.message || "Could not generate AI summary.");
     } finally {
       setLoadingAI(false);
     }
@@ -123,8 +101,8 @@ export default function App() {
             <div className="result-main-column">
               <VerdictCard result={result} />
 
-              <section className="ai-summary-card" aria-labelledby="ai-summary-heading">
-                <div className="section-header-row">
+              <section className="ai-summary-card card" aria-labelledby="ai-summary-heading">
+                <div className="section-header-row ai-summary-header">
                   <div>
                     <h3 id="ai-summary-heading">AI summary</h3>
                     <p className="ai-summary-note">
@@ -136,21 +114,25 @@ export default function App() {
                   <div className="ai-summary-actions">
                     <button
                       type="button"
-                      className="secondary-button"
+                      className="details-toggle"
                       onClick={() => setAIExpanded((value) => !value)}
                       aria-expanded={aiExpanded}
                       aria-controls="ai-summary-panel"
                     >
-                      {aiExpanded ? "Hide" : "Show"}
+                      {aiExpanded ? "Hide AI summary" : "Show AI summary"}
                     </button>
 
                     <button
                       type="button"
-                      className="secondary-button"
+                      className="details-toggle secondary"
                       onClick={handleGenerateAISummary}
                       disabled={loadingAI || !result?.url}
                     >
-                      {loadingAI ? "Generating..." : aiExplanation ? "Regenerate AI summary" : "Generate AI summary"}
+                      {loadingAI
+                        ? "Generating..."
+                        : aiExplanation
+                          ? "Regenerate summary"
+                          : "Generate AI summary"}
                     </button>
                   </div>
                 </div>
@@ -158,14 +140,16 @@ export default function App() {
                 {aiExpanded ? (
                   <div id="ai-summary-panel" className="ai-summary-panel">
                     {loadingAI ? (
-                      <p className="status-muted">Generating a plain-language AI summary...</p>
+                      <p className="status-muted">
+                        Generating a plain-language AI summary...
+                      </p>
                     ) : null}
 
                     {aiError ? (
                       <div className="ai-fallback-message" role="status" aria-live="polite">
                         <p className="status-error">{aiError}</p>
                         <p className="status-muted">
-                          You can still rely on the deterministic verdict and the detailed reason panel.
+                          You can still rely on the deterministic verdict and detailed reasons.
                         </p>
                       </div>
                     ) : null}
