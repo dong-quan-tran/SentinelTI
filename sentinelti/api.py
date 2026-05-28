@@ -346,6 +346,27 @@ SentinelTI provides deterministic URL scoring, heuristic analysis, and optional 
 - If AI is disabled, the endpoint returns `503` with `error_type: "ai_disabled"`.
 - If AI generation fails, the endpoint returns `500` with `error_type: "ai_explanation_error"`.
 """,
+    openapi_tags=[
+        {
+            "name": "health",
+            "description": "Basic health and readiness checks.",
+        },
+        {
+            "name": "model-info",
+            "description": "Model metadata, thresholds, and training summary.",
+        },
+        {
+            "name": "scoring",
+            "description": "Deterministic URL scoring and explanations.",
+        },
+        {
+            "name": "ai",
+            "description": (
+                "Optional AI-assisted explanations that rewrite deterministic results "
+                "in friendlier language. AI output is advisory only."
+            ),
+        },
+    ],
 )
 
 
@@ -376,13 +397,14 @@ app.add_middleware(
 app.add_middleware(RequestLoggingMiddleware)
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 async def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
 @app.get(
     "/model-info",
+    tags=["model-info"],
     response_model=ModelInfoResponse,
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
@@ -395,6 +417,7 @@ async def model_info():
 
 @app.post(
     "/score-url",
+    tags=["scoring"],
     response_model=ScoreResponse,
     responses={
         500: {
@@ -410,6 +433,7 @@ async def score_url(body: ScoreUrlRequest):
 
 @app.post(
     "/score-urls",
+    tags=["scoring"],
     response_model=ScoreUrlsResponse,
     responses={
         500: {
@@ -425,6 +449,7 @@ async def score_urls(body: ScoreUrlsRequest):
 
 @app.post(
     "/explain-score",
+    tags=["scoring"],
     response_model=ExplanationResponse,
     responses={
         500: {
@@ -440,6 +465,7 @@ async def explain_score(body: ScoreUrlRequest):
 
 @app.post(
     "/ai-explain-score",
+    tags=["ai"],
     response_model=AIExplainScoreResponse,
     responses={
         200: {
