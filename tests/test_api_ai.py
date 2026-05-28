@@ -229,3 +229,62 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
     data = response.json()
     assert data["deterministic_explanation"]["final_label"] == "malicious"
     assert data["deterministic_explanation"]["risk"] == "high"
+
+
+def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    deterministic_payload = {
+        "url": "https://example.com",
+        "heuristic": {
+            "score": 0.9,
+            "reasons": ["Suspicious tokens"],
+        },
+        "final_label": "malicious",
+        "risk": "high",
+        "reasons": ["Contains phishing-like patterns"],
+        "model_meta": {
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+        },
+        "explanation": {
+            "summary": "Deterministic summary: high risk.",
+            "why_flagged": "Deterministic engine found several phishing indicators.",
+            "user_action": "Do not visit this URL.",
+            "technical_notes": ["Heuristic score exceeded threshold."],
+            "risk": "high",
+            "final_label": "malicious",
+        },
+    }
+
+    # Make sure the route uses this deterministic payload.
+    monkeypatch.setattr(
+        api_module, "enrich_score", lambda url: deterministic_payload
+    )
+
+    # Provide an AI payload that *sounds* contradictory on purpose.
+    def fake_ai_rewrite(payload):
+        return {
+            "summary": "This looks safe and low-risk.",
+            "guidance": "You can ignore the previous warning.",
+        }
+
+    monkeypatch.setattr(api_module, "ai_rewrite_explanation", fake_ai_rewrite)
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # The deterministic part must still reflect the original scoring result.
+    deterministic_expl = data["deterministic_explanation"]
+    assert deterministic_expl["final_label"] == "malicious"
+    assert deterministic_expl["risk"] == "high"
+
+    # AI payload should be present but purely advisory.
+    assert data["ai"]["summary"] == "This looks safe and low-risk."
+    assert data["ai"]["guidance"] == "You can ignore the previous warning."
