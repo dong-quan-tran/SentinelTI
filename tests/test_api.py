@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+
 from fastapi.testclient import TestClient
 
 import sentinelti.api as api_module
+
 
 client = TestClient(api_module.app)
 
@@ -10,6 +12,10 @@ client = TestClient(api_module.app)
 def _set_test_auth(monkeypatch):
     monkeypatch.setattr(api_module, "API_KEY", "test-key")
     api_module._rate_limit_store.clear()
+
+
+def _auth_headers() -> dict[str, str]:
+    return {"X-API-KEY": "test-key"}
 
 
 def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
@@ -59,11 +65,29 @@ def test_score_url_requires_api_key():
     assert response.json()["detail"] == "Unauthorized"
 
 
+def test_score_url_rejects_invalid_api_key():
+    response = client.post(
+        "/score-url",
+        headers={"X-API-KEY": "wrong-key"},
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unauthorized"
+
+
 def test_explain_score_requires_api_key():
     response = client.post(
         "/explain-score",
         json={"url": "https://example.com"},
     )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unauthorized"
+
+
+def test_model_info_requires_api_key():
+    response = client.get("/model-info")
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Unauthorized"
@@ -103,7 +127,7 @@ def test_score_url_returns_typed_response_with_explanation(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://phishy.example/login"},
     )
 
@@ -138,6 +162,56 @@ def test_score_url_returns_typed_response_with_explanation(monkeypatch):
     assert body["model_meta"]["metrics"]["average_precision"] == 0.998
 
 
+def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
+    _set_test_auth(monkeypatch)
+    _mock_model_meta(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 1,
+            "prob_malicious": 0.83,
+            "heuristic": {"score": 1.2, "reasons": ["login keyword"]},
+            "final_label": "suspicious",
+            "risk": "medium",
+            "reasons": ["Flagged by ML and heuristics"],
+            "explanation": {
+                "summary": "Suspicious traits detected.",
+                "why_flagged": "Elevated model probability.",
+                "user_action": "Verify independently.",
+                "technical_notes": ["Flagged by ML and heuristics"],
+                "risk": "medium",
+                "final_label": "suspicious",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers=_auth_headers(),
+        json={"url": "https://example.com/login"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert set(body.keys()) == {
+        "schema_version",
+        "url",
+        "label",
+        "prob_malicious",
+        "threshold",
+        "heuristic",
+        "final_label",
+        "risk",
+        "reasons",
+        "explanation",
+        "model_meta",
+    }
+
+
 def test_score_urls_returns_results_list_with_explanations(monkeypatch):
     _set_test_auth(monkeypatch)
     _mock_model_meta(monkeypatch, model_type="logreg")
@@ -169,7 +243,7 @@ def test_score_urls_returns_results_list_with_explanations(monkeypatch):
 
     response = client.post(
         "/score-urls",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"urls": ["https://example.com", "https://example.org"]},
     )
 
@@ -222,7 +296,7 @@ def test_explain_score_returns_explanation_response(monkeypatch):
 
     response = client.post(
         "/explain-score",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://www.google.com/"},
     )
 
@@ -235,42 +309,6 @@ def test_explain_score_returns_explanation_response(monkeypatch):
     assert "why_flagged" in body
     assert "user_action" in body
     assert len(body["technical_notes"]) == 2
-
-
-def test_score_url_validation_error_for_missing_url(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    response = client.post(
-        "/score-url",
-        headers={"X-API-KEY": "test-key"},
-        json={},
-    )
-
-    assert response.status_code == 422
-
-
-def test_score_urls_validation_error_for_missing_urls(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    response = client.post(
-        "/score-urls",
-        headers={"X-API-KEY": "test-key"},
-        json={},
-    )
-
-    assert response.status_code == 422
-
-
-def test_explain_score_validation_error_for_missing_url(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    response = client.post(
-        "/explain-score",
-        headers={"X-API-KEY": "test-key"},
-        json={},
-    )
-
-    assert response.status_code == 422
 
 
 def test_model_info_returns_training_notes(monkeypatch):
@@ -296,7 +334,7 @@ def test_model_info_returns_training_notes(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -321,7 +359,7 @@ def test_model_info_defaults_training_notes_to_empty_list(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -352,7 +390,7 @@ def test_model_info_filters_invalid_training_notes(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -406,51 +444,13 @@ def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://example.com"},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["model_meta"]["training_notes"] == ["logreg did not fully converge"]
-
-
-def test_score_url_sets_rate_limit_headers(monkeypatch):
-    _set_test_auth(monkeypatch)
-    _mock_model_meta(monkeypatch)
-
-    monkeypatch.setattr(
-        api_module,
-        "enrich_score",
-        lambda url: {
-            "url": url,
-            "label": 0,
-            "prob_malicious": 0.05,
-            "heuristic": {"score": 0.0, "reasons": []},
-            "final_label": "benign",
-            "risk": "low",
-            "reasons": [],
-            "explanation": {
-                "summary": "Looks low risk.",
-                "why_flagged": "",
-                "user_action": "Proceed carefully.",
-                "technical_notes": [],
-                "risk": "low",
-                "final_label": "benign",
-            },
-        },
-    )
-
-    response = client.post(
-        "/score-url",
-        headers={"X-API-KEY": "test-key"},
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 200
-    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
-    assert "X-RateLimit-Remaining" in response.headers
-    assert "X-RateLimit-Reset" in response.headers
 
 
 def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
@@ -467,7 +467,7 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -494,100 +494,6 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
         "test_1": None,
     }
     assert body["model_meta"]["training_params"] == {}
-
-
-def test_score_url_returns_structured_runtime_error(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    monkeypatch.setattr(
-        api_module,
-        "enrich_score",
-        lambda url: (_ for _ in ()).throw(RuntimeError("model load failed")),
-    )
-
-    response = client.post(
-        "/score-url",
-        headers={"X-API-KEY": "test-key"},
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 500
-    assert response.json() == {
-        "detail": "Internal scoring error",
-        "error_type": "runtime_error",
-    }
-
-
-def test_explain_score_returns_structured_runtime_error(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    monkeypatch.setattr(
-        api_module,
-        "enrich_score",
-        lambda url: (_ for _ in ()).throw(RuntimeError("feature extraction failed")),
-    )
-
-    response = client.post(
-        "/explain-score",
-        headers={"X-API-KEY": "test-key"},
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 500
-    assert response.json() == {
-        "detail": "Internal scoring error",
-        "error_type": "runtime_error",
-    }
-
-
-def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
-    _set_test_auth(monkeypatch)
-    _mock_model_meta(monkeypatch)
-
-    monkeypatch.setattr(
-        api_module,
-        "enrich_score",
-        lambda url: {
-            "url": url,
-            "label": 1,
-            "prob_malicious": 0.83,
-            "heuristic": {"score": 1.2, "reasons": ["login keyword"]},
-            "final_label": "suspicious",
-            "risk": "medium",
-            "reasons": ["Flagged by ML and heuristics"],
-            "explanation": {
-                "summary": "Suspicious traits detected.",
-                "why_flagged": "Elevated model probability.",
-                "user_action": "Verify independently.",
-                "technical_notes": ["Flagged by ML and heuristics"],
-                "risk": "medium",
-                "final_label": "suspicious",
-            },
-        },
-    )
-
-    response = client.post(
-        "/score-url",
-        headers={"X-API-KEY": "test-key"},
-        json={"url": "https://example.com/login"},
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-
-    assert set(body.keys()) == {
-        "schema_version",
-        "url",
-        "label",
-        "prob_malicious",
-        "threshold",
-        "heuristic",
-        "final_label",
-        "risk",
-        "reasons",
-        "explanation",
-        "model_meta",
-    }
 
 
 def test_score_url_includes_top_features_in_model_meta(monkeypatch):
@@ -621,7 +527,7 @@ def test_score_url_includes_top_features_in_model_meta(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://phishy.example/login"},
     )
 
@@ -647,7 +553,7 @@ def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -676,7 +582,7 @@ def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -703,34 +609,7 @@ def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["model_meta"]["threshold"] == 0.6
-    assert body["model_meta"]["threshold_source"] == "env"
-
-
-def test_model_info_uses_effective_threshold_metadata(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    monkeypatch.setattr(
-        api_module,
-        "get_loaded_model_metadata",
-        lambda: {
-            "model_type": "xgb",
-            "threshold": 0.6,
-            "threshold_source": "env",
-            "feature_version": "v2",
-            "metrics": {},
-            "top_features": [],
-        },
-    )
-
-    response = client.get(
-        "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -758,7 +637,7 @@ def test_model_info_returns_recommended_threshold_fields(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -796,7 +675,7 @@ def test_model_info_includes_recommended_threshold(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -809,6 +688,7 @@ def test_model_info_includes_recommended_threshold(monkeypatch):
     assert body["model_meta"]["recommended_threshold"] == 0.3
     assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
     assert body["model_meta"]["feature_version"] == "v2"
+
 
 def test_model_info_includes_model_summary(monkeypatch):
     _set_test_auth(monkeypatch)
@@ -833,7 +713,7 @@ def test_model_info_includes_model_summary(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
     )
 
     assert response.status_code == 200
@@ -893,7 +773,7 @@ def test_score_url_includes_model_summary(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://example.com"},
     )
 
@@ -908,6 +788,7 @@ def test_score_url_includes_model_summary(monkeypatch):
         {"feature": "url_length", "importance": 0.5},
         {"feature": "has_ip", "importance": 0.4},
     ]
+
 
 def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     _set_test_auth(monkeypatch)
@@ -963,7 +844,7 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "http://example.com"},
     )
 
@@ -978,6 +859,93 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     assert body["model_meta"]["recommended_threshold"] == 0.3
     assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
 
+
+def test_score_url_sets_rate_limit_headers(monkeypatch):
+    _set_test_auth(monkeypatch)
+    _mock_model_meta(monkeypatch)
+
+    monkeypatch.setattr(
+        api_module,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.05,
+            "heuristic": {"score": 0.0, "reasons": []},
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": [],
+            "explanation": {
+                "summary": "Looks low risk.",
+                "why_flagged": "",
+                "user_action": "Proceed carefully.",
+                "technical_notes": [],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-url",
+        headers=_auth_headers(),
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_score_url_validation_error_for_missing_url(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    response = client.post(
+        "/score-url",
+        headers=_auth_headers(),
+        json={},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert "detail" in body
+    assert isinstance(body["detail"], list)
+    assert body["detail"][0]["type"]
+
+
+def test_score_urls_validation_error_for_missing_urls(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    response = client.post(
+        "/score-urls",
+        headers=_auth_headers(),
+        json={},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert "detail" in body
+    assert isinstance(body["detail"], list)
+    assert body["detail"][0]["type"]
+
+
+def test_explain_score_validation_error_for_missing_url(monkeypatch):
+    _set_test_auth(monkeypatch)
+
+    response = client.post(
+        "/explain-score",
+        headers=_auth_headers(),
+        json={},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert "detail" in body
+    assert isinstance(body["detail"], list)
+    assert body["detail"][0]["type"]
+
+
 def test_score_url_runtime_error_returns_structured_error(monkeypatch):
     _set_test_auth(monkeypatch)
 
@@ -988,7 +956,7 @@ def test_score_url_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://example.com"},
     )
 
@@ -1009,7 +977,7 @@ def test_score_urls_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.post(
         "/score-urls",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"urls": ["https://example.com", "https://example.org"]},
     )
 
@@ -1030,7 +998,7 @@ def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.post(
         "/explain-score",
-        headers={"X-API-KEY": "test-key"},
+        headers=_auth_headers(),
         json={"url": "https://example.com"},
     )
 
@@ -1039,56 +1007,3 @@ def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
         "detail": "Internal scoring error",
         "error_type": "runtime_error",
     }
-
-
-def test_score_url_unauthorized_when_api_key_missing():
-    response = client.post(
-        "/score-url",
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Unauthorized"
-
-
-def test_score_url_unauthorized_when_api_key_invalid():
-    response = client.post(
-        "/score-url",
-        headers={"X-API-KEY": "wrong-key"},
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Unauthorized"
-
-
-def test_score_url_validation_error_for_missing_url(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    response = client.post(
-        "/score-url",
-        headers={"X-API-KEY": "test-key"},
-        json={},
-    )
-
-    assert response.status_code == 422
-    body = response.json()
-    assert "detail" in body
-    assert isinstance(body["detail"], list)
-    assert body["detail"][0]["type"]
-
-
-def test_score_urls_validation_error_for_missing_urls(monkeypatch):
-    _set_test_auth(monkeypatch)
-
-    response = client.post(
-        "/score-urls",
-        headers={"X-API-KEY": "test-key"},
-        json={},
-    )
-
-    assert response.status_code == 422
-    body = response.json()
-    assert "detail" in body
-    assert isinstance(body["detail"], list)
-    assert body["detail"][0]["type"]
