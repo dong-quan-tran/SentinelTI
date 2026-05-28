@@ -306,8 +306,25 @@ def _build_score_response(url: str) -> Dict[str, Any]:
     }
 
 
-app = FastAPI(title="SentinelTI", version="0.1.0")
+app = FastAPI(
+    title="SentinelTI",
+    version="0.1.0",
+    description="""
+SentinelTI provides deterministic URL scoring, heuristic analysis, and optional AI-assisted explanations.
 
+## Core behavior
+
+- Deterministic scoring is the source of truth.
+- AI-assisted explanations are optional and advisory only.
+- AI output never changes the underlying score, threshold, risk, or final label.
+
+## AI endpoint
+
+- `POST /ai-explain-score` returns the deterministic explanation alongside a separate AI-generated rewrite.
+- If AI is disabled, the endpoint returns `503` with `error_type: "ai_disabled"`.
+- If AI generation fails, the endpoint returns `500` with `error_type: "ai_explanation_error"`.
+""",
+)
 
 @app.exception_handler(RuntimeError)
 async def runtime_error_handler(request: Request, exc: RuntimeError):
