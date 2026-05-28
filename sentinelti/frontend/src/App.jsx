@@ -8,6 +8,28 @@ import ModelInsightPanel from "./components/ModelInsightPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import useModelInfo from "./hooks/useModelInfo";
 
+function getFriendlyAIError(message) {
+  const normalized = String(message || "").toLowerCase();
+
+  if (normalized.includes("ai-assisted explanations are currently disabled")) {
+    return "AI summary is currently unavailable. Your deterministic verdict is still valid.";
+  }
+
+  if (normalized.includes("ai provider unavailable")) {
+    return "AI summary could not be generated right now. Your deterministic verdict is still valid.";
+  }
+
+  if (normalized.includes("ai_explanation_error")) {
+    return "AI summary could not be generated right now. Your deterministic verdict is still valid.";
+  }
+
+  if (normalized.includes("ai_disabled")) {
+    return "AI summary is currently unavailable. Your deterministic verdict is still valid.";
+  }
+
+  return "Could not generate an AI summary right now. Your deterministic verdict is still valid.";
+}
+
 export default function App() {
   const { modelInfo, loadingModel, modelInfoError } = useModelInfo();
 
@@ -19,6 +41,7 @@ export default function App() {
   const [aiExplanation, setAIExplanation] = useState(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiError, setAIError] = useState("");
+  const [aiExpanded, setAIExpanded] = useState(false);
 
   useEffect(() => {
     if (modelInfoError) {
@@ -34,6 +57,7 @@ export default function App() {
     setResult(null);
     setAIExplanation(null);
     setAIError("");
+    setAIExpanded(false);
 
     try {
       const data = await scoreUrl(url);
@@ -54,11 +78,13 @@ export default function App() {
     try {
       setLoadingAI(true);
       setAIError("");
+      setAIExpanded(true);
+
       const data = await fetchAIExplanation(result.url);
       setAIExplanation(data.ai);
     } catch (error) {
       setAIExplanation(null);
-      setAIError(error.message || "Could not generate AI summary.");
+      setAIError(getFriendlyAIError(error.message));
     } finally {
       setLoadingAI(false);
     }
@@ -97,40 +123,68 @@ export default function App() {
             <div className="result-main-column">
               <VerdictCard result={result} />
 
-              <div className="ai-summary-card">
+              <section className="ai-summary-card" aria-labelledby="ai-summary-heading">
                 <div className="section-header-row">
-                  <h3>AI summary</h3>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={handleGenerateAISummary}
-                    disabled={loadingAI || !result?.url}
-                  >
-                    {loadingAI ? "Generating..." : "Generate AI summary"}
-                  </button>
+                  <div>
+                    <h3 id="ai-summary-heading">AI summary</h3>
+                    <p className="ai-summary-note">
+                      Optional plain-language rewrite of the deterministic explanation.
+                      It does not change the score, threshold, risk, or final label.
+                    </p>
+                  </div>
+
+                  <div className="ai-summary-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => setAIExpanded((value) => !value)}
+                      aria-expanded={aiExpanded}
+                      aria-controls="ai-summary-panel"
+                    >
+                      {aiExpanded ? "Hide" : "Show"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleGenerateAISummary}
+                      disabled={loadingAI || !result?.url}
+                    >
+                      {loadingAI ? "Generating..." : aiExplanation ? "Regenerate AI summary" : "Generate AI summary"}
+                    </button>
+                  </div>
                 </div>
 
-                <p className="ai-summary-note">
-                  This is an assistant-generated rewrite of the deterministic
-                  explanation. It does not change the score, threshold, risk, or
-                  final label.
-                </p>
+                {aiExpanded ? (
+                  <div id="ai-summary-panel" className="ai-summary-panel">
+                    {loadingAI ? (
+                      <p className="status-muted">Generating a plain-language AI summary...</p>
+                    ) : null}
 
-                {aiError ? <p className="status-error">{aiError}</p> : null}
+                    {aiError ? (
+                      <div className="ai-fallback-message" role="status" aria-live="polite">
+                        <p className="status-error">{aiError}</p>
+                        <p className="status-muted">
+                          You can still rely on the deterministic verdict and the detailed reason panel.
+                        </p>
+                      </div>
+                    ) : null}
 
-                {!aiExplanation && !loadingAI && !aiError ? (
-                  <p className="status-muted">
-                    Generate a plain-language AI summary for this result.
-                  </p>
-                ) : null}
+                    {!aiExplanation && !loadingAI && !aiError ? (
+                      <p className="status-muted">
+                        Generate a plain-language AI summary for this result when you want a simpler explanation.
+                      </p>
+                    ) : null}
 
-                {aiExplanation ? (
-                  <div className="ai-summary-content">
-                    <p>{aiExplanation.summary}</p>
-                    <p>{aiExplanation.guidance}</p>
+                    {aiExplanation ? (
+                      <div className="ai-summary-content">
+                        <p>{aiExplanation.summary}</p>
+                        <p>{aiExplanation.guidance}</p>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
-              </div>
+              </section>
             </div>
 
             <DetailPanel result={result} />
