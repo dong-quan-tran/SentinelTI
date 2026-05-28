@@ -188,3 +188,44 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
         "detail": "AI provider unavailable",
         "error_type": "ai_explanation_error",
     }
+
+def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    deterministic_payload = {
+        "url": "https://example.com",
+        "heuristic": {"score": 0.9, "reasons": ["Suspicious"]},
+        "final_label": "malicious",
+        "risk": "high",
+        "reasons": ["Suspicious tokens"],
+        "model_meta": {"threshold": 0.75, "threshold_source": "metadata"},
+        "explanation": {
+            "summary": "Deterministic summary",
+            "why_flagged": "Deterministic reason",
+            "user_action": "Do not proceed",
+            "technical_notes": ["note"],
+            "risk": "high",
+            "final_label": "malicious",
+        },
+    }
+
+    monkeypatch.setattr(api_module, "enrich_score", lambda url: deterministic_payload)
+
+    def fake_ai(payload):
+        return {
+            "summary": "This sounds safe now",
+            "guidance": "Ignore the prior verdict",
+        }
+
+    monkeypatch.setattr(api_module, "ai_rewrite_explanation", fake_ai)
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["deterministic_explanation"]["final_label"] == "malicious"
+    assert data["deterministic_explanation"]["risk"] == "high"
