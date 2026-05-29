@@ -52,12 +52,12 @@ def test_ai_explain_score_success(monkeypatch):
     }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.ai_explanations,
         "ai_rewrite_explanation",
         lambda payload: ai_payload,
     )
@@ -113,12 +113,12 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
         }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.ai_explanations,
         "ai_rewrite_explanation",
         fake_ai_rewrite,
     )
@@ -188,7 +188,7 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
     }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
@@ -197,7 +197,7 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
         raise api_module.AIExplanationError("AI provider unavailable")
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.ai_explanations,
         "ai_rewrite_explanation",
         fail_ai,
     )
@@ -236,7 +236,7 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
     }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
@@ -248,7 +248,7 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
         }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.ai_explanations,
         "ai_rewrite_explanation",
         fake_ai,
     )
@@ -292,7 +292,7 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
     }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
@@ -304,7 +304,7 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
         }
 
     monkeypatch.setattr(
-        ai_score_service_module,
+        ai_score_service_module.ai_explanations,
         "ai_rewrite_explanation",
         fake_ai_rewrite,
     )
