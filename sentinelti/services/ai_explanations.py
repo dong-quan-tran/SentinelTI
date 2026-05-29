@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, Protocol
+
+import requests
 
 
 REQUIRED_SCORE_FIELDS = {"url", "final_label", "risk", "explanation"}
@@ -11,6 +14,18 @@ REQUIRED_SCORE_FIELDS = {"url", "final_label", "risk", "explanation"}
 def ai_enabled() -> bool:
     raw = os.getenv("SENTINELTI_AI_ENABLED", "false").strip().lower()
     return raw in {"1", "true", "yes", "on"}
+
+
+def get_ai_provider_name() -> str:
+    return os.getenv("SENTINELTI_AI_PROVIDER", "stub").strip().lower()
+
+
+def get_ollama_endpoint() -> str:
+    return os.getenv("SENTINELTI_OLLAMA_ENDPOINT", "http://localhost:11434").strip()
+
+
+def get_ollama_model() -> str:
+    return os.getenv("SENTINELTI_OLLAMA_MODEL", "llama3.1:8b").strip()
 
 
 class AIExplanationError(RuntimeError):
@@ -54,7 +69,9 @@ def build_ai_explanation_prompt(score_payload: Dict[str, Any]) -> str:
     parts: list[str] = [
         "You are rewriting a deterministic URL safety explanation.",
         "Do not change the verdict, score meaning, threshold meaning, or risk level.",
-        "Keep the explanation concise and user-facing.",
+        "Do not claim the URL is safe if the deterministic verdict says malicious or suspicious.",
+        "Return valid JSON with exactly two string fields: summary and guidance.",
+        "Keep both fields concise and user-facing.",
         "",
         f"URL: {url}",
         f"Deterministic verdict: {final_label}",
@@ -74,6 +91,21 @@ def build_ai_explanation_prompt(score_payload: Dict[str, Any]) -> str:
         parts.append(f"Advisory recommended threshold: {recommended_threshold}")
 
     return "\n".join(str(part) for part in parts if part is not None)
+
+
+def _validate_ai_response_payload(payload: Dict[str, Any]) -> Dict[str, str]:
+    summary = payload.get("summary")
+    guidance = payload.get("guidance")
+
+    if not isinstance(summary, str) or not summary.strip():
+        raise AIExplanationError("AI response is missing a valid summary")
+    if not isinstance(guidance, str) or not guidance.strip():
+        raise AIExplanationError("AI response is missing valid guidance")
+
+    return {
+        "summary": summary.strip(),
+        "guidance": guidance.strip(),
+    }
 
 
 @dataclass
@@ -104,10 +136,105 @@ class StubAIExplanationProvider:
         return {"summary": summary, "guidance": guidance}
 
 
-def get_ai_provider() -> AIExplanationProvider:
-    provider_name = os.getenv("SENTINELTI_AI_PROVIDER", "stub").strip().lower()
+@dataclass
+class OllamaAIExplanationProvider:
+    endpoint: str
+    model_name: str
+    timeout_seconds: float = 30.0
+
+    def generate(self, score_payload: Dict[str, Any]) -> Dict[str, str]:
+        _validate_score_payload(score_payload)
+        prompt = build_ai_explanation_prompt(score_payload)
+
+        try:
+            response = requests.post(
+                f"{self.endpoint.rstrip('/')}/api/chat",
+                json={
+                    "model": self.model_name,
+                    "stream": False,
+                    "format": {
+                        "type": "object",
+                        "properties": {
+                            "summary": {"type": "string"},
+                            "guidance": {"type": "string"},
+                        },
+                        "required": ["summary", "guidance"],
+                    },
+                    "options": {
+                        "temperature": 0,
+                    },
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a safety explanation assistant. "
+                                "You rewrite deterministic phishing verdicts without changing them."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        },
+                    ],
+                },
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise AIExplanationError(f"Ollama request failed: {exc}") from exc
+
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise AIExplanationError("Ollama returned invalid JSON") from exc
+
+        message = body.get("message") or {}
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise AIExplanationError("Ollama response did not contain message content")
+
+        try:
+            parsed = json.loads(content)
+        except ValueError as exc:
+            raise AIExplanationError("Ollama response content was not valid JSON") from exc
+
+        return _validate_ai_response_payload(parsed)
+
+
+def validate_ai_provider_config() -> None:
+    provider_name = get_ai_provider_name()
+
+    if provider_name == "stub":
+        return
+
+    if provider_name == "ollama":
+        endpoint = get_ollama_endpoint()
+        model_name = get_ollama_model()
+
+        if not endpoint:
+            raise AIExplanationError(
+                "SENTINELTI_OLLAMA_ENDPOINT must not be empty when SENTINELTI_AI_PROVIDER=ollama"
+            )
+        if not model_name:
+            raise AIExplanationError(
+                "SENTINELTI_OLLAMA_MODEL must not be empty when SENTINELTI_AI_PROVIDER=ollama"
+            )
+        return
+
+    raise AIExplanationError(f"Unsupported AI provider: {provider_name}")
+
+
+def get_ai_provider(model_name: str | None = None) -> AIExplanationProvider:
+    provider_name = get_ai_provider_name()
+    validate_ai_provider_config()
 
     if provider_name == "stub":
         return StubAIExplanationProvider()
+
+    if provider_name == "ollama":
+        return OllamaAIExplanationProvider(
+            endpoint=get_ollama_endpoint(),
+            model_name=model_name or get_ollama_model(),
+        )
 
     raise AIExplanationError(f"Unsupported AI provider: {provider_name}")
