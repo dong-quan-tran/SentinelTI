@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from sentinelti.ml.predict import get_loaded_model_metadata
-from sentinelti.scoring import enrich_score
-from sentinelti.services.model_metadata import build_model_meta
+from sentinelti import scoring
+from sentinelti.ml import predict
+from sentinelti.services import model_metadata
 
 
 def build_model_meta_response() -> Dict[str, Any]:
-    metadata = get_loaded_model_metadata()
-    return build_model_meta(metadata)
+    metadata = predict.get_loaded_model_metadata()
+    return model_metadata.build_model_meta(metadata)
 
 
 def build_score_response(url: str) -> Dict[str, Any]:
-    result = enrich_score(url)
+    result = scoring.enrich_score(url)
     model_meta = build_model_meta_response()
 
     return {
@@ -32,5 +32,5 @@ def build_score_response(url: str) -> Dict[str, Any]:
 
 
 def build_explanation_response(url: str) -> Dict[str, Any]:
-    result = enrich_score(url)
+    result = scoring.enrich_score(url)
     return result["explanation"]
