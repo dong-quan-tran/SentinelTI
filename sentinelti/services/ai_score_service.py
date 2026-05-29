@@ -15,7 +15,8 @@ def build_ai_explanation_response(url: str) -> Dict[str, Any]:
         raise AIEndpointDisabledError("AI-assisted explanations are currently disabled.")
 
     deterministic = scoring.enrich_score(url)
-    ai_payload = ai_explanations.ai_rewrite_explanation(deterministic)
+    provider = ai_explanations.get_ai_provider()
+    ai_payload = provider.generate(deterministic)
 
     return {
         "deterministic_explanation": deterministic["explanation"],

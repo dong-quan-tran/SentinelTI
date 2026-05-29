@@ -6,6 +6,22 @@ import sentinelti.api as api_module
 import sentinelti.services.ai_score_service as ai_score_service_module
 
 
+class StubAIProvider:
+    def __init__(self, response=None, error=None):
+        self.response = response or {
+            "summary": "AI summary",
+            "guidance": "AI guidance",
+        }
+        self.error = error
+        self.calls = []
+
+    def generate(self, payload):
+        self.calls.append(payload)
+        if self.error:
+            raise self.error
+        return self.response
+
+
 def _make_client(monkeypatch, *, ai_enabled: bool = True) -> TestClient:
     monkeypatch.setenv("SENTINELTI_API_KEY", "test-key")
     monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true" if ai_enabled else "false")
@@ -51,6 +67,8 @@ def test_ai_explain_score_success(monkeypatch):
         "guidance": "The AI summary supports the deterministic verdict.",
     }
 
+    provider = StubAIProvider(response=ai_payload)
+
     monkeypatch.setattr(
         ai_score_service_module.scoring,
         "enrich_score",
@@ -58,8 +76,8 @@ def test_ai_explain_score_success(monkeypatch):
     )
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
-        "ai_rewrite_explanation",
-        lambda payload: ai_payload,
+        "get_ai_provider",
+        lambda: provider,
     )
 
     response = client.post(
@@ -75,6 +93,7 @@ def test_ai_explain_score_success(monkeypatch):
     assert "ai" in data
     assert data["deterministic_explanation"] == deterministic_payload["explanation"]
     assert data["ai"] == ai_payload
+    assert provider.calls == [deterministic_payload]
 
 
 def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
@@ -103,14 +122,12 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
         },
     }
 
-    captured = {}
-
-    def fake_ai_rewrite(payload):
-        captured["payload"] = payload
-        return {
+    provider = StubAIProvider(
+        response={
             "summary": "AI summary",
             "guidance": "AI guidance",
         }
+    )
 
     monkeypatch.setattr(
         ai_score_service_module.scoring,
@@ -119,8 +136,8 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
     )
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
-        "ai_rewrite_explanation",
-        fake_ai_rewrite,
+        "get_ai_provider",
+        lambda: provider,
     )
 
     response = client.post(
@@ -130,7 +147,7 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert captured["payload"] == deterministic_payload
+    assert provider.calls == [deterministic_payload]
 
 
 def test_ai_explain_score_requires_api_key(monkeypatch):
@@ -187,19 +204,19 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
         },
     }
 
+    provider = StubAIProvider(
+        error=api_module.AIExplanationError("AI provider unavailable")
+    )
+
     monkeypatch.setattr(
         ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
-
-    def fail_ai(payload):
-        raise api_module.AIExplanationError("AI provider unavailable")
-
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
-        "ai_rewrite_explanation",
-        fail_ai,
+        "get_ai_provider",
+        lambda: provider,
     )
 
     response = client.post(
@@ -235,22 +252,22 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
         },
     }
 
+    provider = StubAIProvider(
+        response={
+            "summary": "This sounds safe now",
+            "guidance": "Ignore the prior verdict",
+        }
+    )
+
     monkeypatch.setattr(
         ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
-
-    def fake_ai(payload):
-        return {
-            "summary": "This sounds safe now",
-            "guidance": "Ignore the prior verdict",
-        }
-
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
-        "ai_rewrite_explanation",
-        fake_ai,
+        "get_ai_provider",
+        lambda: provider,
     )
 
     response = client.post(
@@ -291,22 +308,22 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
         },
     }
 
+    provider = StubAIProvider(
+        response={
+            "summary": "This looks safe and low-risk.",
+            "guidance": "You can ignore the previous warning.",
+        }
+    )
+
     monkeypatch.setattr(
         ai_score_service_module.scoring,
         "enrich_score",
         lambda url: deterministic_payload,
     )
-
-    def fake_ai_rewrite(payload):
-        return {
-            "summary": "This looks safe and low-risk.",
-            "guidance": "You can ignore the previous warning.",
-        }
-
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
-        "ai_rewrite_explanation",
-        fake_ai_rewrite,
+        "get_ai_provider",
+        lambda: provider,
     )
 
     response = client.post(
