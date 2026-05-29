@@ -20,7 +20,7 @@ def _auth_headers() -> dict[str, str]:
 
 def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "artifact_version": "1.0",
@@ -98,7 +98,7 @@ def test_score_url_returns_typed_response_with_explanation(monkeypatch):
     _mock_model_meta(monkeypatch, model_type="xgb")
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -167,7 +167,7 @@ def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
     _mock_model_meta(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -217,7 +217,7 @@ def test_score_urls_returns_results_list_with_explanations(monkeypatch):
     _mock_model_meta(monkeypatch, model_type="logreg")
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -264,7 +264,7 @@ def test_explain_score_returns_explanation_response(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -315,7 +315,7 @@ def test_model_info_returns_training_notes(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "logreg",
@@ -348,7 +348,7 @@ def test_model_info_defaults_training_notes_to_empty_list(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -371,7 +371,7 @@ def test_model_info_filters_invalid_training_notes(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "logreg",
@@ -405,7 +405,7 @@ def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "logreg",
@@ -421,7 +421,7 @@ def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
     )
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -457,7 +457,7 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -501,7 +501,7 @@ def test_score_url_includes_top_features_in_model_meta(monkeypatch):
     _mock_model_meta(monkeypatch, model_type="xgb")
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -543,7 +543,7 @@ def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -565,7 +565,7 @@ def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -597,7 +597,7 @@ def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -622,7 +622,7 @@ def test_model_info_returns_recommended_threshold_fields(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -650,7 +650,7 @@ def test_model_info_includes_recommended_threshold(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "artifact_version": "1.0",
@@ -694,7 +694,7 @@ def test_model_info_includes_model_summary(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "xgb",
@@ -734,7 +734,7 @@ def test_score_url_includes_model_summary(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "model_type": "logreg",
@@ -750,7 +750,7 @@ def test_score_url_includes_model_summary(monkeypatch):
     )
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -794,7 +794,7 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     _set_test_auth(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.predict,
         "get_loaded_model_metadata",
         lambda: {
             "artifact_version": "1.0",
@@ -818,7 +818,7 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     )
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -865,7 +865,7 @@ def test_score_url_sets_rate_limit_headers(monkeypatch):
     _mock_model_meta(monkeypatch)
 
     monkeypatch.setattr(
-        scoring_service_module,
+        scoring_service_module.scoring,
         "enrich_score",
         lambda url: {
             "url": url,
@@ -952,7 +952,7 @@ def test_score_url_runtime_error_returns_structured_error(monkeypatch):
     def boom(_url):
         raise RuntimeError("feature extraction failed")
 
-    monkeypatch.setattr(scoring_service_module, "enrich_score", boom)
+    monkeypatch.setattr(scoring_service_module.scoring, "enrich_score", boom)
 
     response = client.post(
         "/score-url",
@@ -973,7 +973,7 @@ def test_score_urls_runtime_error_returns_structured_error(monkeypatch):
     def boom(_url):
         raise RuntimeError("feature extraction failed")
 
-    monkeypatch.setattr(scoring_service_module, "enrich_score", boom)
+    monkeypatch.setattr(scoring_service_module.scoring, "enrich_score", boom)
 
     response = client.post(
         "/score-urls",
@@ -994,7 +994,7 @@ def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
     def boom(_url):
         raise RuntimeError("explanation failed")
 
-    monkeypatch.setattr(scoring_service_module, "enrich_score", boom)
+    monkeypatch.setattr(scoring_service_module.scoring, "enrich_score", boom)
 
     response = client.post(
         "/explain-score",
