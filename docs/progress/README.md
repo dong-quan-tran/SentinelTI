@@ -2025,3 +2025,61 @@ Next likely steps
 Implement service-level tests for ai_score_service to lock down prompt/payload behavior and error handling.
 
 Start the LightGBM experiment: train, export an artifact, and integrate it into model metadata/loading so it can be compared against existing XGBoost and logistic regression models.
+
+Progress Log — 2026-05-29
+Summary
+Today’s work established the backend foundation for AI-assisted URL explanation rewrites using a provider-based architecture, upgraded the test suite to match that design, and prepared SentinelTI to use a free local Ollama-backed model instead of a hosted provider.
+
+Backend architecture
+Refactored the AI explanation layer from a direct function call into a provider-based design with a protocol, a default stub provider, and a provider lookup path used by ai_score_service. This keeps deterministic scoring as the source of truth while making the rewrite layer swappable and easier to test.
+
+The AI service flow now keeps deterministic fields separate from the AI rewrite output and preserves the invariant that the deterministic explanation remains the authoritative result. This aligns with safe feature-flag and provider-switching practices where configuration controls behavior rather than ad hoc code branching.
+
+Configuration and provider strategy
+Moved from an initial OpenAI-oriented idea to a local Ollama strategy after confirming a free local model setup was available. That decision avoids hosted API billing and uses Ollama’s local HTTP API, which is exposed at http://localhost:11434 when the local runtime is running.
+
+Defined the AI provider direction around:
+
+stub as the safe default,
+
+ollama as the first real provider,
+
+model selection through environment variables now and optional request-level model choice later.
+
+Confirmed that the local Ollama runtime is active and that these models are installed locally:
+
+llama3.1:8b
+
+deepseek-r1:1.5b
+
+llama3:latest
+These models appear in the local model inventory exposed by Ollama tooling and API concepts.
+
+Ollama provider work
+Prepared the backend for an Ollama-based provider using the chat endpoint and structured JSON output expectations so the model returns a constrained object shape instead of free-form text. Structured outputs are a good fit here because the application only needs two short fields: summary and guidance.
+
+Also decided that supporting both Llama and DeepSeek should be implemented as model choice, not simultaneous execution, because Ollama accepts a model name per request and can list installed models through its tags endpoint. This keeps the design simple while still allowing flexible experimentation between models such as llama3.1:8b and deepseek-r1:1.5b.
+
+Testing work
+Updated service-level tests for ai_explanations.py and ai_score_service.py to reflect the new provider-based architecture and to stop patching removed function-level seams. This included replacing direct monkeypatching of ai_rewrite_explanation with provider stubs that expose a generate() method.
+
+Updated API-level tests for /ai-explain-score so they now align with provider lookup and provider-generated responses instead of the previous direct rewrite function path. This keeps the tests focused on stable boundaries rather than removed internals.
+
+Added or prepared coverage for Ollama-specific behavior, including request failures, invalid JSON handling, missing structured-output fields, and response parsing from message.content returned by the chat API. Fixed a test bug caused by shadowing the Python json module with a mock parameter named json, which had broken json.dumps() inside mocked responses.
+
+Operational validation
+Verified that ollama --version works and that ollama serve fails only because port 11434 is already bound, which indicates the local Ollama server is already running. Confirmed local model availability with ollama list, which is the correct practical check for whether the backend can target a given local model.
+
+Result at end of day
+By the end of today’s work, SentinelTI had:
+
+a provider-based AI explanation architecture,
+
+a safe stub default,
+
+a clear path to use Ollama locally for free AI rewrites,
+
+verified availability of both Llama and DeepSeek in the local runtime,
+
+updated backend and API test coverage aligned with the new design.
+
