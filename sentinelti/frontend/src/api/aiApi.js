@@ -28,8 +28,8 @@ function normalizeAIExplainResponse(value) {
 }
 
 function normalizeAIError(error) {
-  const errorType = String(error?.errorType || "").toLowerCase();
-  const detail = String(error?.detail || error?.message || "");
+  const errorType = String(error?.errorType || "").toLowerCase().trim();
+  const detail = String(error?.detail || error?.message || "").trim();
 
   if (errorType === "ai_disabled") {
     return new Error(

@@ -8,6 +8,40 @@ import ModelInsightPanel from "./components/ModelInsightPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
 import useModelInfo from "./hooks/useModelInfo";
 
+function getAIFallbackTone(message) {
+  const normalized = String(message || "").toLowerCase();
+
+  if (normalized.includes("currently unavailable")) {
+    return {
+      title: "AI summary unavailable",
+      detail:
+        "AI-assisted explanations are turned off or temporarily unavailable right now.",
+    };
+  }
+
+  if (normalized.includes("could not be generated")) {
+    return {
+      title: "AI summary unavailable",
+      detail:
+        "The AI rewrite could not be generated for this scan, but the deterministic result is still complete.",
+    };
+  }
+
+  if (normalized.includes("not authorized")) {
+    return {
+      title: "AI summary unavailable",
+      detail:
+        "The AI summary request was not authorized, but the deterministic result is still complete.",
+    };
+  }
+
+  return {
+    title: "AI summary unavailable",
+    detail:
+      "The AI rewrite is not available right now, but the deterministic result is still complete.",
+  };
+}
+
 export default function App() {
   const { modelInfo, loadingModel, modelInfoError } = useModelInfo();
 
@@ -67,6 +101,8 @@ export default function App() {
       setLoadingAI(false);
     }
   }
+
+  const aiFallback = getAIFallbackTone(aiError);
 
   return (
     <main className="app-shell">
@@ -142,7 +178,13 @@ export default function App() {
                 </div>
 
                 {aiExpanded ? (
-                  <div id="ai-summary-panel" className="ai-summary-panel">
+                  <div
+                    id="ai-summary-panel"
+                    className="ai-summary-panel"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
                     {loadingAI ? (
                       <p className="status-muted">
                         Generating a plain-language AI summary...
@@ -150,15 +192,12 @@ export default function App() {
                     ) : null}
 
                     {aiError ? (
-                      <div
-                        className="ai-fallback-message"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        <p className="status-error">{aiError}</p>
+                      <div className="ai-fallback-message">
+                        <p className="status-error">{aiFallback.title}</p>
+                        <p className="status-muted">{aiFallback.detail}</p>
                         <p className="status-muted">
-                          You can still rely on the deterministic verdict and
-                          detailed reasons.
+                          You can still rely on the deterministic verdict,
+                          explanation, and detailed reasons shown above.
                         </p>
                       </div>
                     ) : null}
