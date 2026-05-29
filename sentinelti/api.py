@@ -259,6 +259,22 @@ class ScoringErrorResponse(BaseModel):
     )
 
 
+class UnauthorizedErrorResponse(BaseModel):
+    detail: str = Field(
+        ...,
+        description="Authentication error message.",
+        examples=["Unauthorized"],
+    )
+
+
+class RateLimitErrorResponse(BaseModel):
+    detail: str = Field(
+        ...,
+        description="High-level rate limit error message.",
+        examples=["Rate limit exceeded. Try again later."],
+    )
+
+
 API_KEY_NAME = "X-API-KEY"
 API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
 
@@ -397,7 +413,7 @@ app.add_middleware(
 app.add_middleware(RequestLoggingMiddleware)
 
 
-@app.get("/health", tags=["health"])
+@app.get("/health", tags=["health"], summary="Health check")
 async def health():
     return {"status": "ok", "version": "0.1.0"}
 
@@ -405,7 +421,23 @@ async def health():
 @app.get(
     "/model-info",
     tags=["model-info"],
+    summary="Get loaded model metadata",
+    description=(
+        "Returns normalized metadata for the currently loaded model, including "
+        "the effective threshold, recommended threshold if available, metrics, "
+        "top features, and a short model summary."
+    ),
     response_model=ModelInfoResponse,
+    responses={
+        401: {
+            "model": UnauthorizedErrorResponse,
+            "description": "Missing or invalid API key.",
+        },
+        429: {
+            "model": RateLimitErrorResponse,
+            "description": "Too many requests from the same client.",
+        },
+    },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def model_info():
@@ -418,12 +450,29 @@ async def model_info():
 @app.post(
     "/score-url",
     tags=["scoring"],
+    summary="Score a single URL",
+    description=(
+        "Runs deterministic URL scoring and heuristic analysis for one URL. "
+        "Returns the raw model output, final label, risk, explanation, and "
+        "normalized model metadata. This deterministic result is the source of truth."
+    ),
     response_model=ScoreResponse,
     responses={
+        401: {
+            "model": UnauthorizedErrorResponse,
+            "description": "Missing or invalid API key.",
+        },
+        422: {
+            "description": "Validation error in the request body.",
+        },
+        429: {
+            "model": RateLimitErrorResponse,
+            "description": "Too many requests from the same client.",
+        },
         500: {
             "model": ScoringErrorResponse,
             "description": "Internal scoring error while processing the URL.",
-        }
+        },
     },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
@@ -434,12 +483,28 @@ async def score_url(body: ScoreUrlRequest):
 @app.post(
     "/score-urls",
     tags=["scoring"],
+    summary="Score multiple URLs",
+    description=(
+        "Runs deterministic URL scoring for multiple URLs and returns a list of "
+        "independent scoring results. Each result includes explanation and model metadata."
+    ),
     response_model=ScoreUrlsResponse,
     responses={
+        401: {
+            "model": UnauthorizedErrorResponse,
+            "description": "Missing or invalid API key.",
+        },
+        422: {
+            "description": "Validation error in the request body.",
+        },
+        429: {
+            "model": RateLimitErrorResponse,
+            "description": "Too many requests from the same client.",
+        },
         500: {
             "model": ScoringErrorResponse,
             "description": "Internal scoring error while processing one or more URLs.",
-        }
+        },
     },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
@@ -450,12 +515,28 @@ async def score_urls(body: ScoreUrlsRequest):
 @app.post(
     "/explain-score",
     tags=["scoring"],
+    summary="Get deterministic explanation for a URL",
+    description=(
+        "Returns only the deterministic explanation for a scored URL. "
+        "This endpoint does not include the full score payload."
+    ),
     response_model=ExplanationResponse,
     responses={
+        401: {
+            "model": UnauthorizedErrorResponse,
+            "description": "Missing or invalid API key.",
+        },
+        422: {
+            "description": "Validation error in the request body.",
+        },
+        429: {
+            "model": RateLimitErrorResponse,
+            "description": "Too many requests from the same client.",
+        },
         500: {
             "model": ScoringErrorResponse,
             "description": "Internal scoring error while generating an explanation.",
-        }
+        },
     },
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
@@ -466,6 +547,12 @@ async def explain_score(body: ScoreUrlRequest):
 @app.post(
     "/ai-explain-score",
     tags=["ai"],
+    summary="Generate an AI-assisted explanation",
+    description=(
+        "Returns the deterministic explanation alongside a separate AI-generated "
+        "plain-language rewrite. Deterministic scoring remains the source of truth; "
+        "AI output never changes the score, threshold, risk, or final label."
+    ),
     response_model=AIExplainScoreResponse,
     responses={
         200: {
@@ -475,6 +562,17 @@ async def explain_score(body: ScoreUrlRequest):
                     "example": AI_EXPLAIN_SCORE_SUCCESS_EXAMPLE,
                 }
             },
+        },
+        401: {
+            "model": UnauthorizedErrorResponse,
+            "description": "Missing or invalid API key.",
+        },
+        422: {
+            "description": "Validation error in the request body.",
+        },
+        429: {
+            "model": RateLimitErrorResponse,
+            "description": "Too many requests from the same client.",
         },
         500: {
             "model": ScoringErrorResponse,
