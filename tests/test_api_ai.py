@@ -489,3 +489,157 @@ def test_ai_explain_score_returns_422_for_unknown_ai_model(monkeypatch):
         "detail": "Requested AI model is not available: missing:model",
         "error_type": "ai_model_unavailable",
     }
+
+def test_ai_explain_score_includes_rate_limit_headers_on_success(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    deterministic_payload = {
+        "url": "https://example.com",
+        "heuristic": {
+            "score": 0.2,
+            "reasons": ["Looks normal"],
+        },
+        "final_label": "benign",
+        "risk": "low",
+        "reasons": ["No obvious phishing indicators"],
+        "model_meta": {
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+        },
+        "explanation": {
+            "summary": "This URL appears safe.",
+            "why_flagged": "No strong phishing signals were detected.",
+            "user_action": "Proceed with normal caution.",
+            "technical_notes": [],
+            "risk": "low",
+            "final_label": "benign",
+        },
+    }
+
+    provider = StubAIProvider()
+
+    monkeypatch.setattr(
+        ai_score_service_module.scoring,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider",
+        lambda model_name=None: provider,
+    )
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_ai_explain_score_returns_rate_limit_headers_on_429(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    import time
+
+    now = time.time()
+    client_ip = "testclient"
+    api_module._rate_limit_store[client_ip] = [
+        now - 1 for _ in range(api_module.RATE_LIMIT_REQUESTS)
+    ]
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
+    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
+    assert response.headers["X-RateLimit-Remaining"] == "0"
+    assert response.headers["Retry-After"] == str(api_module.RATE_LIMIT_WINDOW)
+
+def test_ai_explain_score_includes_rate_limit_headers_on_success(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    deterministic_payload = {
+        "url": "https://example.com",
+        "heuristic": {
+            "score": 0.2,
+            "reasons": ["Looks normal"],
+        },
+        "final_label": "benign",
+        "risk": "low",
+        "reasons": ["No obvious phishing indicators"],
+        "model_meta": {
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+        },
+        "explanation": {
+            "summary": "This URL appears safe.",
+            "why_flagged": "No strong phishing signals were detected.",
+            "user_action": "Proceed with normal caution.",
+            "technical_notes": [],
+            "risk": "low",
+            "final_label": "benign",
+        },
+    }
+
+    provider = StubAIProvider()
+
+    monkeypatch.setattr(
+        ai_score_service_module.scoring,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider",
+        lambda model_name=None: provider,
+    )
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_ai_explain_score_returns_rate_limit_headers_on_429(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    import time
+
+    # Fill the rate limit store for whatever IP the client will use
+    now = time.time()
+    for _ in range(api_module.RATE_LIMIT_REQUESTS):
+        client.post(
+            "/ai-explain-score",
+            json={"url": "https://example.com"},
+            headers=_auth_headers(),
+        )
+
+    # This request should now hit the limit
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
+
+    # Headers should be present and consistent with a throttled response
+    assert "X-RateLimit-Limit" in response.headers
+    assert response.headers["X-RateLimit-Remaining"] == "0"
+    assert response.headers["Retry-After"] == str(api_module.RATE_LIMIT_WINDOW)
