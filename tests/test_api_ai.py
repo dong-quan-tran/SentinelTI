@@ -643,3 +643,109 @@ def test_ai_explain_score_returns_rate_limit_headers_on_429(monkeypatch):
     assert "X-RateLimit-Limit" in response.headers
     assert response.headers["X-RateLimit-Remaining"] == "0"
     assert response.headers["Retry-After"] == str(api_module.RATE_LIMIT_WINDOW)
+
+def test_openapi_includes_ai_explain_score_request_examples(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    schema = response.json()
+    operation = schema["paths"]["/ai-explain-score"]["post"]
+
+    content = operation["requestBody"]["content"]["application/json"]
+    examples = content["examples"]
+
+    assert "benign_example" in examples
+    assert "suspicious_example" in examples
+
+    assert examples["benign_example"]["value"] == {"url": "https://example.com"}
+    assert examples["suspicious_example"]["value"] == {
+        "url": "https://secure-account-check.example/login/verify",
+        "ai_model": "deepseek-r1:1.5b",
+    }
+
+
+def test_openapi_includes_ai_models_route(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    schema = response.json()
+    operation = schema["paths"]["/ai-models"]["get"]
+
+    assert operation["tags"] == ["ai"]
+    assert operation["summary"] == "List available AI models"
+
+    responses = operation["responses"]
+    assert "200" in responses
+    assert "401" in responses
+    assert "429" in responses
+    assert "500" in responses
+
+def test_openapi_includes_ai_explain_score_request_examples(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    schema = response.json()
+    operation = schema["paths"]["/ai-explain-score"]["post"]
+
+    content = operation["requestBody"]["content"]["application/json"]
+    examples = content["examples"]
+
+    assert "benign_example" in examples
+    assert "suspicious_example" in examples
+
+    assert examples["benign_example"]["value"] == {"url": "https://example.com"}
+    assert examples["suspicious_example"]["value"] == {
+        "url": "https://secure-account-check.example/login/verify",
+        "ai_model": "deepseek-r1:1.5b",
+    }
+
+
+def test_openapi_includes_ai_models_route(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    schema = response.json()
+    operation = schema["paths"]["/ai-models"]["get"]
+
+    assert operation["tags"] == ["ai"]
+    assert operation["summary"] == "List available AI models"
+
+    responses = operation["responses"]
+    assert "200" in responses
+    assert "401" in responses
+    assert "429" in responses
+    assert "500" in responses
+
+def test_openapi_includes_ai_explain_score_422_example(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    schema = response.json()
+    operation = schema["paths"]["/ai-explain-score"]["post"]
+    response_422 = operation["responses"]["422"]
+
+    assert response_422["description"]
+    assert response_422["content"]["application/json"]["example"] == {
+        "detail": "Requested AI model is not available: missing:model",
+        "error_type": "ai_model_unavailable",
+    }
+
+def test_ai_models_includes_rate_limit_headers_on_success(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/ai-models", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(api_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers

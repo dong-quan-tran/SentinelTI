@@ -93,6 +93,10 @@ AI_EXPLAIN_SCORE_ERROR_EXAMPLE = {
     "error_type": "ai_explanation_error",
 }
 
+AI_EXPLAIN_SCORE_MODEL_UNAVAILABLE_EXAMPLE = {
+    "detail": "Requested AI model is not available: missing:model",
+    "error_type": "ai_model_unavailable",
+}
 
 async def check_rate_limit(request: Request, response: Response):
     client_ip = request.client.host if request.client else "unknown"
@@ -451,7 +455,7 @@ async def ai_model_not_available_error_handler(request: Request, exc: AIModelNot
         exc,
     )
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "detail": str(exc),
             "error_type": "ai_model_unavailable",
@@ -682,7 +686,16 @@ async def ai_models():
             "description": "Missing or invalid API key.",
         },
         422: {
-            "description": "Validation error in the request body.",
+            "model": ScoringErrorResponse,
+            "description": (
+                "Validation error in the request body, or the requested AI model "
+                "is not available."
+            ),
+            "content": {
+                "application/json": {
+                    "example": AI_EXPLAIN_SCORE_MODEL_UNAVAILABLE_EXAMPLE,
+                }
+            },
         },
         429: {
             "model": RateLimitErrorResponse,
