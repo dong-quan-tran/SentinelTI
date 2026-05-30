@@ -77,7 +77,7 @@ def test_ai_explain_score_success(monkeypatch):
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     response = client.post(
@@ -137,7 +137,7 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     response = client.post(
@@ -147,6 +147,64 @@ def test_ai_explain_score_passes_full_payload_to_ai_service(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert provider.calls == [deterministic_payload]
+
+
+def test_ai_explain_score_passes_ai_model_override(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    deterministic_payload = {
+        "url": "https://example.com",
+        "heuristic": {
+            "score": 0.2,
+            "reasons": ["Looks normal"],
+        },
+        "final_label": "benign",
+        "risk": "low",
+        "reasons": ["No obvious phishing indicators"],
+        "model_meta": {
+            "threshold": 0.75,
+            "threshold_source": "metadata",
+        },
+        "explanation": {
+            "summary": "This URL appears safe.",
+            "why_flagged": "No strong phishing signals were detected.",
+            "user_action": "Proceed with normal caution.",
+            "technical_notes": [],
+            "risk": "low",
+            "final_label": "benign",
+        },
+    }
+
+    captured = {}
+    provider = StubAIProvider()
+
+    def fake_get_ai_provider(model_name=None):
+        captured["model_name"] = model_name
+        return provider
+
+    monkeypatch.setattr(
+        ai_score_service_module.scoring,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider",
+        fake_get_ai_provider,
+    )
+
+    response = client.post(
+        "/ai-explain-score",
+        json={
+            "url": "https://example.com",
+            "ai_model": "deepseek-r1:1.5b",
+        },
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert captured["model_name"] == "deepseek-r1:1.5b"
     assert provider.calls == [deterministic_payload]
 
 
@@ -216,7 +274,7 @@ def test_ai_explain_score_returns_500_when_ai_service_fails(monkeypatch):
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     response = client.post(
@@ -267,7 +325,7 @@ def test_ai_explain_score_keeps_deterministic_fields_unchanged(monkeypatch):
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     response = client.post(
@@ -323,7 +381,7 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     response = client.post(

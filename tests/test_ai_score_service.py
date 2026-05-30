@@ -65,7 +65,7 @@ def test_build_ai_explanation_response_success(monkeypatch, deterministic_payloa
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     result = ai_score_service_module.build_ai_explanation_response("https://example.com")
@@ -103,7 +103,7 @@ def test_build_ai_explanation_response_passes_full_deterministic_payload_to_prov
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     result = ai_score_service_module.build_ai_explanation_response("https://example.com")
@@ -126,7 +126,7 @@ def test_build_ai_explanation_response_propagates_ai_explanation_error(
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     with pytest.raises(AIExplanationError, match="AI provider unavailable"):
@@ -175,7 +175,7 @@ def test_build_ai_explanation_response_keeps_deterministic_explanation_unchanged
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        lambda model_name=None: provider,
     )
 
     result = ai_score_service_module.build_ai_explanation_response("https://example.com")
@@ -196,14 +196,51 @@ def test_build_ai_explanation_response_uses_requested_url_for_scoring(
         captured["url"] = url
         return deterministic_payload
 
+    def fake_get_ai_provider(model_name=None):
+        captured["model_name"] = model_name
+        return provider
+
     monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
     monkeypatch.setattr(ai_score_service_module.scoring, "enrich_score", fake_enrich_score)
     monkeypatch.setattr(
         ai_score_service_module.ai_explanations,
         "get_ai_provider",
-        lambda: provider,
+        fake_get_ai_provider,
     )
 
     ai_score_service_module.build_ai_explanation_response("https://requested.example/path")
 
     assert captured["url"] == "https://requested.example/path"
+    assert captured["model_name"] is None
+
+
+def test_build_ai_explanation_response_passes_ai_model_override(
+    monkeypatch, deterministic_payload
+):
+    provider = StubProvider()
+    captured = {}
+
+    def fake_get_ai_provider(model_name=None):
+        captured["model_name"] = model_name
+        return provider
+
+    monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
+    monkeypatch.setattr(
+        ai_score_service_module.scoring,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider",
+        fake_get_ai_provider,
+    )
+
+    result = ai_score_service_module.build_ai_explanation_response(
+        "https://example.com",
+        ai_model="deepseek-r1:1.5b",
+    )
+
+    assert captured["model_name"] == "deepseek-r1:1.5b"
+    assert result["deterministic_explanation"] == deterministic_payload["explanation"]
+    assert provider.calls == [deterministic_payload]
