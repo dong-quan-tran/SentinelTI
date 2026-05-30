@@ -10,12 +10,15 @@ class AIEndpointDisabledError(RuntimeError):
     """Raised when AI-assisted explanations are disabled."""
 
 
-def build_ai_explanation_response(url: str) -> Dict[str, Any]:
+def build_ai_explanation_response(
+    url: str,
+    ai_model: str | None = None,
+) -> Dict[str, Any]:
     if not ai_explanations.ai_enabled():
         raise AIEndpointDisabledError("AI-assisted explanations are currently disabled.")
 
     deterministic = scoring.enrich_score(url)
-    provider = ai_explanations.get_ai_provider()
+    provider = ai_explanations.get_ai_provider(model_name=ai_model)
     ai_payload = provider.generate(deterministic)
 
     return {

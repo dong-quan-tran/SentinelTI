@@ -225,16 +225,17 @@ def validate_ai_provider_config() -> None:
 
 
 def get_ai_provider(model_name: str | None = None) -> AIExplanationProvider:
-    provider_name = get_ai_provider_name()
-    validate_ai_provider_config()
+    provider_name = os.getenv("SENTINELTI_AI_PROVIDER", "stub").strip().lower()
 
     if provider_name == "stub":
         return StubAIExplanationProvider()
 
     if provider_name == "ollama":
+        endpoint = os.getenv("SENTINELTI_OLLAMA_ENDPOINT", "http://localhost:11434")
+        resolved_model = model_name or os.getenv("SENTINELTI_OLLAMA_MODEL", "llama3.1:8b")
         return OllamaAIExplanationProvider(
-            endpoint=get_ollama_endpoint(),
-            model_name=model_name or get_ollama_model(),
+            endpoint=endpoint,
+            model_name=resolved_model,
         )
 
     raise AIExplanationError(f"Unsupported AI provider: {provider_name}")

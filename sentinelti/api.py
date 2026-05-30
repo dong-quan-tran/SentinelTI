@@ -57,7 +57,10 @@ AI_EXPLAIN_SCORE_REQUEST_EXAMPLES = {
     "suspicious_example": {
         "summary": "Generate an AI rewrite for a suspicious login-style URL",
         "description": "Example request for a URL with phishing-like indicators.",
-        "value": {"url": "https://secure-account-check.example/login/verify"},
+        "value": {
+            "url": "https://secure-account-check.example/login/verify",
+            "ai_model": "deepseek-r1:1.5b",
+        },
     },
 }
 
@@ -338,6 +341,32 @@ class AIRewriteExplanation(BaseModel):
         ),
     )
 
+class AIExplainScoreRequest(BaseModel):
+    url: str = Field(
+        ...,
+        examples=["https://example.com"],
+        description="URL to score and rewrite with AI assistance.",
+    )
+    ai_model: str | None = Field(
+        default=None,
+        examples=["llama3.1:8b", "deepseek-r1:1.5b"],
+        description=(
+            "Optional Ollama model override. If omitted, the configured default "
+            "AI model is used."
+        ),
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"url": "https://example.com"},
+                {
+                    "url": "https://secure-account-check.example/login/verify",
+                    "ai_model": "deepseek-r1:1.5b",
+                },
+            ]
+        }
+    )
 
 class AIExplainScoreResponse(BaseModel):
     deterministic_explanation: ExplanationResponse
@@ -551,7 +580,8 @@ async def explain_score(body: ScoreUrlRequest):
     description=(
         "Returns the deterministic explanation alongside a separate AI-generated "
         "plain-language rewrite. Deterministic scoring remains the source of truth; "
-        "AI output never changes the score, threshold, risk, or final label."
+        "AI output never changes the score, threshold, risk, or final label. "
+        "An optional ai_model field can override the configured Ollama model."
     ),
     response_model=AIExplainScoreResponse,
     responses={
@@ -596,10 +626,10 @@ async def explain_score(body: ScoreUrlRequest):
     dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
 )
 async def ai_explain_score(
-    body: ScoreUrlRequest = Body(..., openapi_examples=AI_EXPLAIN_SCORE_REQUEST_EXAMPLES)
+    body: AIExplainScoreRequest = Body(..., openapi_examples=AI_EXPLAIN_SCORE_REQUEST_EXAMPLES)
 ):
     try:
-        return build_ai_explanation_response(body.url)
+        return build_ai_explanation_response(body.url, ai_model=body.ai_model)
     except AIEndpointDisabledError as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
