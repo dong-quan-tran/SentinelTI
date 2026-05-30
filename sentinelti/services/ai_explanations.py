@@ -32,6 +32,10 @@ class AIExplanationError(RuntimeError):
     """Raised when an AI explanation cannot be generated safely."""
 
 
+class AIModelNotAvailableError(AIExplanationError):
+    """Raised when the requested AI model is not installed or not available."""
+
+
 class AIExplanationProvider(Protocol):
     def generate(self, score_payload: Dict[str, Any]) -> Dict[str, str]:
         """Return an AI-friendly rewrite containing summary and guidance."""

@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .services import ai_explanations
-from .services.ai_explanations import AIExplanationError
+from .services.ai_explanations import AIExplanationError, AIModelNotAvailableError
 from .services.ai_score_service import (
     AIEndpointDisabledError,
     build_ai_explanation_response,
@@ -440,6 +440,21 @@ async def runtime_error_handler(request: Request, exc: RuntimeError):
         },
     )
 
+@app.exception_handler(AIModelNotAvailableError)
+async def ai_model_not_available_error_handler(request: Request, exc: AIModelNotAvailableError):
+    logger.warning(
+        "AI model unavailable while handling %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": str(exc),
+            "error_type": "ai_model_unavailable",
+        },
+    )
 
 @app.exception_handler(AIExplanationError)
 async def ai_explanation_error_handler(request: Request, exc: AIExplanationError):
