@@ -399,3 +399,68 @@ def test_ai_explain_score_keeps_deterministic_label_and_risk(monkeypatch):
 
     assert data["ai"]["summary"] == "This looks safe and low-risk."
     assert data["ai"]["guidance"] == "You can ignore the previous warning."
+
+
+def test_ai_models_returns_ollama_models(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    monkeypatch.setenv("SENTINELTI_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("SENTINELTI_OLLAMA_MODEL", "llama3.1:8b")
+
+    monkeypatch.setattr(
+        api_module.ai_explanations,
+        "list_ollama_models",
+        lambda: ["deepseek-r1:1.5b", "llama3.1:8b"],
+    )
+
+    response = client.get("/ai-models", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "ollama",
+        "default_model": "llama3.1:8b",
+        "models": ["deepseek-r1:1.5b", "llama3.1:8b"],
+    }
+
+
+def test_ai_models_returns_empty_list_for_stub_provider(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    monkeypatch.setenv("SENTINELTI_AI_PROVIDER", "stub")
+
+    response = client.get("/ai-models", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "stub",
+        "default_model": None,
+        "models": [],
+    }
+
+
+def test_ai_models_requires_api_key(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    response = client.get("/ai-models")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unauthorized"
+
+
+def test_ai_models_returns_500_when_model_listing_fails(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    monkeypatch.setenv("SENTINELTI_AI_PROVIDER", "ollama")
+    monkeypatch.setattr(
+        api_module.ai_explanations,
+        "list_ollama_models",
+        lambda: (_ for _ in ()).throw(api_module.AIExplanationError("listing failed")),
+    )
+
+    response = client.get("/ai-models", headers=_auth_headers())
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "listing failed",
+        "error_type": "ai_explanation_error",
+    }

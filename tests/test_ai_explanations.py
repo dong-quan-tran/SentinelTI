@@ -6,6 +6,7 @@ import json
 import pytest
 import requests
 
+import sentinelti.services.ai_explanations as ai_explanations_module
 from sentinelti.services.ai_explanations import (
     AIExplanationError,
     OllamaAIExplanationProvider,
@@ -455,3 +456,73 @@ def test_ollama_provider_raises_when_guidance_missing(monkeypatch, score_payload
 
     with pytest.raises(AIExplanationError, match="missing valid guidance"):
         provider.generate(score_payload)
+
+def test_list_ollama_models_returns_sorted_unique_names(monkeypatch):
+    class MockResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "models": [
+                    {"name": "llama3.1:8b"},
+                    {"name": "deepseek-r1:1.5b"},
+                    {"name": "llama3.1:8b"},
+                ]
+            }
+
+    monkeypatch.setattr(
+        ai_explanations_module.requests,
+        "get",
+        lambda url, timeout=None: MockResponse(),
+    )
+
+    result = ai_explanations_module.list_ollama_models()
+
+    assert result == ["deepseek-r1:1.5b", "llama3.1:8b"]
+
+
+def test_list_ollama_models_raises_on_request_failure(monkeypatch):
+    def fake_get(url, timeout=None):
+        raise ai_explanations_module.requests.RequestException("connection refused")
+
+    monkeypatch.setattr(ai_explanations_module.requests, "get", fake_get)
+
+    with pytest.raises(AIExplanationError, match="Ollama model listing failed"):
+        ai_explanations_module.list_ollama_models()
+
+
+def test_list_ollama_models_raises_on_invalid_json(monkeypatch):
+    class MockResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            raise ValueError("bad json")
+
+    monkeypatch.setattr(
+        ai_explanations_module.requests,
+        "get",
+        lambda url, timeout=None: MockResponse(),
+    )
+
+    with pytest.raises(AIExplanationError, match="invalid JSON"):
+        ai_explanations_module.list_ollama_models()
+
+
+def test_list_ollama_models_raises_when_models_missing(monkeypatch):
+    class MockResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"not_models": []}
+
+    monkeypatch.setattr(
+        ai_explanations_module.requests,
+        "get",
+        lambda url, timeout=None: MockResponse(),
+    )
+
+    with pytest.raises(AIExplanationError, match="missing models"):
+        ai_explanations_module.list_ollama_models()
