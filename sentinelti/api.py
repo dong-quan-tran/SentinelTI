@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from .services import ai_explanations
 from .services.ai_explanations import AIExplanationError
 from .services.ai_score_service import (
     AIEndpointDisabledError,
@@ -278,6 +279,12 @@ class RateLimitErrorResponse(BaseModel):
     )
 
 
+class AIModelsResponse(BaseModel):
+    provider: str
+    default_model: str | None = None
+    models: List[str] = Field(default_factory=list)
+
+
 API_KEY_NAME = "X-API-KEY"
 API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
 
@@ -341,6 +348,7 @@ class AIRewriteExplanation(BaseModel):
         ),
     )
 
+
 class AIExplainScoreRequest(BaseModel):
     url: str = Field(
         ...,
@@ -368,6 +376,7 @@ class AIExplainScoreRequest(BaseModel):
         }
     )
 
+
 class AIExplainScoreResponse(BaseModel):
     deterministic_explanation: ExplanationResponse
     ai: AIRewriteExplanation
@@ -385,11 +394,12 @@ SentinelTI provides deterministic URL scoring, heuristic analysis, and optional 
 - AI-assisted explanations are optional and advisory only.
 - AI output never changes the underlying score, threshold, risk, or final label.
 
-## AI endpoint
+## AI endpoints
 
 - `POST /ai-explain-score` returns the deterministic explanation alongside a separate AI-generated rewrite.
-- If AI is disabled, the endpoint returns `503` with `error_type: "ai_disabled"`.
-- If AI generation fails, the endpoint returns `500` with `error_type: "ai_explanation_error"`.
+- `GET /ai-models` returns the configured AI provider and available Ollama models when applicable.
+- If AI is disabled, the AI explanation endpoint returns `503` with `error_type: "ai_disabled"`.
+- If AI generation or model discovery fails, the endpoint returns `500` with `error_type: "ai_explanation_error"`.
 """,
     openapi_tags=[
         {
@@ -427,6 +437,22 @@ async def runtime_error_handler(request: Request, exc: RuntimeError):
         content={
             "detail": "Internal scoring error",
             "error_type": "runtime_error",
+        },
+    )
+
+
+@app.exception_handler(AIExplanationError)
+async def ai_explanation_error_handler(request: Request, exc: AIExplanationError):
+    logger.exception(
+        "AI explanation error while handling %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": str(exc),
+            "error_type": "ai_explanation_error",
         },
     )
 
@@ -573,6 +599,47 @@ async def explain_score(body: ScoreUrlRequest):
     return build_explanation_response(body.url)
 
 
+@app.get(
+    "/ai-models",
+    tags=["ai"],
+    summary="List available AI models",
+    description=(
+        "Returns the current AI provider and the locally available AI models when "
+        "using Ollama. This helps clients choose a valid ai_model override."
+    ),
+    response_model=AIModelsResponse,
+    responses={
+        401: {
+            "model": UnauthorizedErrorResponse,
+            "description": "Missing or invalid API key.",
+        },
+        429: {
+            "model": RateLimitErrorResponse,
+            "description": "Too many requests from the same client.",
+        },
+        500: {
+            "model": ScoringErrorResponse,
+            "description": "Internal error while listing AI models.",
+        },
+    },
+    dependencies=[Depends(require_api_key), Depends(check_rate_limit)],
+)
+async def ai_models():
+    provider_name = ai_explanations.get_ai_provider_name()
+    default_model = None
+    models: List[str] = []
+
+    if provider_name == "ollama":
+        default_model = ai_explanations.get_ollama_model()
+        models = ai_explanations.list_ollama_models()
+
+    return {
+        "provider": provider_name,
+        "default_model": default_model,
+        "models": models,
+    }
+
+
 @app.post(
     "/ai-explain-score",
     tags=["ai"],
@@ -636,14 +703,6 @@ async def ai_explain_score(
             content={
                 "detail": str(exc),
                 "error_type": "ai_disabled",
-            },
-        )
-    except AIExplanationError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "detail": str(exc),
-                "error_type": "ai_explanation_error",
             },
         )
 

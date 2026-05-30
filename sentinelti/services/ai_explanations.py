@@ -108,6 +108,38 @@ def _validate_ai_response_payload(payload: Dict[str, Any]) -> Dict[str, str]:
     }
 
 
+def list_ollama_models() -> list[str]:
+    endpoint = get_ollama_endpoint()
+
+    try:
+        response = requests.get(
+            f"{endpoint.rstrip('/')}/api/tags",
+            timeout=10.0,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise AIExplanationError(f"Ollama model listing failed: {exc}") from exc
+
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise AIExplanationError("Ollama model listing returned invalid JSON") from exc
+
+    models = body.get("models")
+    if not isinstance(models, list):
+        raise AIExplanationError("Ollama model listing response is missing models")
+
+    names: list[str] = []
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        name = model.get("name")
+        if isinstance(name, str) and name.strip():
+            names.append(name.strip())
+
+    return sorted(set(names))
+
+
 @dataclass
 class StubAIExplanationProvider:
     def generate(self, score_payload: Dict[str, Any]) -> Dict[str, str]:
