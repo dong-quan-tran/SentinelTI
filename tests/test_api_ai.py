@@ -464,3 +464,28 @@ def test_ai_models_returns_500_when_model_listing_fails(monkeypatch):
         "detail": "listing failed",
         "error_type": "ai_explanation_error",
     }
+
+def test_ai_explain_score_returns_422_for_unknown_ai_model(monkeypatch):
+    client = _make_client(monkeypatch, ai_enabled=True)
+
+    monkeypatch.setenv("SENTINELTI_AI_PROVIDER", "ollama")
+    monkeypatch.setattr(
+        api_module.ai_explanations,
+        "list_ollama_models",
+        lambda: ["llama3.1:8b", "deepseek-r1:1.5b"],
+    )
+
+    response = client.post(
+        "/ai-explain-score",
+        headers=_auth_headers(),
+        json={
+            "url": "https://example.com",
+            "ai_model": "missing:model",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Requested AI model is not available: missing:model",
+        "error_type": "ai_model_unavailable",
+    }

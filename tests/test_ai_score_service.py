@@ -244,3 +244,67 @@ def test_build_ai_explanation_response_passes_ai_model_override(
     assert captured["model_name"] == "deepseek-r1:1.5b"
     assert result["deterministic_explanation"] == deterministic_payload["explanation"]
     assert provider.calls == [deterministic_payload]
+
+def test_build_ai_explanation_response_rejects_unknown_ollama_model(monkeypatch):
+    monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider_name",
+        lambda: "ollama",
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "list_ollama_models",
+        lambda: ["llama3.1:8b", "deepseek-r1:1.5b"],
+    )
+
+    with pytest.raises(
+        ai_score_service_module.ai_explanations.AIModelNotAvailableError,
+        match="Requested AI model is not available: missing:model",
+    ):
+        ai_score_service_module.build_ai_explanation_response(
+            "https://example.com",
+            ai_model="missing:model",
+        )
+
+def test_build_ai_explanation_response_accepts_installed_ollama_model(monkeypatch):
+    monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider_name",
+        lambda: "ollama",
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "list_ollama_models",
+        lambda: ["llama3.1:8b", "deepseek-r1:1.5b"],
+    )
+
+    deterministic = {
+        "explanation": {
+            "summary": "Suspicious URL",
+            "why_flagged": "Contains login bait",
+            "user_action": "Do not proceed",
+            "technical_notes": [],
+            "risk": "medium",
+            "final_label": "suspicious",
+        }
+    }
+
+    class FakeProvider:
+        def generate(self, payload):
+            return {"summary": "AI summary", "guidance": "AI guidance"}
+
+    monkeypatch.setattr(ai_score_service_module.scoring, "enrich_score", lambda url: deterministic)
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider",
+        lambda model_name=None: FakeProvider(),
+    )
+
+    result = ai_score_service_module.build_ai_explanation_response(
+        "https://example.com",
+        ai_model="deepseek-r1:1.5b",
+    )
+
+    assert result["ai"] == {"summary": "AI summary", "guidance": "AI guidance"}
