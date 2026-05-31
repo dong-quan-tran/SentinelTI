@@ -2083,3 +2083,86 @@ verified availability of both Llama and DeepSeek in the local runtime,
 
 updated backend and API test coverage aligned with the new design.
 
+Progress log: 05/30/2026
+
+AI services and API
+Fixed a circular import in ai_explanations and stabilized AIExplanationError as a standalone, reusable error type.
+
+Implemented a robust, deterministic AI prompt builder for explanations, with schema validation and clear errors for malformed payloads.
+
+Wired the AI explanation provider abstraction to a stub implementation, ensuring well-formed {"summary", "guidance"} responses without relying on HTTP.
+
+Tightened /ai-explain-score:
+
+unified it with existing scoring helpers,
+
+added clear error handling for AI-disabled and provider failures,
+
+added and updated tests for empty/malformed payloads and stub rewrites.
+
+Rate limiting and headers
+Enhanced the shared rate-limit dependency to emit consistent X-RateLimit-Limit, X-RateLimit-Remaining, and X-RateLimit-Reset headers on both success and 429 responses.
+
+Updated the 429 path to attach headers via the exception so they propagate correctly to the final response.
+
+Added focused tests to assert rate-limit headers on the AI endpoint (200 and 429) and fixed edge cases around header presence and behavior.
+
+OpenAPI and docs
+Strengthened OpenAPI coverage for AI endpoints:
+
+ensured /ai-explain-score request body includes multiple named examples (benign and suspicious URLs, with ai_model usage).
+
+ensured /ai-models is documented with correct tags, summary, and response codes.
+
+added explicit 422 error documentation for AI model unavailability with an example payload.
+
+Cleaned up status code usage by addressing the 422 deprecation warning, updating to the newer constant while preserving behavior.
+
+Model training, artifacts, and prediction
+Refactored the training pipeline to avoid duplicated train/test splitting:
+
+introduced shared helpers for loading datasets and preparing splits,
+
+made it easier to maintain consistent evaluation across models.
+
+Added LightGBM as a first-class model:
+
+implemented train_url_model_lgbm with class imbalance handling,
+
+integrated it into the CLI (--model lgbm and --model all),
+
+ensured artifacts share the same metadata structure as logreg/XGBoost.
+
+Extended the legacy loader and new prediction loader to handle multiple model types:
+
+updated preference ordering to include lgbm,
+
+kept backward compatibility with existing artifacts and tests.
+
+Model evaluation and comparison
+Introduced an offline evaluation script to compare models on a shared holdout:
+
+uses the same dataset builders and a consistent train/test split,
+
+computes ROC AUC and average precision for logreg, XGBoost, and LightGBM,
+
+optionally writes a JSON summary into docs/model_metrics for inspection.
+
+Laid the groundwork for selecting a default production model and for future probability calibration, by centralizing evaluation in one place.
+
+Tests and tooling
+Added and adjusted tests for:
+
+AI explanation service and AI scoring service behavior,
+
+AI API routes (success, error, rate limiting, OpenAPI),
+
+LightGBM model loading and preference ordering in both training and prediction modules.
+
+Fixed test artifacts and mocking patterns:
+
+replaced non-picklable lambdas in test artifacts with simple objects,
+
+ensured temporary model artifacts are compatible with joblib.dump/load.
+
+Kept the full test suite green (300+ tests), validating that new ML and AI functionality is integrated safely.
