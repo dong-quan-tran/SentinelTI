@@ -121,10 +121,16 @@ def _validate_artifact(artifact: Dict[str, Any], path: Path) -> None:
         raise RuntimeError(f"Model artifact 'feature_names' must be a list in {path}")
 
 
-def _load_artifact(prefer: str = "xgb"):
-    order = ["xgb", "logreg"]
+def _preferred_model_order(prefer: str) -> list[str]:
     if prefer == "logreg":
-        order = ["logreg", "xgb"]
+        return ["logreg", "xgb", "lgbm"]
+    if prefer == "lgbm":
+        return ["lgbm", "xgb", "logreg"]
+    return ["xgb", "lgbm", "logreg"]
+
+
+def _load_artifact(prefer: str = "xgb"):
+    order = _preferred_model_order(prefer)
 
     last_error: Exception | None = None
 

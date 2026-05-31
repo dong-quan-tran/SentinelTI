@@ -9,6 +9,7 @@ from typing import Any
 
 import joblib
 import numpy as np
+from lightgbm import LGBMClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -49,9 +50,11 @@ def load_url_model(prefer: str = "xgb"):
     Returns:
         tuple[model, feature_names]
     """
-    order = ["xgb", "logreg"]
+    order = ["xgb", "lgbm", "logreg"]
     if prefer == "logreg":
-        order = ["logreg", "xgb"]
+        order = ["logreg", "xgb", "lgbm"]
+    elif prefer == "lgbm":
+        order = ["lgbm", "xgb", "logreg"]
 
     last_error: Exception | None = None
 
@@ -281,7 +284,6 @@ def _save_metrics_json(model_name: str, metadata: dict[str, Any]) -> Path:
         "metrics": metrics,
         "training_params": metadata["training_params"],
         "top_features": metadata.get("top_features", []),
-        # Expose training notes at top-level for convenience.
         "training_notes": metrics.get("training_notes", []),
     }
 
@@ -313,17 +315,15 @@ def _save_artifact(
     return model_path
 
 
-def _train_and_save(
+def _prepare_training_split(
     *,
-    model_name: str,
-    clf: Any,
     use_real_data: bool,
     csv_path: str | None,
     max_samples: int | None,
     use_urlhaus: bool,
     urlhaus_max_malicious: int | None,
     urlhaus_max_benign: int | None,
-) -> None:
+):
     X, y, feature_names = load_dataset_for_training(
         use_real_data=use_real_data,
         csv_path=csv_path,
@@ -341,8 +341,31 @@ def _train_and_save(
         stratify=y,
     )
 
-    # Capture potential convergence warnings (especially for logreg) so we can
-    # surface them as structured training notes instead of only noisy logs.
+    return X_train, X_test, y_train, y_test, feature_names
+
+
+def _scale_pos_weight(y_train) -> float:
+    negatives = float((y_train == 0).sum())
+    positives = max(float((y_train == 1).sum()), 1.0)
+    return negatives / positives
+
+
+def _train_and_save_from_split(
+    *,
+    model_name: str,
+    clf: Any,
+    feature_names: list[str],
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    use_real_data: bool,
+    csv_path: str | None,
+    max_samples: int | None,
+    use_urlhaus: bool,
+    urlhaus_max_malicious: int | None,
+    urlhaus_max_benign: int | None,
+) -> None:
     training_notes: list[str] = []
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", category=ConvergenceWarning)
@@ -401,6 +424,15 @@ def train_url_model(
     urlhaus_max_malicious: int | None = 1000,
     urlhaus_max_benign: int | None = 1000,
 ) -> None:
+    X_train, X_test, y_train, y_test, feature_names = _prepare_training_split(
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+    )
+
     clf = Pipeline(
         steps=[
             ("scaler", StandardScaler()),
@@ -413,9 +445,15 @@ def train_url_model(
             ),
         ]
     )
-    _train_and_save(
+
+    _train_and_save_from_split(
         model_name="logreg",
         clf=clf,
+        feature_names=feature_names,
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
         use_real_data=use_real_data,
         csv_path=csv_path,
         max_samples=max_samples,
@@ -433,7 +471,7 @@ def train_url_model_xgb(
     urlhaus_max_malicious: int | None = 1000,
     urlhaus_max_benign: int | None = 1000,
 ) -> None:
-    X, y, _ = load_dataset_for_training(
+    X_train, X_test, y_train, y_test, feature_names = _prepare_training_split(
         use_real_data=use_real_data,
         csv_path=csv_path,
         max_samples=max_samples,
@@ -441,16 +479,6 @@ def train_url_model_xgb(
         urlhaus_max_malicious=urlhaus_max_malicious,
         urlhaus_max_benign=urlhaus_max_benign,
     )
-
-    X_train, _, y_train, _ = train_test_split(
-        X,
-        y,
-        test_size=0.3,
-        random_state=42,
-        stratify=y,
-    )
-
-    scale_pos_weight = float((y_train == 0).sum()) / max(float((y_train == 1).sum()), 1.0)
 
     clf = XGBClassifier(
         n_estimators=400,
@@ -460,13 +488,65 @@ def train_url_model_xgb(
         colsample_bytree=0.8,
         objective="binary:logistic",
         eval_metric="logloss",
-        scale_pos_weight=scale_pos_weight,
+        scale_pos_weight=_scale_pos_weight(y_train),
         n_jobs=-1,
+        random_state=42,
     )
 
-    _train_and_save(
+    _train_and_save_from_split(
         model_name="xgb",
         clf=clf,
+        feature_names=feature_names,
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+    )
+
+
+def train_url_model_lgbm(
+    use_real_data: bool = False,
+    csv_path: str | None = None,
+    max_samples: int | None = None,
+    use_urlhaus: bool = False,
+    urlhaus_max_malicious: int | None = 1000,
+    urlhaus_max_benign: int | None = 1000,
+) -> None:
+    X_train, X_test, y_train, y_test, feature_names = _prepare_training_split(
+        use_real_data=use_real_data,
+        csv_path=csv_path,
+        max_samples=max_samples,
+        use_urlhaus=use_urlhaus,
+        urlhaus_max_malicious=urlhaus_max_malicious,
+        urlhaus_max_benign=urlhaus_max_benign,
+    )
+
+    clf = LGBMClassifier(
+        n_estimators=400,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        objective="binary",
+        scale_pos_weight=_scale_pos_weight(y_train),
+        n_jobs=-1,
+        random_state=42,
+        verbosity=-1,
+    )
+
+    _train_and_save_from_split(
+        model_name="lgbm",
+        clf=clf,
+        feature_names=feature_names,
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
         use_real_data=use_real_data,
         csv_path=csv_path,
         max_samples=max_samples,
@@ -480,9 +560,9 @@ def main():
     parser = argparse.ArgumentParser(description="Train SentinelTI URL model")
     parser.add_argument(
         "--model",
-        choices=["logreg", "xgb"],
+        choices=["logreg", "xgb", "lgbm", "all"],
         default="xgb",
-        help="Which model to train (logreg or xgb)",
+        help="Which model to train",
     )
     parser.add_argument(
         "--source",
@@ -518,20 +598,28 @@ def main():
 
     use_real_data = args.source == "kaggle"
     use_urlhaus = args.source == "urlhaus"
+    csv_path = args.csv_path if args.source in ("kaggle", "urlhaus") else None
 
-    if args.model == "logreg":
-        train_url_model(
-            use_real_data=use_real_data,
-            csv_path=args.csv_path if args.source in ("kaggle", "urlhaus") else None,
-            max_samples=args.max_samples,
-            use_urlhaus=use_urlhaus,
-            urlhaus_max_malicious=args.urlhaus_max_malicious,
-            urlhaus_max_benign=args.urlhaus_max_benign,
-        )
+    trainers = {
+        "logreg": train_url_model,
+        "xgb": train_url_model_xgb,
+        "lgbm": train_url_model_lgbm,
+    }
+
+    if args.model == "all":
+        for trainer in ("logreg", "xgb", "lgbm"):
+            trainers[trainer](
+                use_real_data=use_real_data,
+                csv_path=csv_path,
+                max_samples=args.max_samples,
+                use_urlhaus=use_urlhaus,
+                urlhaus_max_malicious=args.urlhaus_max_malicious,
+                urlhaus_max_benign=args.urlhaus_max_benign,
+            )
     else:
-        train_url_model_xgb(
+        trainers[args.model](
             use_real_data=use_real_data,
-            csv_path=args.csv_path if args.source in ("kaggle", "urlhaus") else None,
+            csv_path=csv_path,
             max_samples=args.max_samples,
             use_urlhaus=use_urlhaus,
             urlhaus_max_malicious=args.urlhaus_max_malicious,

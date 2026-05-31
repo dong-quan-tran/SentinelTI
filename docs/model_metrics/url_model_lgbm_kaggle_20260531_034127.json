@@ -1,0 +1,126 @@
+{
+  "artifact_version": "1.0",
+  "model": "lgbm",
+  "trained_at": "2026-05-31T03:41:27Z",
+  "dataset_name": "kaggle",
+  "dataset_source": {
+    "use_real_data": true,
+    "use_urlhaus": false,
+    "csv_path": "data/urldata.csv",
+    "max_samples": null,
+    "urlhaus_max_malicious": 1000,
+    "urlhaus_max_benign": 1000
+  },
+  "feature_version": "v2",
+  "threshold": 0.75,
+  "recommended_threshold": 0.75,
+  "recommended_threshold_source": "artifact",
+  "class_labels": {
+    "benign": 0,
+    "malicious": 1
+  },
+  "class_counts": {
+    "train_0": 242016,
+    "train_1": 73106,
+    "test_0": 103722,
+    "test_1": 31331
+  },
+  "metrics": {
+    "classification_report": {
+      "0": {
+        "precision": 0.9974189571816553,
+        "recall": 0.9984959796378782,
+        "f1-score": 0.9979571778218891,
+        "support": 103722.0
+      },
+      "1": {
+        "precision": 0.9950030430186745,
+        "recall": 0.9914461715234113,
+        "f1-score": 0.9932214228617107,
+        "support": 31331.0
+      },
+      "accuracy": 0.9968604918069203,
+      "macro avg": {
+        "precision": 0.996211000100165,
+        "recall": 0.9949710755806447,
+        "f1-score": 0.9955893003417999,
+        "support": 135053.0
+      },
+      "weighted avg": {
+        "precision": 0.996858488279518,
+        "recall": 0.9968604918069203,
+        "f1-score": 0.9968585281165336,
+        "support": 135053.0
+      }
+    },
+    "roc_auc": 0.9990730233439972,
+    "average_precision": 0.9984849295738372,
+    "training_notes": []
+  },
+  "training_params": {
+    "boosting_type": "gbdt",
+    "class_weight": null,
+    "colsample_bytree": 0.8,
+    "importance_type": "split",
+    "learning_rate": 0.05,
+    "max_depth": -1,
+    "min_child_samples": 20,
+    "min_child_weight": 0.001,
+    "min_split_gain": 0.0,
+    "n_estimators": 400,
+    "n_jobs": -1,
+    "num_leaves": 31,
+    "objective": "binary",
+    "random_state": 42,
+    "reg_alpha": 0.0,
+    "reg_lambda": 0.0,
+    "subsample": 0.8,
+    "subsample_for_bin": 200000,
+    "subsample_freq": 0,
+    "scale_pos_weight": 3.3104806719010753,
+    "verbosity": -1
+  },
+  "top_features": [
+    {
+      "feature": "repeated_char_ratio",
+      "importance": 1085.0
+    },
+    {
+      "feature": "url_entropy",
+      "importance": 1063.0
+    },
+    {
+      "feature": "max_host_label_len",
+      "importance": 834.0
+    },
+    {
+      "feature": "avg_host_label_len",
+      "importance": 762.0
+    },
+    {
+      "feature": "special_ratio",
+      "importance": 648.0
+    },
+    {
+      "feature": "max_path_segment_len",
+      "importance": 608.0
+    },
+    {
+      "feature": "path_len",
+      "importance": 601.0
+    },
+    {
+      "feature": "alpha_ratio",
+      "importance": 576.0
+    },
+    {
+      "feature": "url_len",
+      "importance": 502.0
+    },
+    {
+      "feature": "domain_len",
+      "importance": 480.0
+    }
+  ],
+  "training_notes": []
+}
