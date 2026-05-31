@@ -245,6 +245,7 @@ def test_build_ai_explanation_response_passes_ai_model_override(
     assert result["deterministic_explanation"] == deterministic_payload["explanation"]
     assert provider.calls == [deterministic_payload]
 
+
 def test_build_ai_explanation_response_rejects_unknown_ollama_model(monkeypatch):
     monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
     monkeypatch.setattr(
@@ -266,6 +267,7 @@ def test_build_ai_explanation_response_rejects_unknown_ollama_model(monkeypatch)
             "https://example.com",
             ai_model="missing:model",
         )
+
 
 def test_build_ai_explanation_response_accepts_installed_ollama_model(monkeypatch):
     monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
@@ -308,3 +310,46 @@ def test_build_ai_explanation_response_accepts_installed_ollama_model(monkeypatc
     )
 
     assert result["ai"] == {"summary": "AI summary", "guidance": "AI guidance"}
+
+
+def test_build_ai_explanation_response_skips_model_validation_for_non_ollama_provider(
+    monkeypatch, deterministic_payload
+):
+    provider = StubProvider()
+
+    monkeypatch.setattr(ai_score_service_module.ai_explanations, "ai_enabled", lambda: True)
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider_name",
+        lambda: "openai",
+    )
+
+    def fail_if_called():
+        raise AssertionError("list_ollama_models should not be called for non-ollama providers")
+
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "list_ollama_models",
+        fail_if_called,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.scoring,
+        "enrich_score",
+        lambda url: deterministic_payload,
+    )
+    monkeypatch.setattr(
+        ai_score_service_module.ai_explanations,
+        "get_ai_provider",
+        lambda model_name=None: provider,
+    )
+
+    result = ai_score_service_module.build_ai_explanation_response(
+        "https://example.com",
+        ai_model="some-remote-model",
+    )
+
+    assert result["deterministic_explanation"] == deterministic_payload["explanation"]
+    assert result["ai"] == {
+        "summary": "AI summary",
+        "guidance": "AI guidance",
+    }
