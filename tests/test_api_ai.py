@@ -23,6 +23,33 @@ def _auth_headers(api_key: str = "test-key") -> dict[str, str]:
     return {"X-API-KEY": api_key}
 
 
+def _success_ai_response(
+    *,
+    summary: str = "This URL currently appears low risk.",
+    why_flagged: str = "Few malicious patterns were detected.",
+    user_action: str = "Proceed carefully.",
+    technical_notes: list[str] | None = None,
+    risk: str = "low",
+    final_label: str = "benign",
+    ai_summary: str = "This link appears relatively low risk based on the current checks.",
+    ai_guidance: str = "Proceed carefully and verify the destination independently.",
+) -> dict:
+    return {
+        "deterministic_explanation": {
+            "summary": summary,
+            "why_flagged": why_flagged,
+            "user_action": user_action,
+            "technical_notes": technical_notes or ["No major indicators found"],
+            "risk": risk,
+            "final_label": final_label,
+        },
+        "ai": {
+            "summary": ai_summary,
+            "guidance": ai_guidance,
+        },
+    }
+
+
 def test_ai_models_requires_api_key(monkeypatch):
     client = _make_client(monkeypatch)
 
@@ -114,72 +141,22 @@ def test_ai_explain_score_returns_combined_response(monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
-        lambda url, ai_model=None: {
-            "url": url,
-            "label": 1,
-            "prob_malicious": 0.91,
-            "threshold": 0.75,
-            "heuristic": {
-                "score": 0.82,
-                "reasons": ["Suspicious login keyword", "Nested redirect parameter"],
-            },
-            "final_label": "malicious",
-            "risk": "high",
-            "reasons": ["Model score above threshold", "Multiple phishing indicators"],
-            "deterministic_explanation": {
-                "summary": "This URL looks likely malicious and should be treated as unsafe.",
-                "why_flagged": "The deterministic model assigned a very high malicious probability.",
-                "user_action": "Do not open the link or enter credentials.",
-                "technical_notes": [
-                    "Model score above threshold",
-                    "Multiple phishing indicators",
-                ],
-                "risk": "high",
-                "final_label": "malicious",
-            },
-            "ai": {
-                "summary": (
-                    "This link shows several warning signs that are commonly associated "
-                    "with phishing or other unsafe destinations."
-                ),
-                "guidance": "Do not open the link or enter credentials.",
-            },
-            "model_meta": {
-                "artifact_version": "1.0",
-                "model_type": "xgb",
-                "trained_at": "2026-05-18T03:55:05Z",
-                "dataset_name": "kaggle",
-                "dataset_source": {"use_real_data": True},
-                "feature_version": "v2",
-                "threshold": 0.75,
-                "threshold_source": "metadata",
-                "recommended_threshold": 0.8,
-                "recommended_threshold_source": "artifact",
-                "metrics": {"roc_auc": 0.999, "average_precision": 0.998},
-                "class_labels": {"benign": 0, "malicious": 1},
-                "class_counts": {
-                    "train_0": 10,
-                    "train_1": 5,
-                    "test_0": 4,
-                    "test_1": 2,
-                },
-                "training_params": {"n_estimators": 400},
-                "top_features": [
-                    {"feature": "has_ip", "importance": 0.31},
-                    {"feature": "url_length", "importance": 0.22},
-                ],
-                "training_notes": [],
-                "model_summary": {
-                    "model_type": "xgb",
-                    "dataset_name": "kaggle",
-                    "trained_at": "2026-05-18T03:55:05Z",
-                    "top_features": [
-                        {"feature": "has_ip", "importance": 0.31},
-                        {"feature": "url_length", "importance": 0.22},
-                    ],
-                },
-            },
-        },
+        lambda url, ai_model=None: _success_ai_response(
+            summary="This URL looks likely malicious and should be treated as unsafe.",
+            why_flagged="The deterministic model assigned a very high malicious probability.",
+            user_action="Do not open the link or enter credentials.",
+            technical_notes=[
+                "Model score above threshold",
+                "Multiple phishing indicators",
+            ],
+            risk="high",
+            final_label="malicious",
+            ai_summary=(
+                "This link shows several warning signs that are commonly associated "
+                "with phishing or other unsafe destinations."
+            ),
+            ai_guidance="Do not open the link or enter credentials.",
+        ),
     )
 
     response = client.post(
@@ -194,27 +171,27 @@ def test_ai_explain_score_returns_combined_response(monkeypatch):
     assert response.status_code == 200
     body = response.json()
 
-    assert "deterministic_explanation" in body
-    assert "ai" in body
+    assert body == {
+        "deterministic_explanation": {
+            "summary": "This URL looks likely malicious and should be treated as unsafe.",
+            "why_flagged": "The deterministic model assigned a very high malicious probability.",
+            "user_action": "Do not open the link or enter credentials.",
+            "technical_notes": [
+                "Model score above threshold",
+                "Multiple phishing indicators",
+            ],
+            "risk": "high",
+            "final_label": "malicious",
+        },
+        "ai": {
+            "summary": (
+                "This link shows several warning signs that are commonly associated "
+                "with phishing or other unsafe destinations."
+            ),
+            "guidance": "Do not open the link or enter credentials.",
+        },
+    }
 
-    assert body["deterministic_explanation"]["summary"] == (
-        "This URL looks likely malicious and should be treated as unsafe."
-    )
-    assert body["deterministic_explanation"]["why_flagged"] == (
-        "The deterministic model assigned a very high malicious probability."
-    )
-    assert body["deterministic_explanation"]["user_action"] == (
-        "Do not open the link or enter credentials."
-    )
-    assert body["deterministic_explanation"]["risk"] == "high"
-    assert body["deterministic_explanation"]["final_label"] == "malicious"
-    assert body["deterministic_explanation"]["technical_notes"] == [
-        "Model score above threshold",
-        "Multiple phishing indicators",
-    ]
-
-    assert body["ai"]["summary"].startswith("This link shows several warning signs")
-    assert body["ai"]["guidance"] == "Do not open the link or enter credentials."
 
 def test_ai_explain_score_supports_missing_ai_model_override(monkeypatch):
     client = _make_client(monkeypatch)
@@ -222,60 +199,7 @@ def test_ai_explain_score_supports_missing_ai_model_override(monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
-        lambda url, ai_model=None: {
-            "url": url,
-            "label": 0,
-            "prob_malicious": 0.11,
-            "threshold": 0.75,
-            "heuristic": {
-                "score": 0.10,
-                "reasons": [],
-            },
-            "final_label": "benign",
-            "risk": "low",
-            "reasons": ["No major indicators found"],
-            "deterministic_explanation": {
-                "summary": "This URL currently appears low risk.",
-                "why_flagged": "Few malicious patterns were detected.",
-                "user_action": "Proceed carefully.",
-                "technical_notes": ["No major indicators found"],
-                "risk": "low",
-                "final_label": "benign",
-            },
-            "ai": {
-                "summary": "This link appears relatively low risk based on the current checks.",
-                "guidance": "Proceed carefully and verify the destination independently.",
-            },
-            "model_meta": {
-                "artifact_version": "1.0",
-                "model_type": "logreg",
-                "trained_at": None,
-                "dataset_name": None,
-                "dataset_source": {},
-                "feature_version": None,
-                "threshold": 0.75,
-                "threshold_source": "metadata",
-                "recommended_threshold": None,
-                "recommended_threshold_source": None,
-                "metrics": {"roc_auc": None, "average_precision": None},
-                "class_labels": {"benign": None, "malicious": None},
-                "class_counts": {
-                    "train_0": None,
-                    "train_1": None,
-                    "test_0": None,
-                    "test_1": None,
-                },
-                "training_params": {},
-                "top_features": [],
-                "training_notes": [],
-                "model_summary": {
-                    "model_type": "logreg",
-                    "dataset_name": None,
-                    "trained_at": None,
-                    "top_features": [],
-                },
-            },
-        },
+        lambda url, ai_model=None: _success_ai_response(),
     )
 
     response = client.post(
@@ -287,18 +211,20 @@ def test_ai_explain_score_supports_missing_ai_model_override(monkeypatch):
     assert response.status_code == 200
     body = response.json()
 
-    assert "deterministic_explanation" in body
-    assert "ai" in body
-
-    assert body["deterministic_explanation"]["summary"] == "This URL currently appears low risk."
-    assert body["deterministic_explanation"]["why_flagged"] == "Few malicious patterns were detected."
-    assert body["deterministic_explanation"]["user_action"] == "Proceed carefully."
-    assert body["deterministic_explanation"]["risk"] == "low"
-    assert body["deterministic_explanation"]["final_label"] == "benign"
-    assert body["deterministic_explanation"]["technical_notes"] == ["No major indicators found"]
-
-    assert body["ai"]["summary"] == "This link appears relatively low risk based on the current checks."
-    assert body["ai"]["guidance"] == "Proceed carefully and verify the destination independently."
+    assert body == {
+        "deterministic_explanation": {
+            "summary": "This URL currently appears low risk.",
+            "why_flagged": "Few malicious patterns were detected.",
+            "user_action": "Proceed carefully.",
+            "technical_notes": ["No major indicators found"],
+            "risk": "low",
+            "final_label": "benign",
+        },
+        "ai": {
+            "summary": "This link appears relatively low risk based on the current checks.",
+            "guidance": "Proceed carefully and verify the destination independently.",
+        },
+    }
 
 
 def test_ai_explain_score_validation_error_for_missing_url(monkeypatch):
@@ -410,60 +336,7 @@ def test_ai_explain_score_sets_rate_limit_headers(monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
-        lambda url, ai_model=None: {
-            "url": url,
-            "label": 0,
-            "prob_malicious": 0.11,
-            "threshold": 0.75,
-            "heuristic": {
-                "score": 0.10,
-                "reasons": [],
-            },
-            "final_label": "benign",
-            "risk": "low",
-            "reasons": ["No major indicators found"],
-            "deterministic_explanation": {
-                "summary": "This URL currently appears low risk.",
-                "why_flagged": "Few malicious patterns were detected.",
-                "user_action": "Proceed carefully.",
-                "technical_notes": ["No major indicators found"],
-                "risk": "low",
-                "final_label": "benign",
-            },
-            "ai": {
-                "summary": "This link appears relatively low risk based on the current checks.",
-                "guidance": "Proceed carefully and verify the destination independently.",
-            },
-            "model_meta": {
-                "artifact_version": "1.0",
-                "model_type": "logreg",
-                "trained_at": None,
-                "dataset_name": None,
-                "dataset_source": {},
-                "feature_version": None,
-                "threshold": 0.75,
-                "threshold_source": "metadata",
-                "recommended_threshold": None,
-                "recommended_threshold_source": None,
-                "metrics": {"roc_auc": None, "average_precision": None},
-                "class_labels": {"benign": None, "malicious": None},
-                "class_counts": {
-                    "train_0": None,
-                    "train_1": None,
-                    "test_0": None,
-                    "test_1": None,
-                },
-                "training_params": {},
-                "top_features": [],
-                "training_notes": [],
-                "model_summary": {
-                    "model_type": "logreg",
-                    "dataset_name": None,
-                    "trained_at": None,
-                    "top_features": [],
-                },
-            },
-        },
+        lambda url, ai_model=None: _success_ai_response(),
     )
 
     response = client.post(

@@ -81,6 +81,18 @@ def test_score_url_rejects_invalid_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
+def test_score_urls_requires_api_key(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    response = client.post(
+        "/score-urls",
+        json={"urls": ["https://example.com"]},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Unauthorized"
+
+
 def test_explain_score_requires_api_key(monkeypatch):
     client = _make_client(monkeypatch)
 
@@ -907,6 +919,106 @@ def test_score_url_sets_rate_limit_headers(monkeypatch):
     assert "X-RateLimit-Reset" in response.headers
 
 
+def test_score_urls_sets_rate_limit_headers(monkeypatch):
+    client = _make_client(monkeypatch)
+    _mock_model_meta(monkeypatch)
+
+    monkeypatch.setattr(
+        scoring_service_module.scoring,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.05,
+            "heuristic": {"score": 0.0, "reasons": []},
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": [],
+            "explanation": {
+                "summary": "Looks low risk.",
+                "why_flagged": "",
+                "user_action": "Proceed carefully.",
+                "technical_notes": [],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/score-urls",
+        headers=_auth_headers(),
+        json={"urls": ["https://example.com", "https://example.org"]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(deps_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_explain_score_sets_rate_limit_headers(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    monkeypatch.setattr(
+        scoring_service_module.scoring,
+        "enrich_score",
+        lambda url: {
+            "url": url,
+            "label": 0,
+            "prob_malicious": 0.02,
+            "heuristic": {"score": 0.0, "reasons": []},
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": ["No major indicators found"],
+            "explanation": {
+                "summary": "This URL currently appears low risk.",
+                "why_flagged": "Few malicious patterns were detected.",
+                "user_action": "Proceed carefully.",
+                "technical_notes": ["No major indicators found"],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        },
+    )
+
+    response = client.post(
+        "/explain-score",
+        headers=_auth_headers(),
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(deps_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
+def test_model_info_sets_rate_limit_headers(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    monkeypatch.setattr(
+        scoring_service_module.predict,
+        "get_loaded_model_metadata",
+        lambda: {
+            "model_type": "xgb",
+            "threshold": 0.75,
+            "metrics": {},
+            "top_features": [],
+        },
+    )
+
+    response = client.get(
+        "/model-info",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-RateLimit-Limit"] == str(deps_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Remaining" in response.headers
+    assert "X-RateLimit-Reset" in response.headers
+
+
 def test_score_url_validation_error_for_missing_url(monkeypatch):
     client = _make_client(monkeypatch)
 
@@ -1016,3 +1128,94 @@ def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
         "detail": "Internal scoring error",
         "error_type": "runtime_error",
     }
+
+
+def test_model_info_runtime_error_returns_structured_error(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    def boom():
+        raise RuntimeError("metadata lookup failed")
+
+    monkeypatch.setattr(
+        scoring_service_module.predict,
+        "get_loaded_model_metadata",
+        boom,
+    )
+
+    response = client.get(
+        "/model-info",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Internal scoring error",
+        "error_type": "runtime_error",
+    }
+
+
+def test_model_info_rate_limit_exceeded_returns_429(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    deps_module._rate_limit_store["testclient"] = [
+        9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
+    ]
+
+    response = client.get(
+        "/model-info",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
+
+
+def test_score_url_rate_limit_exceeded_returns_429(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    deps_module._rate_limit_store["testclient"] = [
+        9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
+    ]
+
+    response = client.post(
+        "/score-url",
+        headers=_auth_headers(),
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
+
+
+def test_score_urls_rate_limit_exceeded_returns_429(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    deps_module._rate_limit_store["testclient"] = [
+        9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
+    ]
+
+    response = client.post(
+        "/score-urls",
+        headers=_auth_headers(),
+        json={"urls": ["https://example.com", "https://example.org"]},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
+
+
+def test_explain_score_rate_limit_exceeded_returns_429(monkeypatch):
+    client = _make_client(monkeypatch)
+
+    deps_module._rate_limit_store["testclient"] = [
+        9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
+    ]
+
+    response = client.post(
+        "/explain-score",
+        headers=_auth_headers(),
+        json={"url": "https://example.com"},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Rate limit exceeded. Try again later."

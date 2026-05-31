@@ -39,6 +39,34 @@ from ..services.scoring_service import (
 router = APIRouter()
 
 
+def _build_ai_explain_public_response(result: dict) -> dict:
+    deterministic = result.get("deterministic_explanation") or result.get("explanation") or {}
+    ai_block = result.get("ai") or {}
+
+    if not ai_block:
+        ai_summary = result.get("ai_summary") or result.get("ai_explanation_text") or ""
+        ai_guidance = result.get("ai_guidance") or deterministic.get("user_action") or ""
+        ai_block = {
+            "summary": ai_summary,
+            "guidance": ai_guidance,
+        }
+
+    return {
+        "deterministic_explanation": {
+            "summary": deterministic.get("summary", ""),
+            "why_flagged": deterministic.get("why_flagged", ""),
+            "user_action": deterministic.get("user_action", ""),
+            "technical_notes": deterministic.get("technical_notes", []),
+            "risk": deterministic.get("risk", "low"),
+            "final_label": deterministic.get("final_label", "benign"),
+        },
+        "ai": {
+            "summary": ai_block.get("summary", ""),
+            "guidance": ai_block.get("guidance", ""),
+        },
+    }
+
+
 @router.get("/health", tags=["health"], summary="Health check")
 async def health():
     return {"status": "ok", "version": "0.1.0"}
@@ -276,7 +304,8 @@ async def ai_explain_score(
     body: AIExplainScoreRequest = Body(..., openapi_examples=AI_EXPLAIN_SCORE_REQUEST_EXAMPLES)
 ):
     try:
-        return build_ai_explanation_response(body.url, ai_model=body.ai_model)
+        result = build_ai_explanation_response(body.url, ai_model=body.ai_model)
+        return _build_ai_explain_public_response(result)
     except AIEndpointDisabledError as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
