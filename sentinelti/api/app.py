@@ -4,24 +4,42 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Literal
+from typing import List
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .services import ai_explanations
-from .services.ai_explanations import AIExplanationError, AIModelNotAvailableError
-from .services.ai_score_service import (
+from .schemas import (
+    AIExplainScoreRequest,
+    AIExplainScoreResponse,
+    AIModelsResponse,
+    AI_EXPLAIN_SCORE_DISABLED_EXAMPLE,
+    AI_EXPLAIN_SCORE_ERROR_EXAMPLE,
+    AI_EXPLAIN_SCORE_MODEL_UNAVAILABLE_EXAMPLE,
+    AI_EXPLAIN_SCORE_REQUEST_EXAMPLES,
+    AI_EXPLAIN_SCORE_SUCCESS_EXAMPLE,
+    ExplanationResponse,
+    ModelInfoResponse,
+    RateLimitErrorResponse,
+    ScoreResponse,
+    ScoreUrlRequest,
+    ScoreUrlsRequest,
+    ScoreUrlsResponse,
+    ScoringErrorResponse,
+    UnauthorizedErrorResponse,
+)
+from ..services import ai_explanations
+from ..services.ai_explanations import AIExplanationError, AIModelNotAvailableError
+from ..services.ai_score_service import (
     AIEndpointDisabledError,
     build_ai_explanation_response,
 )
-from .services.scoring_service import (
+from ..services.scoring_service import (
     build_explanation_response,
     build_model_meta_response,
     build_score_response,
@@ -46,57 +64,14 @@ RATE_LIMIT_REQUESTS = 60
 RATE_LIMIT_WINDOW = 60
 _rate_limit_store: dict[str, list[float]] = {}
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
 
-AI_EXPLAIN_SCORE_REQUEST_EXAMPLES = {
-    "benign_example": {
-        "summary": "Generate an AI rewrite for a low-risk URL result",
-        "description": "Example request for a URL that is likely benign.",
-        "value": {"url": "https://example.com"},
-    },
-    "suspicious_example": {
-        "summary": "Generate an AI rewrite for a suspicious login-style URL",
-        "description": "Example request for a URL with phishing-like indicators.",
-        "value": {
-            "url": "https://secure-account-check.example/login/verify",
-            "ai_model": "deepseek-r1:1.5b",
-        },
-    },
-}
+API_KEY_NAME = "X-API-KEY"
+API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
 
-AI_EXPLAIN_SCORE_SUCCESS_EXAMPLE = {
-    "deterministic_explanation": {
-        "summary": "This URL appears suspicious.",
-        "why_flagged": "The URL contains several phishing-like signals and should be treated cautiously.",
-        "user_action": "Avoid entering credentials until the destination is verified independently.",
-        "technical_notes": [
-            "Suspicious login-related tokens detected in path.",
-            "Heuristic score exceeded the suspicious threshold.",
-        ],
-        "risk": "medium",
-        "final_label": "suspicious",
-    },
-    "ai": {
-        "summary": "This link shows some warning signs commonly seen in phishing attempts.",
-        "guidance": "Treat this result as a warning. Double-check the sender and open the site only if you trust it.",
-    },
-}
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-AI_EXPLAIN_SCORE_DISABLED_EXAMPLE = {
-    "detail": "AI-assisted explanations are currently disabled.",
-    "error_type": "ai_disabled",
-}
-
-AI_EXPLAIN_SCORE_ERROR_EXAMPLE = {
-    "detail": "AI provider unavailable",
-    "error_type": "ai_explanation_error",
-}
-
-AI_EXPLAIN_SCORE_MODEL_UNAVAILABLE_EXAMPLE = {
-    "detail": "Requested AI model is not available: missing:model",
-    "error_type": "ai_model_unavailable",
-}
 
 async def check_rate_limit(request: Request, response: Response):
     client_ip = request.client.host if request.client else "unknown"
@@ -127,174 +102,6 @@ async def check_rate_limit(request: Request, response: Response):
     response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
     response.headers["X-RateLimit-Remaining"] = str(remaining - 1 if remaining > 0 else 0)
     response.headers["X-RateLimit-Reset"] = str(int(window_start + RATE_LIMIT_WINDOW - now))
-
-class HeuristicResult(BaseModel):
-    score: float
-    reasons: List[str]
-
-
-class ModelMetricsSummary(BaseModel):
-    roc_auc: float | None = None
-    average_precision: float | None = None
-
-
-class ModelClassLabels(BaseModel):
-    benign: int | None = None
-    malicious: int | None = None
-
-
-class ModelClassCounts(BaseModel):
-    train_0: int | None = None
-    train_1: int | None = None
-    test_0: int | None = None
-    test_1: int | None = None
-
-
-class ModelTopFeature(BaseModel):
-    feature: str
-    importance: float
-
-
-class ModelSummaryResponse(BaseModel):
-    model_type: str
-    dataset_name: str | None = None
-    trained_at: str | None = None
-    top_features: List[ModelTopFeature] = Field(default_factory=list)
-
-
-class ModelMetadataResponse(BaseModel):
-    artifact_version: str | None = None
-    model_type: str
-    trained_at: str | None = None
-    dataset_name: str | None = None
-    dataset_source: Dict[str, Any] = Field(default_factory=dict)
-    feature_version: str | None = None
-    threshold: float
-    threshold_source: Literal["metadata", "env", "default"] | None = None
-    recommended_threshold: float | None = None
-    recommended_threshold_source: str | None = None
-    metrics: ModelMetricsSummary = Field(default_factory=ModelMetricsSummary)
-    class_labels: ModelClassLabels = Field(default_factory=ModelClassLabels)
-    class_counts: ModelClassCounts = Field(default_factory=ModelClassCounts)
-    training_params: Dict[str, Any] = Field(default_factory=dict)
-    training_notes: List[str] = Field(default_factory=list)
-    top_features: List[ModelTopFeature] = Field(default_factory=list)
-    artifact_path: str | None = None
-    model_summary: ModelSummaryResponse
-
-
-class ExplanationResponse(BaseModel):
-    summary: str
-    why_flagged: str
-    user_action: str
-    technical_notes: List[str] = Field(default_factory=list)
-    risk: Literal["low", "medium", "high"]
-    final_label: Literal["benign", "suspicious", "malicious"]
-
-
-class ModelInfoResponse(BaseModel):
-    schema_version: Literal["1.1"] = "1.1"
-    model_meta: ModelMetadataResponse
-
-
-class ScoreResponse(BaseModel):
-    schema_version: Literal["1.2"] = "1.2"
-    url: str
-    label: int
-    prob_malicious: float
-    threshold: float
-    heuristic: HeuristicResult
-    final_label: Literal["benign", "suspicious", "malicious"]
-    risk: Literal["low", "medium", "high"]
-    reasons: List[str]
-    explanation: ExplanationResponse
-    model_meta: ModelMetadataResponse
-
-
-class ScoreUrlRequest(BaseModel):
-    url: str = Field(
-        ...,
-        examples=["https://example.com"],
-        description="URL to score",
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {"url": "https://example.com"},
-                {"url": "https://phishy.example/login"},
-            ]
-        }
-    )
-
-
-class ScoreUrlsRequest(BaseModel):
-    urls: List[str] = Field(
-        ...,
-        examples=[
-            "https://example.com",
-            "https://phishy.example/login",
-        ],
-        description="List of URLs to score",
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "urls": [
-                        "https://example.com",
-                        "https://phishy.example/login",
-                    ]
-                }
-            ]
-        }
-    )
-
-
-class ScoreUrlsResponse(BaseModel):
-    results: List[ScoreResponse]
-
-
-class ScoringErrorResponse(BaseModel):
-    detail: str = Field(
-        ...,
-        description="High-level error message.",
-        examples=["Internal scoring error"],
-    )
-    error_type: str = Field(
-        ...,
-        description="Machine-readable error category.",
-        examples=["runtime_error"],
-    )
-
-
-class UnauthorizedErrorResponse(BaseModel):
-    detail: str = Field(
-        ...,
-        description="Authentication error message.",
-        examples=["Unauthorized"],
-    )
-
-
-class RateLimitErrorResponse(BaseModel):
-    detail: str = Field(
-        ...,
-        description="High-level rate limit error message.",
-        examples=["Rate limit exceeded. Try again later."],
-    )
-
-
-class AIModelsResponse(BaseModel):
-    provider: str
-    default_model: str | None = None
-    models: List[str] = Field(default_factory=list)
-
-
-API_KEY_NAME = "X-API-KEY"
-API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
-
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
 async def require_api_key(api_key: str | None = Depends(api_key_header)):
@@ -339,53 +146,6 @@ class SPAStaticFiles(StaticFiles):
             if ex.status_code == 404:
                 return await super().get_response("index.html", scope)
             raise ex
-
-
-class AIRewriteExplanation(BaseModel):
-    summary: str = Field(
-        ...,
-        description="Short AI-generated summary of the deterministic verdict.",
-    )
-    guidance: str = Field(
-        ...,
-        description=(
-            "Additional user-facing guidance generated by AI. "
-            "Does not change the deterministic label."
-        ),
-    )
-
-
-class AIExplainScoreRequest(BaseModel):
-    url: str = Field(
-        ...,
-        examples=["https://example.com"],
-        description="URL to score and rewrite with AI assistance.",
-    )
-    ai_model: str | None = Field(
-        default=None,
-        examples=["llama3.1:8b", "deepseek-r1:1.5b"],
-        description=(
-            "Optional Ollama model override. If omitted, the configured default "
-            "AI model is used."
-        ),
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {"url": "https://example.com"},
-                {
-                    "url": "https://secure-account-check.example/login/verify",
-                    "ai_model": "deepseek-r1:1.5b",
-                },
-            ]
-        }
-    )
-
-
-class AIExplainScoreResponse(BaseModel):
-    deterministic_explanation: ExplanationResponse
-    ai: AIRewriteExplanation
 
 
 app = FastAPI(
@@ -446,6 +206,7 @@ async def runtime_error_handler(request: Request, exc: RuntimeError):
         },
     )
 
+
 @app.exception_handler(AIModelNotAvailableError)
 async def ai_model_not_available_error_handler(request: Request, exc: AIModelNotAvailableError):
     logger.warning(
@@ -461,6 +222,7 @@ async def ai_model_not_available_error_handler(request: Request, exc: AIModelNot
             "error_type": "ai_model_unavailable",
         },
     )
+
 
 @app.exception_handler(AIExplanationError)
 async def ai_explanation_error_handler(request: Request, exc: AIExplanationError):
@@ -750,4 +512,4 @@ else:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("sentinelti.api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("sentinelti.api.app:app", host="0.0.0.0", port=8000, reload=True)

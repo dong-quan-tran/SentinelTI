@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-import sentinelti.api as api_module
+import sentinelti.api.app as api_module
 import sentinelti.services.ai_score_service as ai_score_service_module
 
 
