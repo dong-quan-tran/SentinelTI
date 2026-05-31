@@ -9,6 +9,8 @@ import pytest
 
 from sentinelti.ml import train as train_module
 
+from sentinelti.ml import evaluate_models as eval_module
+
 
 @pytest.fixture
 def temp_train_dirs(tmp_path, monkeypatch):
@@ -486,3 +488,31 @@ def test_train_url_model_persists_training_notes_in_metrics_and_payload(
 
     payload = json.loads(metrics_files[0].read_text(encoding="utf-8"))
     assert payload["training_notes"] == notes
+
+
+def test_load_url_model_prefers_lgbm_when_available(tmp_path, monkeypatch):
+    # Arrange: create three dummy artifacts so ordering logic is exercised
+    models_dir = tmp_path
+    joblib.dump({"model": "x", "feature_names": []}, models_dir / "url_classifier_xgb.joblib")
+    joblib.dump({"model": "l", "feature_names": []}, models_dir / "url_classifier_logreg.joblib")
+    joblib.dump({"model": "g", "feature_names": []}, models_dir / "url_classifier_lgbm.joblib")
+    monkeypatch.setattr(train_module, "MODELS_DIR", models_dir)
+
+    model, feature_names = train_module.load_url_model(prefer="lgbm")
+    assert model == "g"
+    assert isinstance(feature_names, list)
+
+
+def test_load_url_model_falls_back_when_preferred_missing(tmp_path, monkeypatch):
+    # Only XGB is present; prefer="lgbm" should fall back to xgb
+    models_dir = tmp_path
+    joblib.dump({"model": "x", "feature_names": []}, models_dir / "url_classifier_xgb.joblib")
+    monkeypatch.setattr(train_module, "MODELS_DIR", models_dir)
+
+    model, feature_names = train_module.load_url_model(prefer="lgbm")
+    assert model == "x"
+    assert isinstance(feature_names, list)
+
+def test_evaluate_models_module_imports():
+    # Just ensure module imports; full CLI execution is heavier and can be skipped here.
+    assert hasattr(eval_module, "main")

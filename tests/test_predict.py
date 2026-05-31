@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import joblib
 
 from sentinelti.ml import predict
 
@@ -334,3 +335,40 @@ def test_get_effective_model_metadata_sets_missing_recommended_fields(monkeypatc
     assert metadata["feature_count"] == 2
     assert metadata["recommended_threshold"] is None
     assert metadata["recommended_threshold_source"] is None
+
+import types
+
+from sentinelti.ml import predict as predict_module
+
+
+def test_preferred_model_order_defaults_to_xgb_first():
+    assert predict_module._preferred_model_order("xgb") == ["xgb", "lgbm", "logreg"]
+
+
+def test_preferred_model_order_respects_logreg_and_lgbm():
+    assert predict_module._preferred_model_order("logreg") == ["logreg", "xgb", "lgbm"]
+    assert predict_module._preferred_model_order("lgbm") == ["lgbm", "xgb", "logreg"]
+
+
+def test_get_loaded_model_type_uses_metadata_model_type(tmp_path, monkeypatch):
+    artifact_path = tmp_path / "url_classifier_lgbm.joblib"
+    artifact = {
+        "model": object(),
+        "feature_names": ["f1"],
+        "metadata": {"model_type": "lgbm"},
+    }
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(artifact, artifact_path)
+
+    monkeypatch.setattr(predict_module, "MODELS_DIR", artifact_path.parent)
+
+    model_type = predict_module.get_loaded_model_type(prefer="lgbm")
+    assert model_type == "lgbm"
+
+def test_preferred_model_order_defaults_to_xgb_first():
+    assert predict_module._preferred_model_order("xgb") == ["xgb", "lgbm", "logreg"]
+
+
+def test_preferred_model_order_respects_logreg_and_lgbm():
+    assert predict_module._preferred_model_order("logreg") == ["logreg", "xgb", "lgbm"]
+    assert predict_module._preferred_model_order("lgbm") == ["lgbm", "xgb", "logreg"]
