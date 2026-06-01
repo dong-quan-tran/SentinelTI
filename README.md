@@ -59,10 +59,10 @@ python -m sentinelti.cli --help
 API server:
 
 ```bash
-python -m uvicorn sentinelti.api:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn sentinelti.api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-FastAPI uses response models to validate and shape outbound API data, so the documented response structures below should closely match the application behavior.[web:978]
+FastAPI uses response models to validate and shape outbound API data, so the documented response structures below should closely match the application behavior.
 
 ## CLI usage
 
@@ -141,7 +141,7 @@ If `SENTINELTI_API_KEY` is not set, the app falls back to `"change-me"`, which i
 ### Start the API server
 
 ```bash
-python -m uvicorn sentinelti.api:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn sentinelti.api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Local endpoints:
@@ -418,7 +418,7 @@ curl -X POST "http://localhost:8000/score-urls" \
   -d "{\"urls\": [\"https://example.com\", \"https://phishy.example/login\"]}"
 ```
 
-Example response:
+Example response (truncated to one result for brevity):
 
 ```json
 {
@@ -556,7 +556,8 @@ Example response:
   "final_label": "benign"
 }
 ```
-## AI-assisted explanation
+
+## AI-assisted explanations
 
 SentinelTI includes an optional AI-assisted explanation endpoint:
 
@@ -581,6 +582,11 @@ AI output does **not** change any of the following fields:
 
 The AI summary is advisory only and should be treated as a readability enhancement, not a decision engine.
 
+The AI block may include:
+
+- `summary`: a plain-language restatement of the deterministic explanation
+- `guidance`: user-facing actionable guidance derived from the deterministic verdict
+
 ### Example response
 
 ```json
@@ -602,6 +608,51 @@ The AI summary is advisory only and should be treated as a readability enhanceme
 }
 ```
 
+### AI configuration
+
+AI-assisted explanations are controlled via environment variables:
+
+- `SENTINELTI_AI_ENABLED` — master on/off switch for the AI endpoint (`true` or `false`)
+- `SENTINELTI_AI_PROVIDER` — provider name (currently `ollama` or `none`)
+- `SENTINELTI_OLLAMA_ENDPOINT` — base URL for the Ollama HTTP endpoint, for example:
+
+  ```bash
+  export SENTINELTI_OLLAMA_ENDPOINT="http://localhost:11434"
+  ```
+
+- `SENTINELTI_OLLAMA_MODEL` — default Ollama model name used when the request does not specify `ai_model`, for example:
+
+  ```bash
+  export SENTINELTI_OLLAMA_MODEL="llama3.1:8b"
+  ```
+
+The `GET /ai-models` endpoint returns:
+
+- `provider`: current provider name
+- `default_model`: the configured default model when using Ollama
+- `models`: a list of locally available models when using Ollama
+
+Example request:
+
+```bash
+curl -X GET "http://localhost:8000/ai-models" \
+  -H "X-API-KEY: your-secret-key"
+```
+
+Example response:
+
+```json
+{
+  "provider": "ollama",
+  "default_model": "llama3.1:8b",
+  "models": [
+    "llama3.1:8b",
+    "llama3.1:70b",
+    "codellama:13b"
+  ]
+}
+```
+
 ### AI feature flag
 
 AI-assisted explanations can be enabled or disabled with:
@@ -609,16 +660,23 @@ AI-assisted explanations can be enabled or disabled with:
 - `SENTINELTI_AI_ENABLED=true`
 - `SENTINELTI_AI_ENABLED=false`
 
-When AI is disabled, `POST /ai-explain-score` returns:
+When AI is disabled, `POST /ai-explain-score` short-circuits and returns:
 
 - HTTP `503 Service Unavailable`
 - error payload:
+
   ```json
   {
-    "detail": "AI-assisted explanations are currently disabled.",
+    "detail": "AI explanations are currently disabled.",
     "error_type": "ai_disabled"
   }
   ```
+
+The deterministic scoring endpoints remain fully functional:
+
+- `POST /score-url`
+- `POST /score-urls`
+- `POST /explain-score`
 
 ### AI error behavior
 
@@ -626,6 +684,7 @@ If deterministic scoring succeeds but the AI explanation step fails, the endpoin
 
 - HTTP `500 Internal Server Error`
 - error payload:
+
   ```json
   {
     "detail": "AI provider unavailable",
@@ -633,7 +692,19 @@ If deterministic scoring succeeds but the AI explanation step fails, the endpoin
   }
   ```
 
-This failure does not affect the standard scoring endpoints such as:
+If a client requests an AI model that is not available, the endpoint returns:
+
+- HTTP `422 Unprocessable Entity`
+- error payload:
+
+  ```json
+  {
+    "detail": "Requested AI model is not available",
+    "error_type": "ai_model_unavailable"
+  }
+  ```
+
+These failures do not affect the standard scoring endpoints such as:
 
 - `POST /score-url`
 - `POST /score-urls`
@@ -641,7 +712,7 @@ This failure does not affect the standard scoring endpoints such as:
 
 ## Error responses
 
-SentinelTI returns JSON error responses for common failure modes, and documenting those shapes alongside the happy path makes the API easier to consume.[web:984][web:987]
+SentinelTI returns JSON error responses for common failure modes, and documenting those shapes alongside the happy path makes the API easier to consume.
 
 ### `401 Unauthorized`
 
@@ -657,7 +728,7 @@ Example response:
 
 ### `422 Unprocessable Entity`
 
-Returned when the request body is missing required fields or has the wrong shape. FastAPI’s default validation handler returns a `detail` list describing the validation issue.[web:978][web:991]
+Returned when the request body is missing required fields or has the wrong shape. FastAPI’s default validation handler returns a `detail` list describing the validation issue.
 
 Example response:
 
@@ -673,6 +744,23 @@ Example response:
   ]
 }
 ```
+
+### `429 Too Many Requests`
+
+Protected endpoints are rate-limited per client IP, and exceeding the limit returns:
+
+```json
+{
+  "detail": "Rate limit exceeded. Try again later."
+}
+```
+
+Responses may also include:
+
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset`
+- `Retry-After`
 
 ### `500 Internal Server Error`
 
@@ -708,7 +796,7 @@ SentinelTI uses a few core fields consistently across scoring responses:
 
 ## Model metadata notes
 
-The `model_meta` block now distinguishes between **effective** threshold values used for decisions and **advisory** threshold values included for guidance.
+The `model_meta` block distinguishes between **effective** threshold values used for decisions and **advisory** threshold values included for guidance.
 
 - `threshold`: the effective classification threshold currently used by the application
 - `threshold_source`: where the effective threshold came from, such as `metadata`, `env`, or `default`
@@ -811,13 +899,20 @@ Typical contents include:
 
 ```text
 sentinelti/
-├── api.py
+├── api/
+│   ├── app.py
+│   ├── routes.py
+│   ├── schemas.py
+│   └── dependencies.py
 ├── cli.py
 ├── db.py
 ├── heuristics.py
 ├── scoring.py
 ├── services/
-│   └── model_metadata.py
+│   ├── ai_explanations.py
+│   ├── ai_score_service.py
+│   ├── model_metadata.py
+│   └── scoring_service.py
 ├── feeds/
 │   └── urlhaus.py
 ├── frontend/
@@ -835,12 +930,17 @@ data/
 
 High-level responsibilities:
 
-- `sentinelti/api.py` — FastAPI application and response models
+- `sentinelti/api/app.py` — FastAPI application setup (app instance, middleware, exception handlers, SPA mounting)
+- `sentinelti/api/routes.py` — HTTP routes for health, scoring, model-info, and AI-assisted explanations
+- `sentinelti/api/schemas.py` — Pydantic request/response models and OpenAPI examples
+- `sentinelti/api/dependencies.py` — API key authentication and rate limiting
 - `sentinelti/cli.py` — CLI entry point
 - `sentinelti/db.py` — SQLite initialization and connection logic
 - `sentinelti/heuristics.py` — heuristic URL analysis
 - `sentinelti/scoring.py` — central score enrichment logic
 - `sentinelti/services/model_metadata.py` — model metadata normalization and shaping
+- `sentinelti/services/ai_explanations.py` — AI provider abstraction and prompt/response handling
+- `sentinelti/services/ai_score_service.py` — glue between deterministic scoring and AI explanations
 - `sentinelti/feeds/urlhaus.py` — URLhaus ingestion helpers
 - `sentinelti/ml/` — training, prediction, and model-service utilities
 - `tests/` — pytest suite
@@ -858,6 +958,7 @@ Run focused files:
 
 ```bash
 python -m pytest tests/test_api.py -q
+python -m pytest tests/test_api_ai.py -q
 python -m pytest tests/test_model_metadata_service.py -q
 ```
 
@@ -868,7 +969,7 @@ Near-term planned improvements:
 - stronger structured API error coverage
 - clearer metadata normalization contracts
 - additional frontend polish around metadata and explanation states
-- optional AI-assisted explanation and investigation features layered on top of deterministic scoring
+- richer AI-assisted explanation and investigation features layered on top of deterministic scoring
 
 ## Author
 
@@ -878,4 +979,3 @@ SentinelTI is developed and maintained by:
 - Role: Owner / Collaborator
 - Email: [dxt9721@mavs.uta.edu](mailto:dxt9721@mavs.uta.edu)
 - GitHub: [dong-quan-tran](https://github.com/dong-quan-tran)
-
