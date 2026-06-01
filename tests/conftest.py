@@ -1,66 +1,78 @@
-import pytest
+from __future__ import annotations
 
-from sentinelti import scoring
+import pytest
+from fastapi.testclient import TestClient
+
+from sentinelti.api import app as fastapi_app
+import sentinelti.api.dependencies as deps_module
 from sentinelti import cli
+from sentinelti import scoring
+
+
+TEST_API_KEY = "test-key"
+
+
+@pytest.fixture
+def api_key(monkeypatch) -> str:
+    monkeypatch.setattr(deps_module, "API_KEY", TEST_API_KEY)
+    return TEST_API_KEY
+
+
+@pytest.fixture
+def client(api_key) -> TestClient:
+    deps_module._rate_limit_store.clear()
+    return TestClient(fastapi_app)
+
+
+@pytest.fixture
+def auth_headers(api_key) -> dict[str, str]:
+    return {"X-API-KEY": api_key}
 
 
 @pytest.fixture
 def fake_ml_score(monkeypatch):
-    """
-    Patch sentinelti.scoring.ml_score_url with configurable fake output.
-
-    Usage:
-        def test_something(fake_ml_score):
-            fake_ml_score(prob=0.20, label=0)
-            result = enrich_score("http://example.com")
-    """
-    def _apply(prob: float = 0.10, label: int = 0):
-        def fake_ml_score_url(url: str) -> dict:
+    def _apply(*, prob: float = 0.05, label: int = 0):
+        def _fake_ml_score_url(url: str) -> dict:
             return {
                 "url": url,
                 "label": label,
                 "prob_malicious": prob,
             }
 
-        monkeypatch.setattr(scoring, "ml_score_url", fake_ml_score_url)
-        return fake_ml_score_url
+        monkeypatch.setattr(scoring, "ml_score_url", _fake_ml_score_url)
 
     return _apply
 
 
 @pytest.fixture
 def fake_cli_enrich_score(monkeypatch):
-    """
-    Patch sentinelti.cli.enrich_score with configurable fake output.
+    def _apply(result: dict | None = None):
+        default = {
+            "url": "https://example.com",
+            "label": 0,
+            "prob_malicious": 0.05,
+            "final_label": "benign",
+            "risk": "low",
+            "reasons": [],
+            "heuristic": {
+                "score": 0.0,
+                "reasons": [],
+            },
+            "explanation": {
+                "summary": "This URL currently appears low risk.",
+                "why_flagged": "Few malicious patterns were detected.",
+                "user_action": "Proceed carefully.",
+                "technical_notes": [],
+                "risk": "low",
+                "final_label": "benign",
+            },
+        }
 
-    Usage:
-        def test_cli(fake_cli_enrich_score):
-            fake_cli_enrich_score()
-            ...
-    """
-    def _apply(
-        *,
-        label: int = 0,
-        prob_malicious: float = 0.10,
-        final_label: str = "benign",
-        risk: str = "low",
-        reasons: list[str] | None = None,
-        heuristic: dict | None = None,
-        infrastructure: dict | None = None,
-    ):
-        def fake_enrich_score(url: str) -> dict:
-            return {
-                "url": url,
-                "label": label,
-                "prob_malicious": prob_malicious,
-                "final_label": final_label,
-                "risk": risk,
-                "reasons": reasons or [],
-                "heuristic": heuristic or {},
-                "infrastructure": infrastructure or {},
-            }
+        def _fake_enrich_score(url: str) -> dict:
+            merged = {**default, **(result or {})}
+            merged["url"] = url
+            return merged
 
-        monkeypatch.setattr(cli, "enrich_score", fake_enrich_score)
-        return fake_enrich_score
+        monkeypatch.setattr(cli, "enrich_score", _fake_enrich_score)
 
     return _apply

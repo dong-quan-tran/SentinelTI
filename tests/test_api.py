@@ -1,20 +1,7 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
-from sentinelti.api import app as fastapi_app
 import sentinelti.api.dependencies as deps_module
 import sentinelti.services.scoring_service as scoring_service_module
-
-
-def _make_client(monkeypatch) -> TestClient:
-    monkeypatch.setattr(deps_module, "API_KEY", "test-key")
-    deps_module._rate_limit_store.clear()
-    return TestClient(fastapi_app)
-
-
-def _auth_headers() -> dict[str, str]:
-    return {"X-API-KEY": "test-key"}
 
 
 def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
@@ -45,9 +32,7 @@ def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
     )
 
 
-def test_health_returns_ok(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_health_returns_ok(client):
     response = client.get("/health")
 
     assert response.status_code == 200
@@ -56,9 +41,7 @@ def test_health_returns_ok(monkeypatch):
     assert "version" in body
 
 
-def test_score_url_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_requires_api_key(client):
     response = client.post(
         "/score-url",
         json={"url": "https://example.com"},
@@ -68,9 +51,7 @@ def test_score_url_requires_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_score_url_rejects_invalid_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_rejects_invalid_api_key(client):
     response = client.post(
         "/score-url",
         headers={"X-API-KEY": "wrong-key"},
@@ -81,9 +62,7 @@ def test_score_url_rejects_invalid_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_score_urls_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_urls_requires_api_key(client):
     response = client.post(
         "/score-urls",
         json={"urls": ["https://example.com"]},
@@ -93,9 +72,7 @@ def test_score_urls_requires_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_explain_score_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_explain_score_requires_api_key(client):
     response = client.post(
         "/explain-score",
         json={"url": "https://example.com"},
@@ -105,17 +82,14 @@ def test_explain_score_requires_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_model_info_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_requires_api_key(client):
     response = client.get("/model-info")
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_score_url_returns_typed_response_with_explanation(monkeypatch):
-    client = _make_client(monkeypatch)
+def test_score_url_returns_typed_response_with_explanation(client, auth_headers, monkeypatch):
     _mock_model_meta(monkeypatch, model_type="xgb")
 
     monkeypatch.setattr(
@@ -148,7 +122,7 @@ def test_score_url_returns_typed_response_with_explanation(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://phishy.example/login"},
     )
 
@@ -183,8 +157,7 @@ def test_score_url_returns_typed_response_with_explanation(monkeypatch):
     assert body["model_meta"]["metrics"]["average_precision"] == 0.998
 
 
-def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
-    client = _make_client(monkeypatch)
+def test_score_url_response_contains_expected_top_level_keys(client, auth_headers, monkeypatch):
     _mock_model_meta(monkeypatch)
 
     monkeypatch.setattr(
@@ -211,7 +184,7 @@ def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com/login"},
     )
 
@@ -233,8 +206,7 @@ def test_score_url_response_contains_expected_top_level_keys(monkeypatch):
     }
 
 
-def test_score_urls_returns_results_list_with_explanations(monkeypatch):
-    client = _make_client(monkeypatch)
+def test_score_urls_returns_results_list_with_explanations(client, auth_headers, monkeypatch):
     _mock_model_meta(monkeypatch, model_type="logreg")
 
     monkeypatch.setattr(
@@ -264,7 +236,7 @@ def test_score_urls_returns_results_list_with_explanations(monkeypatch):
 
     response = client.post(
         "/score-urls",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"urls": ["https://example.com", "https://example.org"]},
     )
 
@@ -281,9 +253,7 @@ def test_score_urls_returns_results_list_with_explanations(monkeypatch):
     assert body["results"][1]["url"] == "https://example.org"
 
 
-def test_explain_score_returns_explanation_response(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_explain_score_returns_explanation_response(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.scoring,
         "enrich_score",
@@ -317,7 +287,7 @@ def test_explain_score_returns_explanation_response(monkeypatch):
 
     response = client.post(
         "/explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://www.google.com/"},
     )
 
@@ -332,9 +302,7 @@ def test_explain_score_returns_explanation_response(monkeypatch):
     assert len(body["technical_notes"]) == 2
 
 
-def test_model_info_returns_training_notes(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_returns_training_notes(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -355,7 +323,7 @@ def test_model_info_returns_training_notes(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -365,9 +333,7 @@ def test_model_info_returns_training_notes(monkeypatch):
     ]
 
 
-def test_model_info_defaults_training_notes_to_empty_list(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_defaults_training_notes_to_empty_list(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -380,7 +346,7 @@ def test_model_info_defaults_training_notes_to_empty_list(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -388,9 +354,7 @@ def test_model_info_defaults_training_notes_to_empty_list(monkeypatch):
     assert body["model_meta"]["training_notes"] == []
 
 
-def test_model_info_filters_invalid_training_notes(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_filters_invalid_training_notes(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -411,7 +375,7 @@ def test_model_info_filters_invalid_training_notes(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -422,9 +386,7 @@ def test_model_info_filters_invalid_training_notes(monkeypatch):
     ]
 
 
-def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_includes_training_notes_in_model_meta(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -465,7 +427,7 @@ def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -474,9 +436,7 @@ def test_score_url_includes_training_notes_in_model_meta(monkeypatch):
     assert body["model_meta"]["training_notes"] == ["logreg did not fully converge"]
 
 
-def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_uses_safe_defaults_for_partial_metadata(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -488,7 +448,7 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -517,8 +477,7 @@ def test_model_info_uses_safe_defaults_for_partial_metadata(monkeypatch):
     assert body["model_meta"]["training_params"] == {}
 
 
-def test_score_url_includes_top_features_in_model_meta(monkeypatch):
-    client = _make_client(monkeypatch)
+def test_score_url_includes_top_features_in_model_meta(client, auth_headers, monkeypatch):
     _mock_model_meta(monkeypatch, model_type="xgb")
 
     monkeypatch.setattr(
@@ -548,7 +507,7 @@ def test_score_url_includes_top_features_in_model_meta(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://phishy.example/login"},
     )
 
@@ -560,9 +519,7 @@ def test_score_url_includes_top_features_in_model_meta(monkeypatch):
     ]
 
 
-def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_defaults_top_features_to_empty_list(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -574,7 +531,7 @@ def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -582,9 +539,7 @@ def test_model_info_defaults_top_features_to_empty_list(monkeypatch):
     assert body["model_meta"]["top_features"] == []
 
 
-def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_filters_invalid_top_feature_entries(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -603,7 +558,7 @@ def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -614,9 +569,7 @@ def test_model_info_filters_invalid_top_feature_entries(monkeypatch):
     ]
 
 
-def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_returns_threshold_source_from_metadata(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -630,7 +583,7 @@ def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -639,9 +592,7 @@ def test_model_info_returns_threshold_source_from_metadata(monkeypatch):
     assert body["model_meta"]["threshold_source"] == "env"
 
 
-def test_model_info_returns_recommended_threshold_fields(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_returns_recommended_threshold_fields(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -658,7 +609,7 @@ def test_model_info_returns_recommended_threshold_fields(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -667,9 +618,7 @@ def test_model_info_returns_recommended_threshold_fields(monkeypatch):
     assert body["model_meta"]["recommended_threshold_source"] == "artifact"
 
 
-def test_model_info_includes_recommended_threshold(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_includes_recommended_threshold(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -696,7 +645,7 @@ def test_model_info_includes_recommended_threshold(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -711,9 +660,7 @@ def test_model_info_includes_recommended_threshold(monkeypatch):
     assert body["model_meta"]["feature_version"] == "v2"
 
 
-def test_model_info_includes_model_summary(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_includes_model_summary(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -734,7 +681,7 @@ def test_model_info_includes_model_summary(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -751,9 +698,7 @@ def test_model_info_includes_model_summary(monkeypatch):
     ]
 
 
-def test_score_url_includes_model_summary(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_includes_model_summary(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -794,7 +739,7 @@ def test_score_url_includes_model_summary(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -811,9 +756,7 @@ def test_score_url_includes_model_summary(monkeypatch):
     ]
 
 
-def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_uses_effective_threshold_not_recommended(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -865,7 +808,7 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "http://example.com"},
     )
 
@@ -881,8 +824,7 @@ def test_score_url_uses_effective_threshold_not_recommended(monkeypatch):
     assert body["model_meta"]["recommended_threshold_source"] == "calibrated-grid"
 
 
-def test_score_url_sets_rate_limit_headers(monkeypatch):
-    client = _make_client(monkeypatch)
+def test_score_url_sets_rate_limit_headers(client, auth_headers, monkeypatch):
     _mock_model_meta(monkeypatch)
 
     monkeypatch.setattr(
@@ -909,7 +851,7 @@ def test_score_url_sets_rate_limit_headers(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -919,8 +861,7 @@ def test_score_url_sets_rate_limit_headers(monkeypatch):
     assert "X-RateLimit-Reset" in response.headers
 
 
-def test_score_urls_sets_rate_limit_headers(monkeypatch):
-    client = _make_client(monkeypatch)
+def test_score_urls_sets_rate_limit_headers(client, auth_headers, monkeypatch):
     _mock_model_meta(monkeypatch)
 
     monkeypatch.setattr(
@@ -947,7 +888,7 @@ def test_score_urls_sets_rate_limit_headers(monkeypatch):
 
     response = client.post(
         "/score-urls",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"urls": ["https://example.com", "https://example.org"]},
     )
 
@@ -957,9 +898,7 @@ def test_score_urls_sets_rate_limit_headers(monkeypatch):
     assert "X-RateLimit-Reset" in response.headers
 
 
-def test_explain_score_sets_rate_limit_headers(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_explain_score_sets_rate_limit_headers(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.scoring,
         "enrich_score",
@@ -984,7 +923,7 @@ def test_explain_score_sets_rate_limit_headers(monkeypatch):
 
     response = client.post(
         "/explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -994,9 +933,7 @@ def test_explain_score_sets_rate_limit_headers(monkeypatch):
     assert "X-RateLimit-Reset" in response.headers
 
 
-def test_model_info_sets_rate_limit_headers(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_sets_rate_limit_headers(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         scoring_service_module.predict,
         "get_loaded_model_metadata",
@@ -1010,7 +947,7 @@ def test_model_info_sets_rate_limit_headers(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -1019,12 +956,10 @@ def test_model_info_sets_rate_limit_headers(monkeypatch):
     assert "X-RateLimit-Reset" in response.headers
 
 
-def test_score_url_validation_error_for_missing_url(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_validation_error_for_missing_url(client, auth_headers):
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={},
     )
 
@@ -1035,12 +970,10 @@ def test_score_url_validation_error_for_missing_url(monkeypatch):
     assert body["detail"][0]["type"]
 
 
-def test_score_urls_validation_error_for_missing_urls(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_urls_validation_error_for_missing_urls(client, auth_headers):
     response = client.post(
         "/score-urls",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={},
     )
 
@@ -1051,12 +984,10 @@ def test_score_urls_validation_error_for_missing_urls(monkeypatch):
     assert body["detail"][0]["type"]
 
 
-def test_explain_score_validation_error_for_missing_url(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_explain_score_validation_error_for_missing_url(client, auth_headers):
     response = client.post(
         "/explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={},
     )
 
@@ -1067,9 +998,7 @@ def test_explain_score_validation_error_for_missing_url(monkeypatch):
     assert body["detail"][0]["type"]
 
 
-def test_score_url_runtime_error_returns_structured_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_runtime_error_returns_structured_error(client, auth_headers, monkeypatch):
     def boom(_url):
         raise RuntimeError("feature extraction failed")
 
@@ -1077,7 +1006,7 @@ def test_score_url_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -1088,9 +1017,7 @@ def test_score_url_runtime_error_returns_structured_error(monkeypatch):
     }
 
 
-def test_score_urls_runtime_error_returns_structured_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_urls_runtime_error_returns_structured_error(client, auth_headers, monkeypatch):
     def boom(_url):
         raise RuntimeError("feature extraction failed")
 
@@ -1098,7 +1025,7 @@ def test_score_urls_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.post(
         "/score-urls",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"urls": ["https://example.com", "https://example.org"]},
     )
 
@@ -1109,9 +1036,7 @@ def test_score_urls_runtime_error_returns_structured_error(monkeypatch):
     }
 
 
-def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_explain_score_runtime_error_returns_structured_error(client, auth_headers, monkeypatch):
     def boom(_url):
         raise RuntimeError("explanation failed")
 
@@ -1119,7 +1044,7 @@ def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.post(
         "/explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -1130,9 +1055,7 @@ def test_explain_score_runtime_error_returns_structured_error(monkeypatch):
     }
 
 
-def test_model_info_runtime_error_returns_structured_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_runtime_error_returns_structured_error(client, auth_headers, monkeypatch):
     def boom():
         raise RuntimeError("metadata lookup failed")
 
@@ -1144,7 +1067,7 @@ def test_model_info_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 500
@@ -1154,32 +1077,28 @@ def test_model_info_runtime_error_returns_structured_error(monkeypatch):
     }
 
 
-def test_model_info_rate_limit_exceeded_returns_429(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_model_info_rate_limit_exceeded_returns_429(client, auth_headers):
     deps_module._rate_limit_store["testclient"] = [
         9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
     ]
 
     response = client.get(
         "/model-info",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 429
     assert response.json()["detail"] == "Rate limit exceeded. Try again later."
 
 
-def test_score_url_rate_limit_exceeded_returns_429(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_url_rate_limit_exceeded_returns_429(client, auth_headers):
     deps_module._rate_limit_store["testclient"] = [
         9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
     ]
 
     response = client.post(
         "/score-url",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -1187,16 +1106,14 @@ def test_score_url_rate_limit_exceeded_returns_429(monkeypatch):
     assert response.json()["detail"] == "Rate limit exceeded. Try again later."
 
 
-def test_score_urls_rate_limit_exceeded_returns_429(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_score_urls_rate_limit_exceeded_returns_429(client, auth_headers):
     deps_module._rate_limit_store["testclient"] = [
         9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
     ]
 
     response = client.post(
         "/score-urls",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"urls": ["https://example.com", "https://example.org"]},
     )
 
@@ -1204,16 +1121,14 @@ def test_score_urls_rate_limit_exceeded_returns_429(monkeypatch):
     assert response.json()["detail"] == "Rate limit exceeded. Try again later."
 
 
-def test_explain_score_rate_limit_exceeded_returns_429(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_explain_score_rate_limit_exceeded_returns_429(client, auth_headers):
     deps_module._rate_limit_store["testclient"] = [
         9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
     ]
 
     response = client.post(
         "/explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 

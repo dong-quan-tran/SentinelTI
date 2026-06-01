@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
-from sentinelti.api import app as fastapi_app
 import sentinelti.api.dependencies as deps_module
 import sentinelti.api.routes as routes_module
 import sentinelti.services.ai_explanations as ai_explanations_module
@@ -11,16 +8,6 @@ from sentinelti.services.ai_explanations import (
     AIModelNotAvailableError,
 )
 from sentinelti.services.ai_score_service import AIEndpointDisabledError
-
-
-def _make_client(monkeypatch, *, api_key: str = "test-key") -> TestClient:
-    monkeypatch.setattr(deps_module, "API_KEY", api_key)
-    deps_module._rate_limit_store.clear()
-    return TestClient(fastapi_app)
-
-
-def _auth_headers(api_key: str = "test-key") -> dict[str, str]:
-    return {"X-API-KEY": api_key}
 
 
 def _success_ai_response(
@@ -50,18 +37,14 @@ def _success_ai_response(
     }
 
 
-def test_ai_models_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_models_requires_api_key(client):
     response = client.get("/ai-models")
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_ai_explain_score_requires_api_key(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_requires_api_key(client):
     response = client.post(
         "/ai-explain-score",
         json={"url": "https://example.com"},
@@ -71,9 +54,7 @@ def test_ai_explain_score_requires_api_key(monkeypatch):
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_ai_models_returns_provider_and_models_for_ollama(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_models_returns_provider_and_models_for_ollama(client, auth_headers, monkeypatch):
     monkeypatch.setattr(ai_explanations_module, "get_ai_provider_name", lambda: "ollama")
     monkeypatch.setattr(ai_explanations_module, "get_ollama_model", lambda: "llama3.1:8b")
     monkeypatch.setattr(
@@ -84,7 +65,7 @@ def test_ai_models_returns_provider_and_models_for_ollama(monkeypatch):
 
     response = client.get(
         "/ai-models",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -96,14 +77,12 @@ def test_ai_models_returns_provider_and_models_for_ollama(monkeypatch):
     }
 
 
-def test_ai_models_returns_empty_models_for_non_ollama_provider(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_models_returns_empty_models_for_non_ollama_provider(client, auth_headers, monkeypatch):
     monkeypatch.setattr(ai_explanations_module, "get_ai_provider_name", lambda: "openai")
 
     response = client.get(
         "/ai-models",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -115,9 +94,7 @@ def test_ai_models_returns_empty_models_for_non_ollama_provider(monkeypatch):
     }
 
 
-def test_ai_models_runtime_error_returns_structured_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_models_runtime_error_returns_structured_error(client, auth_headers, monkeypatch):
     def boom():
         raise RuntimeError("provider lookup failed")
 
@@ -125,7 +102,7 @@ def test_ai_models_runtime_error_returns_structured_error(monkeypatch):
 
     response = client.get(
         "/ai-models",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 500
@@ -135,9 +112,7 @@ def test_ai_models_runtime_error_returns_structured_error(monkeypatch):
     }
 
 
-def test_ai_explain_score_returns_combined_response(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_returns_combined_response(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
@@ -161,7 +136,7 @@ def test_ai_explain_score_returns_combined_response(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={
             "url": "https://phishy.example/login",
             "ai_model": "llama3.1:8b",
@@ -193,9 +168,7 @@ def test_ai_explain_score_returns_combined_response(monkeypatch):
     }
 
 
-def test_ai_explain_score_supports_missing_ai_model_override(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_supports_missing_ai_model_override(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
@@ -204,7 +177,7 @@ def test_ai_explain_score_supports_missing_ai_model_override(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -227,12 +200,10 @@ def test_ai_explain_score_supports_missing_ai_model_override(monkeypatch):
     }
 
 
-def test_ai_explain_score_validation_error_for_missing_url(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_validation_error_for_missing_url(client, auth_headers):
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={},
     )
 
@@ -243,9 +214,7 @@ def test_ai_explain_score_validation_error_for_missing_url(monkeypatch):
     assert body["detail"][0]["type"]
 
 
-def test_ai_explain_score_returns_503_when_ai_disabled(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_returns_503_when_ai_disabled(client, auth_headers, monkeypatch):
     def disabled(_url, ai_model=None):
         raise AIEndpointDisabledError("AI-assisted explanations are disabled")
 
@@ -253,7 +222,7 @@ def test_ai_explain_score_returns_503_when_ai_disabled(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -264,9 +233,7 @@ def test_ai_explain_score_returns_503_when_ai_disabled(monkeypatch):
     }
 
 
-def test_ai_explain_score_returns_422_for_unavailable_model(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_returns_422_for_unavailable_model(client, auth_headers, monkeypatch):
     def unavailable(_url, ai_model=None):
         raise AIModelNotAvailableError("Requested AI model is not available")
 
@@ -274,7 +241,7 @@ def test_ai_explain_score_returns_422_for_unavailable_model(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={
             "url": "https://example.com",
             "ai_model": "missing-model",
@@ -288,9 +255,7 @@ def test_ai_explain_score_returns_422_for_unavailable_model(monkeypatch):
     }
 
 
-def test_ai_explain_score_returns_500_for_ai_explanation_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_returns_500_for_ai_explanation_error(client, auth_headers, monkeypatch):
     def broken(_url, ai_model=None):
         raise AIExplanationError("AI generation failed")
 
@@ -298,7 +263,7 @@ def test_ai_explain_score_returns_500_for_ai_explanation_error(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -309,9 +274,7 @@ def test_ai_explain_score_returns_500_for_ai_explanation_error(monkeypatch):
     }
 
 
-def test_ai_explain_score_returns_500_for_runtime_error(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_returns_500_for_runtime_error(client, auth_headers, monkeypatch):
     def boom(_url, ai_model=None):
         raise RuntimeError("unexpected failure")
 
@@ -319,7 +282,7 @@ def test_ai_explain_score_returns_500_for_runtime_error(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -330,9 +293,7 @@ def test_ai_explain_score_returns_500_for_runtime_error(monkeypatch):
     }
 
 
-def test_ai_explain_score_sets_rate_limit_headers(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_sets_rate_limit_headers(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
@@ -341,7 +302,7 @@ def test_ai_explain_score_sets_rate_limit_headers(monkeypatch):
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
@@ -351,32 +312,28 @@ def test_ai_explain_score_sets_rate_limit_headers(monkeypatch):
     assert "X-RateLimit-Reset" in response.headers
 
 
-def test_ai_models_rate_limit_exceeded_returns_429(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_models_rate_limit_exceeded_returns_429(client, auth_headers):
     deps_module._rate_limit_store["testclient"] = [
         9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
     ]
 
     response = client.get(
         "/ai-models",
-        headers=_auth_headers(),
+        headers=auth_headers,
     )
 
     assert response.status_code == 429
     assert response.json()["detail"] == "Rate limit exceeded. Try again later."
 
 
-def test_ai_explain_score_rate_limit_exceeded_returns_429(monkeypatch):
-    client = _make_client(monkeypatch)
-
+def test_ai_explain_score_rate_limit_exceeded_returns_429(client, auth_headers):
     deps_module._rate_limit_store["testclient"] = [
         9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
     ]
 
     response = client.post(
         "/ai-explain-score",
-        headers=_auth_headers(),
+        headers=auth_headers,
         json={"url": "https://example.com"},
     )
 
