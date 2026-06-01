@@ -269,6 +269,7 @@ def test_get_ai_provider_uses_model_override(monkeypatch):
 
 def test_ollama_provider_returns_summary_and_guidance(monkeypatch, score_payload):
     captured = {}
+    json_module = json
 
     def fake_post(url, json=None, timeout=None):
         captured["url"] = url
@@ -286,8 +287,6 @@ def test_ollama_provider_returns_summary_and_guidance(monkeypatch, score_payload
                 }
             }
         )
-
-    import json as json_module
 
     monkeypatch.setattr(
         "sentinelti.services.ai_explanations.requests.post",
@@ -399,9 +398,9 @@ def test_ollama_provider_raises_when_message_content_is_not_valid_json(
 
 
 def test_ollama_provider_raises_when_summary_missing(monkeypatch, score_payload):
-    def fake_post(url, json=None, timeout=None):
-        import json as json_module
+    json_module = json
 
+    def fake_post(url, json=None, timeout=None):
         return MockResponse(
             json_data={
                 "message": {
@@ -429,9 +428,9 @@ def test_ollama_provider_raises_when_summary_missing(monkeypatch, score_payload)
 
 
 def test_ollama_provider_raises_when_guidance_missing(monkeypatch, score_payload):
-    def fake_post(url, json=None, timeout=None):
-        import json as json_module
+    json_module = json
 
+    def fake_post(url, json=None, timeout=None):
         return MockResponse(
             json_data={
                 "message": {
@@ -457,8 +456,9 @@ def test_ollama_provider_raises_when_guidance_missing(monkeypatch, score_payload
     with pytest.raises(AIExplanationError, match="missing valid guidance"):
         provider.generate(score_payload)
 
+
 def test_list_ollama_models_returns_sorted_unique_names(monkeypatch):
-    class MockResponse:
+    class _MockResponse:
         def raise_for_status(self):
             return None
 
@@ -474,7 +474,7 @@ def test_list_ollama_models_returns_sorted_unique_names(monkeypatch):
     monkeypatch.setattr(
         ai_explanations_module.requests,
         "get",
-        lambda url, timeout=None: MockResponse(),
+        lambda url, timeout=None: _MockResponse(),
     )
 
     result = ai_explanations_module.list_ollama_models()
@@ -493,7 +493,7 @@ def test_list_ollama_models_raises_on_request_failure(monkeypatch):
 
 
 def test_list_ollama_models_raises_on_invalid_json(monkeypatch):
-    class MockResponse:
+    class _MockResponse:
         def raise_for_status(self):
             return None
 
@@ -503,7 +503,7 @@ def test_list_ollama_models_raises_on_invalid_json(monkeypatch):
     monkeypatch.setattr(
         ai_explanations_module.requests,
         "get",
-        lambda url, timeout=None: MockResponse(),
+        lambda url, timeout=None: _MockResponse(),
     )
 
     with pytest.raises(AIExplanationError, match="invalid JSON"):
@@ -511,7 +511,7 @@ def test_list_ollama_models_raises_on_invalid_json(monkeypatch):
 
 
 def test_list_ollama_models_raises_when_models_missing(monkeypatch):
-    class MockResponse:
+    class _MockResponse:
         def raise_for_status(self):
             return None
 
@@ -521,7 +521,7 @@ def test_list_ollama_models_raises_when_models_missing(monkeypatch):
     monkeypatch.setattr(
         ai_explanations_module.requests,
         "get",
-        lambda url, timeout=None: MockResponse(),
+        lambda url, timeout=None: _MockResponse(),
     )
 
     with pytest.raises(AIExplanationError, match="missing models"):
