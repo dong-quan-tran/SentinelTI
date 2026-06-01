@@ -1,139 +1,106 @@
-AI foundation & provider strategy
-Most of this is done: you now have env-driven AI enablement, provider selection, and a stub provider with clear contracts and tests. What’s left is mostly “polish and hardening”:
+PROJECT_IMPROVEMENT_PLAN
+This project is functionally complete and all current tests are passing. The items below are not required for the current release; they represent a future roadmap for improving model quality, operational maturity, and user experience.
 
-Consider adding a simple health-check path for AI providers (e.g., a lightweight “ping” call for external models or a dry-run prompt for local ones) and surfacing that in /ai-models.
+Future roadmap
+1. Model improvement and classifier accuracy
+Future work can focus on improving the phishing URL classifier beyond the current production-ready baseline.
 
-Decide whether you want a second non-Ollama provider (e.g., a hosted API) and, if so, define the minimal adapter interface and env wiring for it.
+Planned improvements include:
 
-Document provider configuration more explicitly in README/OpenAPI (expected env vars, failure modes, and how to run with AI disabled vs stub vs real).
+Expanding dataset freshness and coverage, especially with newer malicious URL samples and better-balanced benign examples.
 
-AI API implementation & testing
-You’ve already added strong unit tests for prompt building, error handling, and the /ai-explain-score route, including rate-limit headers and OpenAPI schemas.
+Adding stronger lexical, structural, and host-derived features, such as entropy, suspicious token patterns, domain-depth signals, and reputation-oriented enrichments.
 
-Remaining:
+Running more systematic model comparisons across Logistic Regression, XGBoost, and LightGBM using metrics such as ROC AUC, average precision, recall, and false negatives.
 
-Add one or two “edge-case” AI tests:
+Improving generalization by validating on harder splits that reduce memorization of duplicate or near-duplicate URLs.
 
-deterministic payloads with unusual shapes (very long reasons list, missing optional fields) to ensure AI prompt construction still behaves and errors are clear.
+Exploring better probability calibration so reported malicious probabilities are more trustworthy and more useful for threshold-based decisions.
 
-explicit test that ai_enabled=False always returns the AI-disabled error shape and never calls a provider.
+2. Calibration and threshold selection
+The current system supports thresholded predictions, but future iterations can make threshold selection more principled.
 
-Add a very small “negative” test to assert that AI cannot change final_label, risk, or threshold_source on the API response (even if provider output is malicious or malformed).
+Planned improvements include:
 
-Scoring & model architecture
-You’ve made the big structural step: unified training pipeline, multiple models (logreg, XGBoost, LightGBM), richer metadata, and loaders that understand model types and thresholds.
+Adding an optional calibration stage during training, such as Platt scaling or isotonic calibration.
 
-Still to do to really “wrap it up”:
+Measuring calibration quality with metrics such as Brier score and reliability summaries.
 
-Decide the default production model
+Replacing static default thresholds with thresholds selected from validation results.
 
-Run your comparison script and pick a default among logreg, xgb, and lgbm based on ROC AUC, average precision, and runtime.
+Recording the recommended threshold and threshold-selection rationale directly in model artifact metadata.
 
-Update any default prefer="xgb" choices (in API/metadata service) if LightGBM or another model wins.
+Keeping environment-based threshold overrides only as an advanced operational control.
 
-Probability calibration & thresholds (the big missing piece)
+3. Model lifecycle and metadata
+The model pipeline now supports multiple model types and richer metadata, but lifecycle management can be improved further over time.
 
-Add an optional calibration step in training (e.g., --calibrate platt / --calibrate isotonic) using a held-out calibration split.
+Planned improvements include:
 
-Write calibration metrics (e.g., Brier score and at least a summary of reliability curve bins) into the artifact metadata.
+Adding a small CLI or helper script to print the active model’s metadata, including model type, feature version, threshold, and evaluation metrics.
 
-Replace the hardcoded DEFAULT_THRESHOLD with a threshold chosen from validation metrics and store it in artifact metadata; keep the env override but treat it as an advanced lever.
+Formalizing a simple versioning policy for feature extraction so older artifacts cannot be used with incompatible feature sets.
 
-Document how the recommended threshold was chosen (e.g., “optimizes recall at fixed FPR”) so you can reason about changes later.
+Making model selection and promotion more explicit for future retraining cycles.
 
-Model metadata & lifecycle
+Preserving clearer training provenance for debugging, auditability, and reproducibility.
 
-Add a tiny script or CLI command that prints out current model metadata (model_type, feature_version, threshold, recommended_threshold, metrics) to help ops/debugging.
+4. AI provider maturity
+AI-assisted explanations are already integrated behind a deterministic scoring pipeline, but the provider layer can be expanded later.
 
-Decide on a simple versioning policy: when feature engineering changes, how do you bump FEATURE_VERSION and ensure old models aren’t used with new extractors.
+Planned improvements include:
 
-Heuristics & explanations
-You already have a clean deterministic explanation structure and AI rewrites, but heuristics still have room to become more structured:
+Adding a lightweight AI provider health check and exposing provider readiness more clearly through the API.
 
-Audit the current heuristic rules in enrich_score() and:
+Supporting a second provider in addition to the current local-provider path.
 
-Ensure reasons are stable and deterministic (same URL → same reasons, same order).
+Documenting provider configuration, expected failure modes, and disabled/stub/real-AI behavior in greater detail.
 
-Replace any technical names with user-readable phrases.
+Expanding edge-case tests for malformed or adversarial provider outputs.
 
-Add lightweight categorization:
+Continuing to enforce the rule that AI-generated text cannot change the deterministic verdict, risk label, or threshold source.
 
-e.g., {"category": "lexical"|"structural"|"domain_signal", "reason": "..."}
+5. Explanation quality and evidence structure
+The current explanation layer is usable and stable, but future versions can make evidence more structured and UI-friendly.
 
-surface that in explanations so a UI can group evidence later.
+Planned improvements include:
 
-Consider adding a non-breaking confidence or evidence_strength field:
+Making heuristic evidence categories explicit, such as lexical, structural, or domain-signal categories.
 
-derived from a mix of model probability and heuristic evidence (even if you only expose it as “low/medium/high” to start).
+Ensuring all reason ordering remains deterministic and consistent across repeated scans.
 
-API structure, docs, and quality
-You’ve significantly tightened the AI endpoints and their docs (OpenAPI examples, error shapes, rate-limit headers). To fully “wrap up”:
+Replacing any remaining internal or technical wording with more user-readable phrasing.
 
-Decide if you want a dedicated AI error response model:
+Adding a lightweight confidence or evidence-strength field to help users interpret borderline cases.
 
-If AI errors currently piggyback on a generic error shape, introduce a more specific schema only if you are seeing confusion in the responses.
+Improving how deterministic reasons and AI summaries complement each other in the user experience.
 
-Do a consistency pass over all endpoints:
+6. Frontend polish
+The current UI is sufficient for project completion, but future updates can improve resilience and usability.
 
-Verify that 401/403/422/429/500/503 usage and docs match actual behavior.
+Planned improvements include:
 
-Ensure all AI-specific errors (ai_disabled, ai_explanation_error, ai_model_unavailable) are clearly described in README and OpenAPI.
+Refining AI summary states for disabled, loading, success, and failure scenarios.
 
-Consider a small structure cleanup:
+Making deterministic explanations and AI-generated summaries visually distinct but clearly related.
 
-Move API schemas into a dedicated module (e.g., api_schemas.py) so api.py remains thin and focused on routing.
+Improving mobile responsiveness and consistency across all cards and panels.
 
-Frontend AI & UX
-On the backend you’re in good shape; to fully finish the project, the frontend needs to reflect the deterministic vs AI layering:
+Surfacing scan metadata such as timestamps or request identifiers for debugging and traceability.
 
-Implement the AI summary as a secondary UX element:
+Removing any remaining dead components, unused styles, or legacy UI paths.
 
-collapsible panel, “Show AI summary” toggle, or a visually subordinate card beneath the deterministic explanation.
+7. Tooling, CI, and production hardening
+The project is currently in a strong local-development state, and future work can raise its production readiness.
 
-Wire up AI availability states:
+Planned improvements include:
 
-ai_disabled → friendly message like “AI summary is unavailable; deterministic verdict remains valid.”
+Adding a CI pipeline that runs backend tests and frontend builds on every push or pull request.
 
-Provider errors → “AI summary failed; deterministic verdict still applies.”
+Enforcing linting and formatting for both Python and frontend code.
 
-Normalize AI responses in the frontend adapter:
+Adding basic coverage reporting for core backend modules such as ML services, AI services, and API routes.
 
-ensure components always see { summary, guidance } and sensible defaults when AI is disabled or errors out.
+Extending deployment and observability support if the project is later promoted from portfolio/demo status to a maintained service.
 
-Add frontend tests (when your test setup exists):
-
-loading state (button disabled + spinner/text),
-
-error state,
-
-success state for both summary and guidance.
-
-Frontend structure & polish
-To truly call the project “wrapped”:
-
-Align loading/empty/error states across all main cards (verdict, details, model insight, AI summary).
-
-Verify responsive layout on mobile for the scoring view and AI summary.
-
-Optionally include per-scan metadata like timestamp and request ID somewhere in the UI for debugging/log correlation.
-
-Remove any dead or legacy components and unused styles.
-
-Testing, tooling, CI
-You’re already in a strong place test-wise (and the full suite is green), but a production-ready wrap-up should include:
-
-CI pipeline:
-
-run backend tests and build the frontend on every push / PR,
-
-fail on test failures, obvious type errors, and lint issues.
-
-Lint & format:
-
-Python: ruff/flake8 + black (or equivalent).
-
-JS/TS: ESLint + Prettier.
-
-Basic coverage reporting:
-
-even a simple coverage summary in CI, focusing on ML services, AI services, and API.
+Performing a final production-readiness pass on logging, error handling, and operational diagnostics.

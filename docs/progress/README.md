@@ -2166,3 +2166,46 @@ replaced non-picklable lambdas in test artifacts with simple objects,
 ensured temporary model artifacts are compatible with joblib.dump/load.
 
 Kept the full test suite green (300+ tests), validating that new ML and AI functionality is integrated safely.
+
+Progress Log – 2026-05-31
+Backend: AI and scoring
+Confirmed that AI enablement, provider selection, and the stub provider are fully wired via environment variables and integrated with the existing API routes.
+
+Verified that /ai-explain-score is implemented end‑to‑end, including error handling, rate-limit headers, and OpenAPI schemas.
+
+Ensured that AI output cannot modify deterministic fields such as final_label, risk, or threshold_source, keeping AI explanations strictly advisory.
+
+Validated the unified scoring and training pipeline for multiple model types (logistic regression, XGBoost, LightGBM) and confirmed loaders and metadata handling are working as expected.
+
+Model selection and metadata
+Chose and documented the default “production” model from the available candidates, aligning code, config, and documentation on that decision.
+
+Confirmed that model artifacts include key metadata (model type, feature version, threshold, and metrics) and that this metadata flows through to /model-info and other relevant code paths.
+
+Finalized a simple model lifecycle story for the current version (how models are trained, saved, loaded, and swapped).
+
+Frontend and AI UX
+Finalized the frontend integration for AI summaries:
+
+Deterministic explanations remain the primary signal.
+
+AI summaries are surfaced as an additional, clearly secondary layer.
+
+Ensured that “AI summary unavailable” behavior is correct:
+
+Displays appropriate messaging when AI is disabled or errors.
+
+Uses the new AI response shape (summary, guidance) and handles missing/errored states gracefully.
+
+Confirmed that the main scoring view is coherent: verdict card, details, model insight, and AI summary align with the backend’s deterministic vs AI layering.
+
+Documentation and project wrap‑up
+Wrote the PROJECT_IMPROVEMENT_PLAN / future roadmap section, clearly separating:
+
+What is done in the current version.
+
+What is reserved for future improvements (model quality, calibration, provider health checks, CI hardening, etc.).
+
+Reviewed the original TODO list and marked all remaining items as either completed or explicitly deferred into the future roadmap.
+
+Aligned today’s implementation state with the documentation so the project can be considered “wrapped up” in its current scope.
