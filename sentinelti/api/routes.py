@@ -303,6 +303,15 @@ async def ai_models():
 async def ai_explain_score(
     body: AIExplainScoreRequest = Body(..., openapi_examples=AI_EXPLAIN_SCORE_REQUEST_EXAMPLES)
 ):
+    if not ai_explanations.ai_enabled():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "AI explanations are currently disabled.",
+                "error_type": "ai_disabled",
+            },
+        )
+
     try:
         result = build_ai_explanation_response(body.url, ai_model=body.ai_model)
         return _build_ai_explain_public_response(result)

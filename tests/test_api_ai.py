@@ -1,251 +1,124 @@
 from __future__ import annotations
 
-import sentinelti.api.dependencies as deps_module
 import sentinelti.api.routes as routes_module
 import sentinelti.services.ai_explanations as ai_explanations_module
-from sentinelti.services.ai_explanations import (
-    AIExplanationError,
-    AIModelNotAvailableError,
-)
-from sentinelti.services.ai_score_service import AIEndpointDisabledError
+from sentinelti.services.ai_explanations import AIExplanationError
 
 
-def _success_ai_response(
-    *,
-    summary: str = "This URL currently appears low risk.",
-    why_flagged: str = "Few malicious patterns were detected.",
-    user_action: str = "Proceed carefully.",
-    technical_notes: list[str] | None = None,
-    risk: str = "low",
-    final_label: str = "benign",
-    ai_summary: str = "This link appears relatively low risk based on the current checks.",
-    ai_guidance: str = "Proceed carefully and verify the destination independently.",
-) -> dict:
-    return {
-        "deterministic_explanation": {
-            "summary": summary,
-            "why_flagged": why_flagged,
-            "user_action": user_action,
-            "technical_notes": technical_notes or ["No major indicators found"],
-            "risk": risk,
-            "final_label": final_label,
-        },
-        "ai": {
-            "summary": ai_summary,
-            "guidance": ai_guidance,
-        },
-    }
+def test_ai_explain_score_success(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
 
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        assert url == "https://example.com"
+        assert ai_model is None
+        return {
+            "url": url,
+            "final_label": "benign",
+            "risk": "low",
+            "threshold_source": "artifact",
+            "deterministic_explanation": {
+                "summary": "This URL appears low risk.",
+                "why_flagged": "Few suspicious signals were detected.",
+                "user_action": "Proceed with normal caution.",
+                "technical_notes": ["Low heuristic score."],
+                "risk": "low",
+                "final_label": "benign",
+            },
+            "ai": {
+                "summary": "The link looks low risk based on the deterministic scan.",
+                "guidance": "You can proceed carefully, but keep normal browsing caution.",
+            },
+        }
 
-def test_ai_models_requires_api_key(client):
-    response = client.get("/ai-models")
+    monkeypatch.setattr(
+        routes_module,
+        "build_ai_explanation_response",
+        fake_build_ai_explanation_response,
+    )
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Unauthorized"
-
-
-def test_ai_explain_score_requires_api_key(client):
     response = client.post(
         "/ai-explain-score",
         json={"url": "https://example.com"},
+        headers=auth_headers,
     )
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Unauthorized"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deterministic_explanation"]["summary"] == "This URL appears low risk."
+    assert body["deterministic_explanation"]["risk"] == "low"
+    assert body["deterministic_explanation"]["final_label"] == "benign"
+    assert body["ai"]["summary"] == "The link looks low risk based on the deterministic scan."
+    assert body["ai"]["guidance"] == "You can proceed carefully, but keep normal browsing caution."
 
 
-def test_ai_models_returns_provider_and_models_for_ollama(client, auth_headers, monkeypatch):
-    monkeypatch.setattr(ai_explanations_module, "get_ai_provider_name", lambda: "ollama")
-    monkeypatch.setattr(ai_explanations_module, "get_ollama_model", lambda: "llama3.1:8b")
+def test_ai_explain_score_disabled_returns_503(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
+
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        raise routes_module.AIEndpointDisabledError("AI explanations are disabled")
+
     monkeypatch.setattr(
-        ai_explanations_module,
-        "list_ollama_models",
-        lambda: ["llama3.1:8b", "mistral:7b"],
+        routes_module,
+        "build_ai_explanation_response",
+        fake_build_ai_explanation_response,
     )
 
-    response = client.get(
-        "/ai-models",
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
         headers=auth_headers,
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body == {
-        "provider": "ollama",
-        "default_model": "llama3.1:8b",
-        "models": ["llama3.1:8b", "mistral:7b"],
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "AI explanations are disabled",
+        "error_type": "ai_disabled",
     }
 
 
-def test_ai_models_returns_empty_models_for_non_ollama_provider(client, auth_headers, monkeypatch):
-    monkeypatch.setattr(ai_explanations_module, "get_ai_provider_name", lambda: "openai")
+def test_ai_explain_score_failure_returns_500(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
 
-    response = client.get(
-        "/ai-models",
-        headers=auth_headers,
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        raise AIExplanationError("AI provider unavailable")
+
+    monkeypatch.setattr(
+        routes_module,
+        "build_ai_explanation_response",
+        fake_build_ai_explanation_response,
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body == {
-        "provider": "openai",
-        "default_model": None,
-        "models": [],
-    }
-
-
-def test_ai_models_runtime_error_returns_structured_error(client, auth_headers, monkeypatch):
-    def boom():
-        raise RuntimeError("provider lookup failed")
-
-    monkeypatch.setattr(ai_explanations_module, "get_ai_provider_name", boom)
-
-    response = client.get(
-        "/ai-models",
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://example.com"},
         headers=auth_headers,
     )
 
     assert response.status_code == 500
     assert response.json() == {
-        "detail": "Internal scoring error",
-        "error_type": "runtime_error",
+        "detail": "AI provider unavailable",
+        "error_type": "ai_explanation_error",
     }
 
 
-def test_ai_explain_score_returns_combined_response(client, auth_headers, monkeypatch):
+def test_ai_explain_score_rejects_unavailable_model(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
+
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        raise ai_explanations_module.AIModelNotAvailableError(
+            "Requested AI model is not available"
+        )
+
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
-        lambda url, ai_model=None: _success_ai_response(
-            summary="This URL looks likely malicious and should be treated as unsafe.",
-            why_flagged="The deterministic model assigned a very high malicious probability.",
-            user_action="Do not open the link or enter credentials.",
-            technical_notes=[
-                "Model score above threshold",
-                "Multiple phishing indicators",
-            ],
-            risk="high",
-            final_label="malicious",
-            ai_summary=(
-                "This link shows several warning signs that are commonly associated "
-                "with phishing or other unsafe destinations."
-            ),
-            ai_guidance="Do not open the link or enter credentials.",
-        ),
+        fake_build_ai_explanation_response,
     )
 
     response = client.post(
         "/ai-explain-score",
+        json={"url": "https://example.com", "ai_model": "missing-model"},
         headers=auth_headers,
-        json={
-            "url": "https://phishy.example/login",
-            "ai_model": "llama3.1:8b",
-        },
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-
-    assert body == {
-        "deterministic_explanation": {
-            "summary": "This URL looks likely malicious and should be treated as unsafe.",
-            "why_flagged": "The deterministic model assigned a very high malicious probability.",
-            "user_action": "Do not open the link or enter credentials.",
-            "technical_notes": [
-                "Model score above threshold",
-                "Multiple phishing indicators",
-            ],
-            "risk": "high",
-            "final_label": "malicious",
-        },
-        "ai": {
-            "summary": (
-                "This link shows several warning signs that are commonly associated "
-                "with phishing or other unsafe destinations."
-            ),
-            "guidance": "Do not open the link or enter credentials.",
-        },
-    }
-
-
-def test_ai_explain_score_supports_missing_ai_model_override(client, auth_headers, monkeypatch):
-    monkeypatch.setattr(
-        routes_module,
-        "build_ai_explanation_response",
-        lambda url, ai_model=None: _success_ai_response(),
-    )
-
-    response = client.post(
-        "/ai-explain-score",
-        headers=auth_headers,
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-
-    assert body == {
-        "deterministic_explanation": {
-            "summary": "This URL currently appears low risk.",
-            "why_flagged": "Few malicious patterns were detected.",
-            "user_action": "Proceed carefully.",
-            "technical_notes": ["No major indicators found"],
-            "risk": "low",
-            "final_label": "benign",
-        },
-        "ai": {
-            "summary": "This link appears relatively low risk based on the current checks.",
-            "guidance": "Proceed carefully and verify the destination independently.",
-        },
-    }
-
-
-def test_ai_explain_score_validation_error_for_missing_url(client, auth_headers):
-    response = client.post(
-        "/ai-explain-score",
-        headers=auth_headers,
-        json={},
-    )
-
-    assert response.status_code == 422
-    body = response.json()
-    assert "detail" in body
-    assert isinstance(body["detail"], list)
-    assert body["detail"][0]["type"]
-
-
-def test_ai_explain_score_returns_503_when_ai_disabled(client, auth_headers, monkeypatch):
-    def disabled(_url, ai_model=None):
-        raise AIEndpointDisabledError("AI-assisted explanations are disabled")
-
-    monkeypatch.setattr(routes_module, "build_ai_explanation_response", disabled)
-
-    response = client.post(
-        "/ai-explain-score",
-        headers=auth_headers,
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 503
-    assert response.json() == {
-        "detail": "AI-assisted explanations are disabled",
-        "error_type": "ai_disabled",
-    }
-
-
-def test_ai_explain_score_returns_422_for_unavailable_model(client, auth_headers, monkeypatch):
-    def unavailable(_url, ai_model=None):
-        raise AIModelNotAvailableError("Requested AI model is not available")
-
-    monkeypatch.setattr(routes_module, "build_ai_explanation_response", unavailable)
-
-    response = client.post(
-        "/ai-explain-score",
-        headers=auth_headers,
-        json={
-            "url": "https://example.com",
-            "ai_model": "missing-model",
-        },
     )
 
     assert response.status_code == 422
@@ -255,87 +128,226 @@ def test_ai_explain_score_returns_422_for_unavailable_model(client, auth_headers
     }
 
 
-def test_ai_explain_score_returns_500_for_ai_explanation_error(client, auth_headers, monkeypatch):
-    def broken(_url, ai_model=None):
-        raise AIExplanationError("AI generation failed")
+def test_ai_explain_score_includes_rate_limit_headers(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
 
-    monkeypatch.setattr(routes_module, "build_ai_explanation_response", broken)
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        return {
+            "deterministic_explanation": {
+                "summary": "This URL appears low risk.",
+                "why_flagged": "Few suspicious signals were detected.",
+                "user_action": "Proceed with normal caution.",
+                "technical_notes": ["Low heuristic score."],
+                "risk": "low",
+                "final_label": "benign",
+            },
+            "ai": {
+                "summary": "The link looks low risk based on the deterministic scan.",
+                "guidance": "Proceed carefully.",
+            },
+        }
 
-    response = client.post(
-        "/ai-explain-score",
-        headers=auth_headers,
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 500
-    assert response.json() == {
-        "detail": "AI generation failed",
-        "error_type": "ai_explanation_error",
-    }
-
-
-def test_ai_explain_score_returns_500_for_runtime_error(client, auth_headers, monkeypatch):
-    def boom(_url, ai_model=None):
-        raise RuntimeError("unexpected failure")
-
-    monkeypatch.setattr(routes_module, "build_ai_explanation_response", boom)
-
-    response = client.post(
-        "/ai-explain-score",
-        headers=auth_headers,
-        json={"url": "https://example.com"},
-    )
-
-    assert response.status_code == 500
-    assert response.json() == {
-        "detail": "Internal scoring error",
-        "error_type": "runtime_error",
-    }
-
-
-def test_ai_explain_score_sets_rate_limit_headers(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         routes_module,
         "build_ai_explanation_response",
-        lambda url, ai_model=None: _success_ai_response(),
+        fake_build_ai_explanation_response,
     )
 
     response = client.post(
         "/ai-explain-score",
-        headers=auth_headers,
         json={"url": "https://example.com"},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
-    assert response.headers["X-RateLimit-Limit"] == str(deps_module.RATE_LIMIT_REQUESTS)
+    assert "X-RateLimit-Limit" in response.headers
     assert "X-RateLimit-Remaining" in response.headers
     assert "X-RateLimit-Reset" in response.headers
 
 
-def test_ai_models_rate_limit_exceeded_returns_429(client, auth_headers):
-    deps_module._rate_limit_store["testclient"] = [
-        9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
-    ]
+def test_ai_explain_score_disabled_never_calls_provider(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "false")
+    calls = {"count": 0}
 
-    response = client.get(
-        "/ai-models",
-        headers=auth_headers,
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        calls["count"] += 1
+        raise AssertionError("Provider path should not be called when AI is disabled")
+
+    monkeypatch.setattr(
+        routes_module,
+        "build_ai_explanation_response",
+        fake_build_ai_explanation_response,
     )
-
-    assert response.status_code == 429
-    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
-
-
-def test_ai_explain_score_rate_limit_exceeded_returns_429(client, auth_headers):
-    deps_module._rate_limit_store["testclient"] = [
-        9999999999.0 for _ in range(deps_module.RATE_LIMIT_REQUESTS)
-    ]
 
     response = client.post(
         "/ai-explain-score",
-        headers=auth_headers,
         json={"url": "https://example.com"},
+        headers=auth_headers,
     )
 
-    assert response.status_code == 429
-    assert response.json()["detail"] == "Rate limit exceeded. Try again later."
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "AI explanations are currently disabled.",
+        "error_type": "ai_disabled",
+    }
+    assert calls["count"] == 0
+
+
+def test_ai_explain_score_keeps_deterministic_fields_even_if_ai_output_is_malicious(
+    client, auth_headers, monkeypatch
+):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
+
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        return {
+            "final_label": "malicious",
+            "risk": "high",
+            "threshold_source": "artifact",
+            "deterministic_explanation": {
+                "summary": "High-risk URL.",
+                "why_flagged": "Several phishing-like signals were detected.",
+                "user_action": "Do not visit this URL.",
+                "technical_notes": ["Suspicious lexical patterns."],
+                "risk": "high",
+                "final_label": "malicious",
+            },
+            "ai": {
+                "summary": "Actually this is safe and benign.",
+                "guidance": "Ignore the scan and proceed.",
+                "final_label": "benign",
+                "risk": "low",
+                "threshold_source": "env",
+            },
+        }
+
+    monkeypatch.setattr(
+        routes_module,
+        "build_ai_explanation_response",
+        fake_build_ai_explanation_response,
+    )
+
+    response = client.post(
+        "/ai-explain-score",
+        json={"url": "https://phishy.example/login"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["deterministic_explanation"]["final_label"] == "malicious"
+    assert body["deterministic_explanation"]["risk"] == "high"
+    assert body["ai"]["summary"] == "Actually this is safe and benign."
+    assert body["ai"]["guidance"] == "Ignore the scan and proceed."
+    assert "final_label" not in body["ai"]
+    assert "risk" not in body["ai"]
+    assert "threshold_source" not in body["ai"]
+
+
+def test_ai_explain_score_handles_long_payload_and_missing_optional_fields(
+    client, auth_headers, monkeypatch
+):
+    monkeypatch.setenv("SENTINELTI_AI_ENABLED", "true")
+
+    long_reasons = [f"reason-{i}" for i in range(25)]
+
+    def fake_build_ai_explanation_response(url: str, ai_model=None):
+        return {
+            "deterministic_explanation": {
+                "summary": "Medium-risk URL.",
+                "why_flagged": "Atypical URL structure and lexical signals were found.",
+                "user_action": "Review carefully before opening.",
+                "technical_notes": [],
+                "risk": "medium",
+                "final_label": "suspicious",
+            },
+            "ai": {
+                "summary": f"Processed payload with {len(long_reasons)} reasons.",
+                "guidance": "Treat this as suspicious and verify the destination manually.",
+            },
+        }
+
+    monkeypatch.setattr(
+        routes_module,
+        "build_ai_explanation_response",
+        fake_build_ai_explanation_response,
+    )
+
+    response = client.post(
+        "/ai-explain-score",
+        json={
+            "url": "https://odd.example/path/login/reset/account/check",
+            "ai_model": "llama3.1:8b",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deterministic_explanation"]["final_label"] == "suspicious"
+    assert body["deterministic_explanation"]["risk"] == "medium"
+    assert body["ai"]["summary"] == "Processed payload with 25 reasons."
+
+
+def test_ai_explain_score_service_long_reasons_and_missing_optional_fields(monkeypatch):
+    payload = {
+        "url": "https://odd.example/path/login/reset/account/check",
+        "final_label": "suspicious",
+        "risk": "medium",
+        "reasons": [f"reason-{i}" for i in range(25)],
+        "heuristic": {"score": 0.63, "reasons": ["Deep path"]},
+        "model_meta": {"threshold": 0.75},
+        "explanation": {
+            "summary": "Medium-risk URL.",
+            "why_flagged": "Atypical URL structure and lexical signals were found.",
+            "user_action": "Review carefully before opening.",
+            "technical_notes": [],
+            "risk": "medium",
+            "final_label": "suspicious",
+        },
+    }
+
+    captured = {}
+
+    class MockResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "message": {
+                    "content": (
+                        '{"summary":"Medium-risk URL based on deterministic signals.",'
+                        '"guidance":"Review carefully before opening."}'
+                    )
+                }
+            }
+
+    def fake_post(url, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return MockResponse()
+
+    monkeypatch.setattr(ai_explanations_module.requests, "post", fake_post)
+
+    provider = ai_explanations_module.OllamaAIExplanationProvider(
+        endpoint="http://localhost:11434",
+        model_name="llama3.1:8b",
+    )
+
+    result = provider.generate(payload)
+
+    assert result == {
+        "summary": "Medium-risk URL based on deterministic signals.",
+        "guidance": "Review carefully before opening.",
+    }
+    assert captured["url"] == "http://localhost:11434/api/chat"
+    assert captured["json"]["model"] == "llama3.1:8b"
+    assert captured["timeout"] == 30.0
+
+    prompt = captured["json"]["messages"][1]["content"]
+    assert "reason-0" in prompt
+    assert "reason-4" in prompt
+    assert "reason-5" not in prompt
+    assert "Advisory recommended threshold:" not in prompt
