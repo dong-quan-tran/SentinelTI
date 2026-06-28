@@ -977,5 +977,5 @@ SentinelTI is developed and maintained by:
 
 - **Dong Quan Tran (Johnny)**
 - Role: Owner / Collaborator
-- Email: [dxt9721@mavs.uta.edu](mailto:dxt9721@mavs.uta.edu)
-- GitHub: [dong-quan-tran](https://github.com/dong-quan-tran)
+- Email: dxt9721@mavs.uta.edu / dongquan.tran.johnny@gmail.com
+- GitHub: dong-quan-tran
