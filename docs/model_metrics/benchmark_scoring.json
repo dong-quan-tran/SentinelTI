@@ -1,0 +1,45 @@
+{
+  "benchmark_name": "sentinelti_deterministic_scoring",
+  "timestamp_utc": "2026-09-02T18:26:34.212435+00:00",
+  "configuration": {
+    "model_type": "xgb",
+    "feature_version": "v2",
+    "threshold": 0.75,
+    "iterations": 500,
+    "warmup_iterations": 25,
+    "url_count": 8,
+    "ai_included": false,
+    "notes": [
+      "core_score includes feature extraction, XGBoost predict_proba, and heuristics",
+      "enrich_score includes ML scoring, heuristics, DNS resolution, local reputation checks, decision fusion, and deterministic explanation generation",
+      "network-dependent DNS behavior can affect end-to-end results"
+    ]
+  },
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel"
+  },
+  "results": {
+    "warm_core_score": {
+      "count": 500,
+      "mean_ms": 0.901,
+      "median_ms": 0.9,
+      "p95_ms": 1.0,
+      "p99_ms": 1.126,
+      "min_ms": 0.719,
+      "max_ms": 1.796,
+      "throughput_urls_per_sec": 1110.43
+    },
+    "end_to_end_enrich_score": {
+      "count": 500,
+      "mean_ms": 107.382,
+      "median_ms": 104.189,
+      "p95_ms": 123.614,
+      "p99_ms": 192.087,
+      "min_ms": 96.034,
+      "max_ms": 250.184,
+      "throughput_urls_per_sec": 9.31
+    }
+  }
+}
