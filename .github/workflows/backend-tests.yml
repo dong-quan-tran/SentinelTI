@@ -26,3 +26,5 @@ jobs:
         env:
           SENTINELTI_API_KEY: sentinelti-ci-test-key-not-for-production
         run: python -m pytest -q
+      - name: Initialize database from scratch
+        run: python -m sentinelti.cli init
