@@ -53,10 +53,11 @@ The deterministic scoring pipeline remains the source of truth. Optional AI summ
 
 ### Requirements
 
-- Python 3.10+
+- Python 3.11 (the version verified in CI)
 - Git
 - Recommended: a virtual environment
-- A trained model artifact in `sentinelti/models/`, or a labeled dataset for training
+- Node.js 24 and npm for the frontend
+- The checked-in model artifacts in `sentinelti/models/` for scoring
 
 ### 1. Clone the repository
 
@@ -91,8 +92,8 @@ source .venv/bin/activate
 ### 3. Install dependencies
 
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 ### 4. Run the CLI or API
@@ -103,10 +104,22 @@ CLI help:
 python -m sentinelti.cli --help
 ```
 
-Start the API server:
+Set a local demo key before starting the API. In PowerShell:
+
+```powershell
+$env:SENTINELTI_API_KEY="change-me"
+```
+
+On Linux or macOS:
 
 ```bash
-python -m uvicorn sentinelti.api.app:app --host 0.0.0.0 --port 8000 --reload
+export SENTINELTI_API_KEY="change-me"
+```
+
+Then, from the repository root, start the API server:
+
+```bash
+python -m uvicorn sentinelti.api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Local API resources:
@@ -122,7 +135,7 @@ From the frontend directory:
 
 ```bash
 cd sentinelti/frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -138,6 +151,8 @@ If needed, create `sentinelti/frontend/.env`:
 VITE_API_BASE_URL=http://127.0.0.1:8000
 VITE_SENTINELTI_API_KEY=change-me
 ```
+
+The frontend's `VITE_SENTINELTI_API_KEY` must match the backend's `SENTINELTI_API_KEY` for this local demo. Vite exposes `VITE_` values to browser users: this is not a secret or a suitable authentication design for a public deployment.
 
 ## CLI usage
 
@@ -213,13 +228,7 @@ Windows PowerShell:
 $env:SENTINELTI_API_KEY="your-secret-key"
 ```
 
-For local development only, the API falls back to:
-
-```text
-change-me
-```
-
-Do not use the default API key in a deployed environment.
+The API has no default key: set `SENTINELTI_API_KEY` before starting it. The quick start uses `change-me` only for local development; do not use it for a deployed environment.
 
 ### Core endpoints
 
