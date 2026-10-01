@@ -20,8 +20,11 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Check dependencies
         run: python -m pip check
-      - name: Test without bundled database
-        run: Remove-Item sentinelti.db
+      - name: Verify database is not bundled
+        run: |
+          if (Test-Path sentinelti.db) {
+            throw 'sentinelti.db must not be tracked in Git.'
+          }
       - name: Run tests
         env:
           SENTINELTI_API_KEY: sentinelti-ci-test-key-not-for-production
