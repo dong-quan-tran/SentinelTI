@@ -11,7 +11,12 @@ RATE_LIMIT_WINDOW = 60
 _rate_limit_store: dict[str, list[float]] = {}
 
 API_KEY_NAME = "X-API-KEY"
-API_KEY = os.getenv("SENTINELTI_API_KEY", "change-me")
+API_KEY = os.getenv("SENTINELTI_API_KEY")
+
+if not API_KEY:
+    raise RuntimeError(
+        "SENTINELTI_API_KEY must be set before starting SentinelTI."
+    )
 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
