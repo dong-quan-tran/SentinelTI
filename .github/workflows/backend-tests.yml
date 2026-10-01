@@ -1,4 +1,4 @@
-﻿name: Backend tests
+name: Backend tests
 
 on:
   push:
@@ -21,4 +21,6 @@ jobs:
       - name: Check dependencies
         run: python -m pip check
       - name: Run tests
+        env:
+          SENTINELTI_API_KEY: sentinelti-ci-test-key-not-for-production
         run: python -m pytest -q
