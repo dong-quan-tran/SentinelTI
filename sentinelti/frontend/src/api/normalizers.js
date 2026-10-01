@@ -86,7 +86,27 @@ export function normalizeModelInfoResponse(value) {
 }
 
 export function normalizeScoreResponse(value) {
-  const payload = isObject(value) ? value : {};
+  if (!isObject(value)) {
+    throw new Error("Invalid scoring response: expected an object.");
+  }
+
+  const payload = value;
+  const validLabels = new Set(["benign", "suspicious", "malicious"]);
+  const validRisks = new Set(["low", "medium", "high"]);
+
+  if (
+    typeof payload.url !== "string" ||
+    !payload.url.trim() ||
+    !validLabels.has(payload.final_label) ||
+    !validRisks.has(payload.risk) ||
+    typeof payload.prob_malicious !== "number" ||
+    !Number.isFinite(payload.prob_malicious) ||
+    payload.prob_malicious < 0 ||
+    payload.prob_malicious > 1
+  ) {
+    throw new Error("Invalid scoring response: missing or invalid verdict data.");
+  }
+
   const heuristic = isObject(payload.heuristic) ? payload.heuristic : {};
   const explanation = isObject(payload.explanation) ? payload.explanation : {};
 
