@@ -244,6 +244,8 @@ def analyze_url(url: str) -> HeuristicResult:
     lower_url = url.lower()
     lower_base = base_domain.lower()
 
+    is_trusted = base_domain in TRUSTED_DOMAINS
+
     lower_path = path.lower()
     lower_query = query.lower()
 
@@ -810,7 +812,6 @@ def analyze_url(url: str) -> HeuristicResult:
             reasons.append("URL path is deeply nested, often used to hide payloads or phishing pages.")
 
     # Mild signal for unusually deep paths on non-trusted, non-SSO domains
-    is_trusted = base_domain in TRUSTED_DOMAINS
 
     if (
         path_depth >= 6
