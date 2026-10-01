@@ -149,7 +149,9 @@ SentinelTI includes a CLI for database initialization, URLhaus ingestion, and UR
 python -m sentinelti.cli init
 ```
 
-This creates the local SQLite database used for threat-intelligence storage.
+This creates `sentinelti.db` in the current working directory. Run the command from the repository root; the database is local runtime data and is not included in new clones.
+
+To populate it with current URLhaus indicators, run `python -m sentinelti.cli ingest urlhaus` after initialization. Ingestion downloads data and requires network access.
 
 ### Ingest the URLhaus feed
 
