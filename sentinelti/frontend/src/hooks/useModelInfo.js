@@ -25,8 +25,29 @@ export default function useModelInfo() {
   }, []);
 
   useEffect(() => {
-    loadModelInfo();
-  }, [loadModelInfo]);
+    let active = true;
+
+    fetchModelInfo()
+      .then((data) => {
+        if (active) {
+          setModelInfo(data);
+          setLoadingModel(false);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setModelInfoError(
+            error?.message || "Could not load model information right now."
+          );
+          setModelInfo(null);
+          setLoadingModel(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return {
     modelInfo,

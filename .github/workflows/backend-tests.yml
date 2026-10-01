@@ -31,3 +31,24 @@ jobs:
         run: python -m pytest -q
       - name: Initialize database from scratch
         run: python -m sentinelti.cli init
+
+  frontend:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: sentinelti/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: sentinelti/frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Lint frontend
+        run: npm run lint
+      - name: Test frontend
+        run: npm run test -- --run
+      - name: Build frontend
+        run: npm run build

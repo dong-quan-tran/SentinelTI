@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { scoreUrl } from "./api/scanApi";
 import { fetchAIExplanation } from "./api/aiApi";
 import UrlForm from "./components/UrlForm";
@@ -54,13 +54,6 @@ export default function App() {
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiError, setAIError] = useState("");
   const [aiExpanded, setAIExpanded] = useState(false);
-
-  useEffect(() => {
-    if (modelInfoError) {
-      setStatus(modelInfoError);
-      setStatusKind("error");
-    }
-  }, [modelInfoError]);
 
   async function handleScan(url) {
     setLoadingScan(true);
@@ -119,8 +112,8 @@ export default function App() {
       <section className="top-grid">
         <div className="scan-column">
           <UrlForm onSubmit={handleScan} loading={loadingScan} />
-          <div className={`status-line status-line--${statusKind}`}>
-            {loadingModel ? "Loading model info..." : status}
+          <div className={`status-line status-line--${status ? statusKind : modelInfoError ? "error" : statusKind}`}>
+            {loadingModel ? "Loading model info..." : status || modelInfoError}
           </div>
         </div>
 
