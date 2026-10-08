@@ -1,0 +1,15 @@
+url,prob_malicious
+https://example.com/,0.8556845784187317
+https://www.example.com/,0.022527819499373436
+https://example.net/,0.9187009930610657
+https://www.example.net/,0.027668530121445656
+https://example.org/,0.8589765429496765
+https://www.example.org/,0.019684279337525368
+https://github.com/,0.7947829365730286
+https://www.github.com/,0.020459521561861038
+https://google.com/,0.9274020195007324
+https://www.google.com/,0.03104955516755581
+https://microsoft.com/,0.5215267539024353
+https://www.microsoft.com/,0.21795852482318878
+https://wikipedia.org/,0.6438981890678406
+https://www.wikipedia.org/,0.024313069880008698
