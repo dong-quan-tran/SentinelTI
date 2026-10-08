@@ -1,0 +1,187 @@
+{
+  "created_at": "2026-10-08T04:09:41.420043+00:00",
+  "csv_path": "data/urldata.csv",
+  "preprocessing": "http-empty-path-to-root-v1",
+  "threshold": 0.75,
+  "invalid_rows": 48,
+  "deduplicated_rows": 239,
+  "diagnostic_domain_rows_excluded": 14940,
+  "train_rows": 294749,
+  "test_rows": 140200,
+  "train_groups": 98447,
+  "test_groups": 42192,
+  "group_overlap": 0,
+  "split_seed": 42,
+  "variant": "no_scheme",
+  "feature_names": [
+    "url_len",
+    "domain_len",
+    "host_len",
+    "path_len",
+    "query_len",
+    "fragment_len",
+    "digits_count",
+    "alpha_count",
+    "special_count",
+    "slash_count",
+    "dot_count_full",
+    "dot_count_host",
+    "hyphen_count_host",
+    "underscore_count",
+    "percent_count",
+    "equals_count",
+    "amp_count",
+    "question_count",
+    "at_count",
+    "digit_ratio",
+    "alpha_ratio",
+    "special_ratio",
+    "has_ip",
+    "has_port",
+    "port_value",
+    "uncommon_port",
+    "subdomain_depth",
+    "max_host_label_len",
+    "avg_host_label_len",
+    "num_path_segments",
+    "max_path_segment_len",
+    "num_query_params",
+    "keyword_hits",
+    "keyword_density",
+    "has_punycode",
+    "has_fragment",
+    "has_nested_url_in_query",
+    "has_nested_url_in_fragment",
+    "redirect_param_count",
+    "login_in_host",
+    "login_in_path",
+    "brand_in_host",
+    "brand_in_path",
+    "suspicious_extension",
+    "repeated_char_ratio",
+    "url_entropy",
+    "is_internal_host",
+    "https_token_in_host",
+    "double_slash_in_path",
+    "tilde_count",
+    "plus_count",
+    "semicolon_count",
+    "tld"
+  ],
+  "roc_auc": 0.9925159471967273,
+  "average_precision": 0.9852050549934848,
+  "overall": {
+    "rows": 140200,
+    "benign_rows": 108148,
+    "malicious_rows": 32052,
+    "false_positive_rate": 0.009440766357214189,
+    "malicious_recall": 0.9240297017346811,
+    "confusion_matrix": [
+      [
+        107127,
+        1021
+      ],
+      [
+        2435,
+        29617
+      ]
+    ]
+  },
+  "classification_report": {
+    "0": {
+      "precision": 0.9777751410160457,
+      "recall": 0.9905592336427859,
+      "f1-score": 0.9841256717651923,
+      "support": 108148.0
+    },
+    "1": {
+      "precision": 0.9666753704549905,
+      "recall": 0.9240297017346811,
+      "f1-score": 0.9448715903652896,
+      "support": 32052.0
+    },
+    "accuracy": 0.9753495007132668,
+    "macro avg": {
+      "precision": 0.9722252557355181,
+      "recall": 0.9572944676887335,
+      "f1-score": 0.9644986310652409,
+      "support": 140200.0
+    },
+    "weighted avg": {
+      "precision": 0.9752375529559676,
+      "recall": 0.9753495007132668,
+      "f1-score": 0.9751515503883758,
+      "support": 140200.0
+    }
+  },
+  "slices": {
+    "http_apex": {
+      "rows": 21321,
+      "benign_rows": 0,
+      "malicious_rows": 21321,
+      "false_positive_rate": null,
+      "malicious_recall": 0.9930115848224755,
+      "confusion_matrix": [
+        [
+          0,
+          0
+        ],
+        [
+          149,
+          21172
+        ]
+      ]
+    },
+    "http_subdomain": {
+      "rows": 8980,
+      "benign_rows": 0,
+      "malicious_rows": 8980,
+      "false_positive_rate": null,
+      "malicious_recall": 0.7744988864142539,
+      "confusion_matrix": [
+        [
+          0,
+          0
+        ],
+        [
+          2025,
+          6955
+        ]
+      ]
+    },
+    "https_apex": {
+      "rows": 887,
+      "benign_rows": 125,
+      "malicious_rows": 762,
+      "false_positive_rate": 0.616,
+      "malicious_recall": 0.9619422572178478,
+      "confusion_matrix": [
+        [
+          48,
+          77
+        ],
+        [
+          29,
+          733
+        ]
+      ]
+    },
+    "https_subdomain": {
+      "rows": 109012,
+      "benign_rows": 108023,
+      "malicious_rows": 989,
+      "false_positive_rate": 0.008738879683030465,
+      "malicious_recall": 0.7654196157735086,
+      "confusion_matrix": [
+        [
+          107079,
+          944
+        ],
+        [
+          232,
+          757
+        ]
+      ]
+    }
+  }
+}

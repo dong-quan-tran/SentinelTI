@@ -1,0 +1,189 @@
+{
+  "created_at": "2026-10-08T04:09:41.420043+00:00",
+  "csv_path": "data/urldata.csv",
+  "preprocessing": "http-empty-path-to-root-v1",
+  "threshold": 0.75,
+  "invalid_rows": 48,
+  "deduplicated_rows": 239,
+  "diagnostic_domain_rows_excluded": 14940,
+  "train_rows": 294749,
+  "test_rows": 140200,
+  "train_groups": 98447,
+  "test_groups": 42192,
+  "group_overlap": 0,
+  "split_seed": 42,
+  "variant": "full",
+  "feature_names": [
+    "url_len",
+    "domain_len",
+    "host_len",
+    "path_len",
+    "query_len",
+    "fragment_len",
+    "digits_count",
+    "alpha_count",
+    "special_count",
+    "slash_count",
+    "dot_count_full",
+    "dot_count_host",
+    "hyphen_count_host",
+    "underscore_count",
+    "percent_count",
+    "equals_count",
+    "amp_count",
+    "question_count",
+    "at_count",
+    "digit_ratio",
+    "alpha_ratio",
+    "special_ratio",
+    "has_ip",
+    "is_http",
+    "is_https",
+    "has_port",
+    "port_value",
+    "uncommon_port",
+    "subdomain_depth",
+    "max_host_label_len",
+    "avg_host_label_len",
+    "num_path_segments",
+    "max_path_segment_len",
+    "num_query_params",
+    "keyword_hits",
+    "keyword_density",
+    "has_punycode",
+    "has_fragment",
+    "has_nested_url_in_query",
+    "has_nested_url_in_fragment",
+    "redirect_param_count",
+    "login_in_host",
+    "login_in_path",
+    "brand_in_host",
+    "brand_in_path",
+    "suspicious_extension",
+    "repeated_char_ratio",
+    "url_entropy",
+    "is_internal_host",
+    "https_token_in_host",
+    "double_slash_in_path",
+    "tilde_count",
+    "plus_count",
+    "semicolon_count",
+    "tld"
+  ],
+  "roc_auc": 0.9987876160097149,
+  "average_precision": 0.9980347087921159,
+  "overall": {
+    "rows": 140200,
+    "benign_rows": 108148,
+    "malicious_rows": 32052,
+    "false_positive_rate": 0.0009339053889114916,
+    "malicious_recall": 0.9851179333582928,
+    "confusion_matrix": [
+      [
+        108047,
+        101
+      ],
+      [
+        477,
+        31575
+      ]
+    ]
+  },
+  "classification_report": {
+    "0": {
+      "precision": 0.995604658877299,
+      "recall": 0.9990660946110885,
+      "f1-score": 0.9973323733569636,
+      "support": 108148.0
+    },
+    "1": {
+      "precision": 0.9968114660942038,
+      "recall": 0.9851179333582928,
+      "f1-score": 0.9909302033642983,
+      "support": 32052.0
+    },
+    "accuracy": 0.9958773181169758,
+    "macro avg": {
+      "precision": 0.9962080624857514,
+      "recall": 0.9920920139846907,
+      "f1-score": 0.9941312883606309,
+      "support": 140200.0
+    },
+    "weighted avg": {
+      "precision": 0.9958805546327644,
+      "recall": 0.9958773181169758,
+      "f1-score": 0.9958687331814648,
+      "support": 140200.0
+    }
+  },
+  "slices": {
+    "http_apex": {
+      "rows": 21321,
+      "benign_rows": 0,
+      "malicious_rows": 21321,
+      "false_positive_rate": null,
+      "malicious_recall": 1.0,
+      "confusion_matrix": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          21321
+        ]
+      ]
+    },
+    "http_subdomain": {
+      "rows": 8980,
+      "benign_rows": 0,
+      "malicious_rows": 8980,
+      "false_positive_rate": null,
+      "malicious_recall": 1.0,
+      "confusion_matrix": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          8980
+        ]
+      ]
+    },
+    "https_apex": {
+      "rows": 887,
+      "benign_rows": 125,
+      "malicious_rows": 762,
+      "false_positive_rate": 0.368,
+      "malicious_recall": 0.8963254593175853,
+      "confusion_matrix": [
+        [
+          79,
+          46
+        ],
+        [
+          79,
+          683
+        ]
+      ]
+    },
+    "https_subdomain": {
+      "rows": 109012,
+      "benign_rows": 108023,
+      "malicious_rows": 989,
+      "false_positive_rate": 0.0005091508289901225,
+      "malicious_recall": 0.5975733063700708,
+      "confusion_matrix": [
+        [
+          107968,
+          55
+        ],
+        [
+          398,
+          591
+        ]
+      ]
+    }
+  }
+}
