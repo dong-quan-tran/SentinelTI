@@ -2209,3 +2209,158 @@ What is reserved for future improvements (model quality, calibration, provider h
 Reviewed the original TODO list and marked all remaining items as either completed or explicitly deferred into the future roadmap.
 
 Aligned today’s implementation state with the documentation so the project can be considered “wrapped up” in its current scope.
+
+
+## Goal
+
+Fix the model’s excessive warnings on benign URLs, verify that threat detection still works, then return to **deployment**.
+
+We will not keep adding tools, downloading datasets, or changing unrelated code without a clear reason.
+
+## 1. Freeze the current baseline
+
+Record these results as our starting point:
+
+- 413 backend tests pass.
+- Current production model hash: `9783b5dcbb6ac748ebcebf4a176058012acaf4052318181d857d6abe95320379`
+- On the 50 source-labeled benign diagnostic URLs:
+  - 14 benign results.
+  - 36 suspicious results.
+  - Zero malicious results.
+  - All warnings had zero heuristic score.
+- Direct ML and full scoring return matching probabilities in the latest check.
+
+Keep the production model unchanged throughout the experiment.
+
+Deliverable: one short baseline report containing the model hash, input-file hashes, results, and known limits.
+
+## 2. Set the rules before trying fixes
+
+We need to measure both the model and the app:
+
+| Measure | What it tells us |
+|---|---|
+| ML false-positive rate | How often benign URLs cross the model threshold |
+| Final warning rate | How often benign URLs become suspicious or malicious |
+| Final malicious rate on benign URLs | How often the app makes a stronger false accusation |
+| Malicious detection | How many labeled threats receive warnings or malicious verdicts |
+| Counts by URL group | Whether averages hide weak groups |
+
+Report HTTP/HTTPS and apex/subdomain separately, alongside distinct-domain counts.
+
+Before evaluating new candidates, agree on numerical limits for false warnings and missed threats. These will be project acceptance rules—not proof that a URL checker can guarantee safety.
+
+Deliverable: a fixed evaluation checklist. We do not relax it afterward just to make a candidate pass.
+
+## 3. Resolve the data blocker
+
+This is the first real task.
+
+### Keep the files in these roles
+
+| File or set | Role |
+|---|---|
+| `urldata.csv` | Existing training source; preserve the original |
+| `manual_eval_urls.csv` | Behavior checks; not verified accuracy evidence |
+| LegitPhish review queue | Already-examined diagnostic set |
+| Downloaded LegitPhish and PhiUSIIL | Archived sources; do not blindly merge |
+| Go/Rust examples | Small reviewed diagnostic set; not enough for approval |
+
+### Collect the missing examples
+
+We need observed benign HTTPS apex URLs and genuine benign HTTP URLs, with varied domains and page types.
+
+Collection rules:
+
+- Preserve the observed URL.
+- Do not manufacture examples by removing `www` or changing schemes.
+- Record source, dates, reviewer, and label evidence.
+- Separate verified observations from labels accepted from a published dataset.
+- Leave uncertain records out of binary training.
+- Include ordinary pages, documentation, login pages, and other varied paths—not mostly “popular websites” articles.
+
+To avoid another download loop: inspect a source’s method and a sample first. Download or process the full source only if it appears to supply the missing coverage.
+
+Deliverable: one selected source and an audited supplemental batch. If adequate coverage cannot be obtained, stop and document that limit rather than pretend the model is fixed.
+
+## 4. Separate training, validation, and final testing
+
+Split by domain group:
+
+- Training: teaches the model.
+- Validation: guides candidate selection and any threshold tuning.
+- Final test: stays untouched until the candidate is selected.
+
+Group-based splits keep a group’s URLs together rather than scattering them across partitions. [scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html)
+
+The 50 URLs we have repeatedly examined remain diagnostics. They cannot serve as our untouched final test.
+
+Audit for duplicates, label conflicts, and domain overlap before training. Check class and subgroup counts after splitting.
+
+Deliverable: saved split manifests and a zero-overlap check.
+
+## 5. Run one controlled retraining experiment
+
+First change only the training-data coverage.
+
+Keep fixed:
+
+- Feature extractor.
+- XGBoost settings.
+- Model threshold of 0.75.
+- Final scoring rules.
+- Evaluation inputs and preprocessing.
+
+Train into a new candidate directory outside production paths. Compare the existing model and new candidate on the same validation data.
+
+If the data change fails, investigate one likely feature issue at a time. Do not remove several features and adjust thresholds simultaneously.
+
+Threshold tuning, if needed later, must use validation data—not training or final-test data. [scikit-learn](https://scikit-learn.org/stable/modules/classification_threshold.html)
+
+Deliverable: one candidate artifact and a comparison report explaining exactly what changed.
+
+## 6. Check gains and tradeoffs
+
+A candidate is not acceptable merely because it warns less.
+
+Check:
+
+- Did benign apex warnings fall?
+- Did benign HTTP behavior improve?
+- Did malicious detection get worse?
+- Are the results supported by enough distinct domains?
+- Do both ML scores and final app labels improve?
+- Does it still pass the behavior tests and full code suite?
+
+Then evaluate the selected candidate once on the untouched final test. If it fails, it is not ready for promotion.
+
+Deliverable: a clear accept/reject decision, including remaining limits.
+
+## 7. Promote, then finish deployment
+
+Only after acceptance:
+
+1. Make a backup of the existing artifact.
+2. Install the accepted candidate through a deliberate promotion step.
+3. Verify feature names, preprocessing, labels, and thresholds.
+4. Run backend and frontend checks.
+5. Test the API and UI from a clean setup.
+6. Finish hosting configuration, secrets, model readiness checks, and rollback instructions.
+
+We will not bundle unrelated scoring, authentication, or infrastructure refactors into the model experiment.
+
+## Scope guardrails
+
+- No more diagnostics unless they answer a specific unresolved question.
+- No large dataset download without checking likely coverage first.
+- No hand-labeling URLs as malicious merely because they look suspicious.
+- No “zero heuristic score means benign” shortcut.
+- No model promotion based only on passing code tests.
+- No feature change without retraining and matching prediction behavior.
+- One focused patch at a time, with ready-to-paste commands.
+
+## Immediate next action
+
+Write the baseline and acceptance checklist, then choose a practical collection source for the missing benign groups.
+
+We already have enough code inspection for that. The next milestone is better data—not another refactor.
