@@ -1,0 +1,24 @@
+{
+  "recorded_at": "2026-10-10T20:38:35.600925+00:00",
+  "model_sha256": "9783b5dcbb6ac748ebcebf4a176058012acaf4052318181d857d6abe95320379",
+  "model_type": "xgb",
+  "trained_at": "2026-05-31T03:40:52Z",
+  "feature_version": "v2",
+  "ml_threshold": 0.75,
+  "training_csv_sha256": "e40f2383fb3542b168087b96e43096de196e14ab049c49092771a31c244f3133",
+  "diagnostic_report_sha256": "af1cc21dfedc8ac40bed9a56e24fb41059c37d88664b6e19ad4ac179e52a4300",
+  "diagnostic_rows": 50,
+  "final_labels": {
+    "suspicious": 36,
+    "benign": 14
+  },
+  "final_warning_rate": 0.72,
+  "final_malicious_rate": 0.0,
+  "last_reported_backend_tests_passed": 413,
+  "limitations": [
+    "Source benign labels are not independently verified.",
+    "This selected diagnostic set is not representative of deployment traffic.",
+    "These URLs have been examined and are not an untouched final test.",
+    "No malicious recall estimate is available from this benign-only set."
+  ]
+}
