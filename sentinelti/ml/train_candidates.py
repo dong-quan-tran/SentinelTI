@@ -70,6 +70,34 @@ def slice_metrics(y_true, probabilities) -> dict:
     }
 
 
+def domain_group(url: str, suffixes) -> str:
+    host = urlsplit(url).hostname or ""
+    result = suffixes(host)
+    return result.top_domain_under_public_suffix or host.lower()
+
+
+def url_subgroup(url: str, suffixes) -> tuple[str, str]:
+    parsed = urlsplit(url)
+    scheme = parsed.scheme.lower()
+    host_type = (
+        "subdomain"
+        if suffixes(parsed.hostname or "").subdomain
+        else "apex"
+    )
+    return scheme, host_type
+
+
+def selected_feature_indices(names, variant: str) -> list[int]:
+    if variant not in {"full", "no_scheme"}:
+        raise ValueError(f"Unknown candidate variant: {variant}")
+
+    return [
+        index
+        for index, name in enumerate(names)
+        if variant == "full" or name not in {"is_http", "is_https"}
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--csv-path", default="data/urldata.csv")
@@ -100,12 +128,9 @@ def main() -> None:
     df = df.drop_duplicates("normalized_url").copy()
     deduplicated_rows = before_dedup - len(df)
 
-    def domain_group(url: str) -> str:
-        host = urlsplit(url).hostname or ""
-        result = suffixes(host)
-        return result.top_domain_under_public_suffix or host.lower()
-
-    df["group"] = df["normalized_url"].map(domain_group)
+    df["group"] = df["normalized_url"].map(
+        lambda url: domain_group(url, suffixes)
+    )
     excluded_rows = int(df["group"].isin(DIAGNOSTIC_DOMAINS).sum())
     df = df[~df["group"].isin(DIAGNOSTIC_DOMAINS)].reset_index(drop=True)
     df["y"] = df["label"].map({"benign": 0, "malicious": 1})
@@ -160,19 +185,16 @@ def main() -> None:
     ).to_csv(output / "split_groups.csv", index=False)
 
     test_urls = df.iloc[test_index]["normalized_url"]
-    schemes = test_urls.map(lambda url: urlsplit(url).scheme.lower()).to_numpy()
-    host_types = test_urls.map(
-        lambda url: "subdomain"
-        if suffixes(urlsplit(url).hostname or "").subdomain
-        else "apex"
-    ).to_numpy()
+    subgroups = [
+        url_subgroup(url, suffixes)
+        for url in test_urls
+    ]
+    schemes = np.asarray([scheme for scheme, _ in subgroups])
+    host_types = np.asarray([host_type for _, host_type in subgroups])
     summaries = []
 
     for variant in ("full", "no_scheme"):
-        selected = [
-            index for index, name in enumerate(names)
-            if variant == "full" or name not in {"is_http", "is_https"}
-        ]
+        selected = selected_feature_indices(names, variant)
         candidate_names = [names[index] for index in selected]
         model = XGBClassifier(
             n_estimators=400,

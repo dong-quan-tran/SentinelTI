@@ -377,8 +377,8 @@ def _train_and_save_from_split(
                 if msg:
                     training_notes.append(msg)
 
-    y_pred = clf.predict(X_test)
     y_prob = clf.predict_proba(X_test)[:, 1]
+    y_pred = (y_prob >= DEFAULT_THRESHOLD).astype(int)
 
     print(f"Evaluation on holdout set ({model_name}):")
     print(classification_report(y_test, y_pred, zero_division=0))
