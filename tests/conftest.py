@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
+
+
+TEST_API_KEY = "test-key"
+
+# The API validates its configuration during import, before fixtures run.
+# Supply a placeholder only inside the pytest process.
+if not os.environ.get("SENTINELTI_API_KEY"):
+    os.environ["SENTINELTI_API_KEY"] = TEST_API_KEY
 
 from sentinelti.api import app as fastapi_app
 import sentinelti.api.dependencies as deps_module
 from sentinelti import cli
 from sentinelti import scoring
-
-
-TEST_API_KEY = "test-key"
 
 
 @pytest.fixture
