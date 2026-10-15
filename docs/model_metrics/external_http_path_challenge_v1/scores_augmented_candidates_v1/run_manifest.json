@@ -1,0 +1,56 @@
+{
+  "challenge_csv_sha256": "7f5e28c9f46a170ab6467a0d04a30f57bf57d6ab1d2549502b1bb65a60c2de89",
+  "challenge_manifest_sha256": "c6fdaeed89e913faf1d05fa6fff21cd4645e3f20dedf2a1a0038268a1da1699c",
+  "production_features_sha256": "d75edcee9d59d49bf3ca9accdea01792921ccabdb4a1d07c15e72ec45e165299",
+  "artifacts": [
+    {
+      "variant": "full_augmented",
+      "artifact_sha256": "7b044e342009ef69d4740722327850c9beb2a348fa169f80121ddbee4e967461",
+      "report_sha256": "a15e4e8b56fea9a7ccbe7e88fad5c935d9453b4affae0f7a3453d43d160ec92f",
+      "diagnostic_csv_sha256": "4c3fcda091250eeb2f521a70b1bf6ebcceafefbe1eaec5c97db47fcce1e1bc99",
+      "supplemental_csv_sha256": "ab781ad1cf5f8bb3459cc5c5cfa6181effd94992f534e9fe7ae1ea589d7ae1cc",
+      "challenge_supplement_group_overlap": 0,
+      "saved_diagnostics_reproduced": true
+    },
+    {
+      "variant": "no_scheme_augmented",
+      "artifact_sha256": "6f65c74d769865228028375464f098af8f3aee9571ec81dee743eb5d631089a0",
+      "report_sha256": "302bfb5309b59724264c2c136d860e11a11bdbf71032ce2446395cb5d70dcb77",
+      "diagnostic_csv_sha256": "eee4904dda51e419d7425dc27dc099fd7f3f90b5ec13299df65909425fe39f87",
+      "supplemental_csv_sha256": "ab781ad1cf5f8bb3459cc5c5cfa6181effd94992f534e9fe7ae1ea589d7ae1cc",
+      "challenge_supplement_group_overlap": 0,
+      "saved_diagnostics_reproduced": true
+    }
+  ],
+  "summary": [
+    {
+      "variant": "full_augmented",
+      "urls": 1350,
+      "flagged_urls": 288,
+      "url_flag_rate": 0.21333333333333335,
+      "domain_groups": 101,
+      "domains_with_any_flag": 41,
+      "domains_with_all_flagged": 16,
+      "domain_macro_flag_rate": 0.2574150950970986,
+      "threshold": 0.75
+    },
+    {
+      "variant": "no_scheme_augmented",
+      "urls": 1350,
+      "flagged_urls": 196,
+      "url_flag_rate": 0.1451851851851852,
+      "domain_groups": 101,
+      "domains_with_any_flag": 36,
+      "domains_with_all_flagged": 13,
+      "domain_macro_flag_rate": 0.21001843235390116,
+      "threshold": 0.75
+    }
+  ],
+  "limitations": [
+    "Labels are inherited from a historical source, not newly verified.",
+    "The source has already been inspected during project development.",
+    "Supplemented candidates used other domains from the same source.",
+    "Only benign HTTP/apex path-bearing examples are included.",
+    "Results cannot establish malicious recall or root-only performance."
+  ]
+}

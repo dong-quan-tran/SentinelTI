@@ -51,3 +51,10 @@ coverage/
 /docs/model_metrics/http_apex_supplement_baseline_v1/split_groups.csv
 /docs/model_metrics/http_apex_supplement_augmented_v1/split_groups.csv
 /docs/model_metrics/scheme_invariant_baseline_v1/split_groups.csv
+
+# Source-level experiment files held pending publication review
+# Retained locally and in the verified pre-cleanup backup; not deleted.
+/docs/model_metrics/external_http_path_challenge_v1/scores_augmented_candidates_v1/domain_results.csv
+/docs/model_metrics/external_http_path_challenge_v1/scores_original_candidates_v1/domain_results.csv
+/docs/model_metrics/external_http_path_challenge_v1/urls.csv
+/docs/model_metrics/hannousse_external_eval_v1/urls.csv

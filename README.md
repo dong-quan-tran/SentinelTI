@@ -16,7 +16,7 @@ The deterministic scoring pipeline remains the source of truth. Optional AI summ
 ## Highlights
 
 - **Hybrid threat detection:** Combines XGBoost classification with deterministic lexical, structural, homoglyph, infrastructure, and reputation-based URL signals.
-- **Model quality:** XGBoost achieved **0.9991 ROC-AUC**, **0.9985 average precision**, **99.69% accuracy**, and **99.08% malicious-class recall** on a **135,053-URL held-out test set**.
+- **Historical in-dataset evaluation:** XGBoost achieved **0.9991 ROC-AUC**, **0.9985 average precision**, **99.69% accuracy**, and **99.08% malicious-class recall** on a **135,053-URL held-out test set**. These figures do not establish external URL-format generalization; see [evaluation limitations](#evaluation-limitations-and-format-shortcut-experiments).
 - **Training scale:** Evaluated Logistic Regression, XGBoost, and LightGBM using **450,175 labeled URLs** across training and held-out evaluation sets.
 - **Scoring performance:** A 500-iteration warmed benchmark measured **0.9 ms median** and **1.0 ms p95** core-scoring latency, sustaining **1,110 URLs/second**.
 - **End-to-end enrichment:** The complete deterministic path—including DNS resolution, local IP reputation checks, risk fusion, and explanation generation—measured **104.2 ms median** and **123.6 ms p95** latency.
@@ -364,7 +364,7 @@ SentinelTI combines model output and deterministic enrichment in one scoring pat
 
 SentinelTI supports Logistic Regression, XGBoost, and LightGBM classifiers.
 
-The latest evaluation used 450,175 labeled URLs:
+The historical in-dataset model comparison used 450,175 labeled URLs:
 
 - Training set: 315,122 URLs
 - Held-out test set: 135,053 URLs
@@ -375,13 +375,27 @@ The latest evaluation used 450,175 labeled URLs:
 | XGBoost | **0.9991** | **0.9985** | **99.69%** | **99.61%** | 99.08% | **99.34%** |
 | LightGBM | 0.9991 | 0.9985 | 99.69% | 99.50% | **99.14%** | 99.32% |
 
-XGBoost is the current preferred model because it achieved the strongest overall ROC-AUC, average precision, accuracy, and malicious-class F1. LightGBM achieved marginally higher malicious recall, so model selection can be revisited if recall becomes the primary operational requirement.
+XGBoost is the current preferred deployed model. In this historical comparison it achieved the strongest overall ROC-AUC, average precision, accuracy, and malicious-class F1; LightGBM achieved marginally higher malicious recall. This comparison alone does not establish robustness to new URL sources or formats.
 
 Evaluation artifacts are stored in:
 
 ```text
 docs/model_metrics/
 ```
+
+### Evaluation limitations and format-shortcut experiments
+
+The metrics above describe the historical in-dataset comparison, not an external
+generalization guarantee. Separate fixed-split candidate experiments exposed
+substantial format-associated errors on a historical external phishing dataset.
+The best overall candidate still flagged 24.86% of source-labeled benign URLs;
+severe apex errors remained. No candidate was promoted, and these are not new
+measurements of the deployed production artifact.
+
+See [the experiment results and limitations](docs/model_metrics/FORMAT_SHORTCUT_RESULTS.md)
+and [the artifact policy](docs/model_metrics/FORMAT_SHORTCUT_EXPERIMENTS.md).
+External labels are historical, current safety is unverified, and local-only
+artifacts limit reproduction from a fresh clone.
 
 ## Training
 

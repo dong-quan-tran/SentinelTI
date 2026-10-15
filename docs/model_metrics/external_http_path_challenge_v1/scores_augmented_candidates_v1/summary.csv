@@ -1,0 +1,3 @@
+variant,urls,flagged_urls,url_flag_rate,domain_groups,domains_with_any_flag,domains_with_all_flagged,domain_macro_flag_rate,threshold
+full_augmented,1350,288,0.21333333333333335,101,41,16,0.2574150950970986,0.75
+no_scheme_augmented,1350,196,0.1451851851851852,101,36,13,0.21001843235390116,0.75

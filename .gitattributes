@@ -1,0 +1,27 @@
+# Frozen experiment evidence: preserve recorded byte hashes.
+/docs/model_metrics/external_http_path_challenge_v1/manifest.json -text
+/docs/model_metrics/external_http_path_challenge_v1/scores_augmented_candidates_v1/combined_summary.csv -text
+/docs/model_metrics/external_http_path_challenge_v1/scores_augmented_candidates_v1/run_manifest.json -text
+/docs/model_metrics/external_http_path_challenge_v1/scores_augmented_candidates_v1/summary.csv -text
+/docs/model_metrics/external_http_path_challenge_v1/scores_original_candidates_v1/run_manifest.json -text
+/docs/model_metrics/external_http_path_challenge_v1/scores_original_candidates_v1/summary.csv -text
+/docs/model_metrics/hannousse_external_eval_v1/coverage.csv -text
+/docs/model_metrics/hannousse_external_eval_v1/manifest.json -text
+/docs/model_metrics/hannousse_external_scores_v1/manifest.json -text
+/docs/model_metrics/hannousse_external_scores_v1/metrics.csv -text
+/docs/model_metrics/hannousse_external_scores_v1/paired_changes.csv -text
+/docs/model_metrics/hannousse_external_scores_v1/root_slices.csv -text
+/docs/model_metrics/hannousse_external_scores_v1/summary.csv -text
+/docs/model_metrics/http_apex_supplement_augmented_v1/full_diagnostics.csv -text
+/docs/model_metrics/http_apex_supplement_augmented_v1/full_metrics.json -text
+/docs/model_metrics/http_apex_supplement_augmented_v1/no_scheme_diagnostics.csv -text
+/docs/model_metrics/http_apex_supplement_augmented_v1/no_scheme_metrics.json -text
+/docs/model_metrics/http_apex_supplement_augmented_v1/summary.csv -text
+/docs/model_metrics/http_apex_supplement_baseline_v1/full_diagnostics.csv -text
+/docs/model_metrics/http_apex_supplement_baseline_v1/full_metrics.json -text
+/docs/model_metrics/http_apex_supplement_baseline_v1/no_scheme_diagnostics.csv -text
+/docs/model_metrics/http_apex_supplement_baseline_v1/no_scheme_metrics.json -text
+/docs/model_metrics/http_apex_supplement_baseline_v1/summary.csv -text
+/docs/model_metrics/scheme_invariant_baseline_v1/scheme_invariant_diagnostics.csv -text
+/docs/model_metrics/scheme_invariant_baseline_v1/scheme_invariant_metrics.json -text
+/docs/model_metrics/scheme_invariant_baseline_v1/summary.csv -text

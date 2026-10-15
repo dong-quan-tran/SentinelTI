@@ -1,0 +1,205 @@
+{
+  "created_at": "2026-10-13T15:13:50.100706+00:00",
+  "csv_path": ".\\data\\urldata.csv",
+  "csv_sha256": "e40f2383fb3542b168087b96e43096de196e14ab049c49092771a31c244f3133",
+  "preprocessing": "http-empty-path-to-root-v1",
+  "threshold": 0.75,
+  "invalid_rows": 48,
+  "deduplicated_rows": 239,
+  "diagnostic_domain_rows_excluded": 14940,
+  "baseline_train_rows": 294749,
+  "train_rows": 296528,
+  "test_rows": 140200,
+  "train_groups": 98447,
+  "test_groups": 42192,
+  "group_overlap": 0,
+  "split_method": "saved-domain-groups",
+  "split_seed": null,
+  "split_groups_path": ".\\docs\\model_metrics\\format_shortcut_experiment\\split_groups.csv",
+  "split_groups_sha256": "046b5e55a61a6f41ee2de1238815eda4c4eade4a243be3932ba91eeffd38f871",
+  "baseline_train_partition_sha256": "5ea6b618fc6b7ab867256eaa2e7f0dc10c8c83256d778a4b49c1a961c3961004",
+  "test_partition_sha256": "7484ae896eadb3e0634940e0d2734301b8479367d64f6c61076b1b84979015ad",
+  "supplemental_csv": "C:\\Users\\God\\Downloads\\sentinelti_http_apex_supplement_v1.csv",
+  "supplemental_csv_sha256": "ab781ad1cf5f8bb3459cc5c5cfa6181effd94992f534e9fe7ae1ea589d7ae1cc",
+  "supplemental_rows": 1779,
+  "supplemental_groups": 121,
+  "supplemental_domain_cap": 20,
+  "manual_eval_path": ".\\data\\manual_eval_urls.csv",
+  "manual_eval_sha256": "1518c8a1c6a2544caf3d69576e39355fd414a3047334e04c0cc73d2c238fa77c",
+  "scale_pos_weight": 3.154964124106627,
+  "scale_pos_weight_basis": "baseline-training-class-ratio",
+  "variant": "full",
+  "feature_names": [
+    "url_len",
+    "domain_len",
+    "host_len",
+    "path_len",
+    "query_len",
+    "fragment_len",
+    "digits_count",
+    "alpha_count",
+    "special_count",
+    "slash_count",
+    "dot_count_full",
+    "dot_count_host",
+    "hyphen_count_host",
+    "underscore_count",
+    "percent_count",
+    "equals_count",
+    "amp_count",
+    "question_count",
+    "at_count",
+    "digit_ratio",
+    "alpha_ratio",
+    "special_ratio",
+    "has_ip",
+    "is_http",
+    "is_https",
+    "has_port",
+    "port_value",
+    "uncommon_port",
+    "subdomain_depth",
+    "max_host_label_len",
+    "avg_host_label_len",
+    "num_path_segments",
+    "max_path_segment_len",
+    "num_query_params",
+    "keyword_hits",
+    "keyword_density",
+    "has_punycode",
+    "has_fragment",
+    "has_nested_url_in_query",
+    "has_nested_url_in_fragment",
+    "redirect_param_count",
+    "login_in_host",
+    "login_in_path",
+    "brand_in_host",
+    "brand_in_path",
+    "suspicious_extension",
+    "repeated_char_ratio",
+    "url_entropy",
+    "is_internal_host",
+    "https_token_in_host",
+    "double_slash_in_path",
+    "tilde_count",
+    "plus_count",
+    "semicolon_count",
+    "tld"
+  ],
+  "roc_auc": 0.9987812238571563,
+  "average_precision": 0.9980370734033611,
+  "overall": {
+    "rows": 140200,
+    "benign_rows": 108148,
+    "malicious_rows": 32052,
+    "false_positive_rate": 0.0008784258608573436,
+    "malicious_recall": 0.9839323599151379,
+    "confusion_matrix": [
+      [
+        108053,
+        95
+      ],
+      [
+        515,
+        31537
+      ]
+    ]
+  },
+  "classification_report": {
+    "0": {
+      "precision": 0.9952564291503943,
+      "recall": 0.9991215741391427,
+      "f1-score": 0.9971852562801086,
+      "support": 108148.0
+    },
+    "1": {
+      "precision": 0.9969967121901872,
+      "recall": 0.9839323599151379,
+      "f1-score": 0.9904214559386973,
+      "support": 32052.0
+    },
+    "accuracy": 0.9956490727532097,
+    "macro avg": {
+      "precision": 0.9961265706702906,
+      "recall": 0.9915269670271403,
+      "f1-score": 0.993803356109403,
+      "support": 140200.0
+    },
+    "weighted avg": {
+      "precision": 0.9956542861546128,
+      "recall": 0.9956490727532097,
+      "f1-score": 0.9956389415258795,
+      "support": 140200.0
+    }
+  },
+  "slices": {
+    "http_apex": {
+      "rows": 21321,
+      "benign_rows": 0,
+      "malicious_rows": 21321,
+      "false_positive_rate": null,
+      "malicious_recall": 0.9978425026968716,
+      "confusion_matrix": [
+        [
+          0,
+          0
+        ],
+        [
+          46,
+          21275
+        ]
+      ]
+    },
+    "http_subdomain": {
+      "rows": 8980,
+      "benign_rows": 0,
+      "malicious_rows": 8980,
+      "false_positive_rate": null,
+      "malicious_recall": 0.9994432071269488,
+      "confusion_matrix": [
+        [
+          0,
+          0
+        ],
+        [
+          5,
+          8975
+        ]
+      ]
+    },
+    "https_apex": {
+      "rows": 887,
+      "benign_rows": 125,
+      "malicious_rows": 762,
+      "false_positive_rate": 0.392,
+      "malicious_recall": 0.89501312335958,
+      "confusion_matrix": [
+        [
+          76,
+          49
+        ],
+        [
+          80,
+          682
+        ]
+      ]
+    },
+    "https_subdomain": {
+      "rows": 109012,
+      "benign_rows": 108023,
+      "malicious_rows": 989,
+      "false_positive_rate": 0.0004258352387917388,
+      "malicious_recall": 0.6117290192113246,
+      "confusion_matrix": [
+        [
+          107977,
+          46
+        ],
+        [
+          384,
+          605
+        ]
+      ]
+    }
+  }
+}
