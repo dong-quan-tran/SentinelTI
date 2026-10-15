@@ -261,12 +261,266 @@ def load_supplement(
     return supplement
 
 
+
+REVIEWED_SUPPLEMENT_SCHEMA = "reviewed-new-domains-v1"
+REVIEWED_SUPPLEMENT_DOMAIN_CAP = 1
+PROTECTED_EXTERNAL_EVALUATIONS = (
+    (
+        "docs/model_metrics/hannousse_external_eval_v1/urls.csv",
+        "docs/model_metrics/hannousse_external_eval_v1/manifest.json",
+        "evaluation_csv_sha256",
+    ),
+    (
+        "docs/model_metrics/external_http_path_challenge_v1/urls.csv",
+        "docs/model_metrics/external_http_path_challenge_v1/manifest.json",
+        "challenge_csv_sha256",
+    ),
+)
+
+
+def load_reviewed_supplement(
+    path,
+    manifest_path,
+    main_df: pd.DataFrame,
+    train_groups: set[str],
+    test_groups: set[str],
+    manual_eval_path,
+    suffixes,
+    *,
+    baseline_csv_sha256: str,
+    baseline_split_sha256: str,
+    protected_evaluations=PROTECTED_EXTERNAL_EVALUATIONS,
+) -> pd.DataFrame:
+    """Validate experiment approvals and isolation; do not infer safe labels."""
+    def require(condition, message):
+        if not condition:
+            raise ValueError(message)
+
+    def nonempty(value):
+        return isinstance(value, str) and bool(value.strip())
+
+    def is_hash(value):
+        return (
+            isinstance(value, str)
+            and len(value) == 64
+            and all(char in "0123456789abcdef" for char in value)
+        )
+
+    manifest_bytes = Path(manifest_path).read_bytes()
+    csv_bytes = Path(path).read_bytes()
+    manifest = json.loads(manifest_bytes.decode("utf-8-sig"))
+    require(isinstance(manifest, dict), "Supplement manifest must be an object.")
+    require(
+        manifest.get("schema_version") == REVIEWED_SUPPLEMENT_SCHEMA,
+        "Unsupported reviewed supplement schema.",
+    )
+    require(
+        manifest.get("supplement_csv_sha256")
+        == hashlib.sha256(csv_bytes).hexdigest(),
+        "Reviewed supplement CSV hash mismatch.",
+    )
+    require(
+        manifest.get("baseline_csv_sha256") == baseline_csv_sha256
+        and manifest.get("baseline_split_sha256") == baseline_split_sha256,
+        "Reviewed supplement baseline fingerprints differ.",
+    )
+    manual_bytes = Path(manual_eval_path).read_bytes()
+    require(
+        manifest.get("manual_fixture_sha256")
+        == hashlib.sha256(manual_bytes).hexdigest(),
+        "Reviewed supplement manual fixture hash mismatch.",
+    )
+    require(
+        manifest.get("preprocessing") == PREPROCESSING,
+        "Reviewed supplement preprocessing differs.",
+    )
+    basis = manifest.get("label_basis")
+    require(
+        basis in {"historical_source_label", "registry_associated_assumed_benign"},
+        "Unsupported or unassigned supplement label basis.",
+    )
+    approval = manifest.get("approval")
+    require(isinstance(approval, dict), "Explicit experiment approval required.")
+    require(
+        approval.get("status") == "approved_for_experiment"
+        and nonempty(approval.get("reviewer"))
+        and nonempty(approval.get("label_policy"))
+        and approval.get("not_current_safety_verification") is True,
+        "Explicit experiment approval and label policy required.",
+    )
+    try:
+        reviewed_at = datetime.fromisoformat(approval["reviewed_at_utc"])
+        require(reviewed_at.utcoffset() is not None, "Approval timestamp needs a timezone.")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Approval needs a timezone-aware review timestamp.") from exc
+    source = manifest.get("source")
+    require(
+        isinstance(source, dict)
+        and nonempty(source.get("name"))
+        and nonempty(source.get("url"))
+        and is_hash(source.get("sha256")),
+        "Documented source name, URL, and SHA256 required.",
+    )
+    require(
+        type(manifest.get("per_domain_cap")) is int
+        and manifest["per_domain_cap"] == REVIEWED_SUPPLEMENT_DOMAIN_CAP,
+        "Reviewed supplements require a one-URL-per-domain cap.",
+    )
+
+    import io
+    supplement = read_string_csv(io.BytesIO(csv_bytes))
+    required = {
+        "url", "label", "label_basis", "review_status",
+        "review_evidence_url", "reviewer", "source_sha256",
+    }
+    require(required.issubset(supplement.columns), "Missing reviewed supplement columns.")
+    require(not supplement.empty, "Reviewed supplement is empty.")
+    require(supplement["label"].eq("benign").all(), "Only explicit benign labels accepted.")
+    require(supplement["label_basis"].eq(basis).all(), "Per-row label basis differs.")
+    require(
+        supplement["review_status"].eq("approved_for_experiment").all(),
+        "Every row requires experiment approval; corroboration alone is insufficient.",
+    )
+    for column in ("review_evidence_url", "reviewer"):
+        require(supplement[column].str.strip().ne("").all(), f"Blank {column}.")
+    for evidence_url in [source["url"], *supplement["review_evidence_url"]]:
+        require(
+            normalize_candidate_url(evidence_url) is not None,
+            "Evidence and source URLs must be explicit HTTP(S) URLs.",
+        )
+    require(
+        supplement["source_sha256"].eq(source["sha256"]).all(),
+        "Per-row source hash differs.",
+    )
+    supplement["normalized_url"] = supplement["url"].map(normalize_candidate_url)
+    require(supplement["normalized_url"].notna().all(), "Invalid reviewed supplement URLs.")
+    require(
+        not supplement["normalized_url"].duplicated().any(),
+        "Reviewed supplement contains normalized duplicates or conflicting labels.",
+    )
+    require(
+        not supplement["normalized_url"].isin(main_df["normalized_url"]).any(),
+        "Reviewed supplement overlaps normalized main URLs.",
+    )
+
+    import ipaddress
+    for url in supplement["normalized_url"]:
+        parsed = urlsplit(url)
+        try:
+            ipaddress.ip_address(parsed.hostname)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("IP-literal supplements are outside this experiment.")
+        require(
+            parsed.username is None and parsed.password is None,
+            "Credential-bearing supplements are outside this experiment.",
+        )
+        default_port = 80 if parsed.scheme.lower() == "http" else 443
+        require(
+            parsed.port in (None, default_port),
+            "Nondefault-port supplements are outside this experiment.",
+        )
+        require(bool(suffixes(parsed.hostname).suffix), "Public-suffix hostname required.")
+
+    supplement["group"] = supplement["normalized_url"].map(
+        lambda url: domain_group(url, suffixes)
+    )
+    groups = set(supplement["group"])
+    require(groups.isdisjoint(test_groups), "Supplement overlaps saved test domains.")
+    require(
+        groups.isdisjoint(set(main_df["group"]) | train_groups),
+        "Reviewed supplement must contain new domain groups only.",
+    )
+    require(groups.isdisjoint(DIAGNOSTIC_DOMAINS), "Supplement overlaps diagnostic domains.")
+    require(
+        not supplement["group"].duplicated().any(),
+        "Reviewed supplement exceeds the one-URL-per-domain cap.",
+    )
+
+    def protected_groups(data, description):
+        urls = data["url"].map(normalize_candidate_url)
+        require(urls.notna().all(), f"Invalid URL in {description}.")
+        computed = urls.map(lambda url: domain_group(url, suffixes))
+        if "group" in data.columns:
+            require(computed.equals(data["group"]), f"Stored groups differ in {description}.")
+        return set(computed)
+
+    manual = read_string_csv(io.BytesIO(manual_bytes), usecols=["url"])
+    require(
+        groups.isdisjoint(protected_groups(manual, "manual fixture")),
+        "Supplement overlaps manual evaluation domains.",
+    )
+    require(bool(protected_evaluations), "Protected external evaluations are required.")
+    declared = manifest.get("protected_evaluations")
+    require(isinstance(declared, list), "Protected evaluation fingerprints required.")
+    actual_records = []
+    for csv_path, evaluation_manifest_path, hash_key in protected_evaluations:
+        evaluation_bytes = Path(csv_path).read_bytes()
+        evaluation_manifest_bytes = Path(evaluation_manifest_path).read_bytes()
+        evaluation_manifest = json.loads(evaluation_manifest_bytes.decode("utf-8-sig"))
+        evaluation_hash = hashlib.sha256(evaluation_bytes).hexdigest()
+        require(
+            isinstance(evaluation_manifest, dict)
+            and evaluation_manifest.get(hash_key) == evaluation_hash,
+            "Protected evaluation CSV hash mismatch.",
+        )
+        data = read_string_csv(io.BytesIO(evaluation_bytes))
+        require("url" in data.columns and not data.empty, "Empty/invalid protected evaluation.")
+        require(
+            groups.isdisjoint(protected_groups(data, "protected evaluation")),
+            "Supplement overlaps protected external evaluation domains.",
+        )
+        actual_records.append({
+            "csv_path": str(csv_path),
+            "csv_sha256": evaluation_hash,
+            "manifest_path": str(evaluation_manifest_path),
+            "manifest_sha256": hashlib.sha256(evaluation_manifest_bytes).hexdigest(),
+        })
+    require(declared == actual_records, "Protected evaluation fingerprints differ.")
+    require(
+        type(manifest.get("rows")) is int and manifest["rows"] == len(supplement)
+        and type(manifest.get("domain_groups")) is int
+        and manifest["domain_groups"] == len(groups),
+        "Reviewed supplement row/domain counts differ.",
+    )
+    require(
+        Path(path).read_bytes() == csv_bytes
+        and Path(manifest_path).read_bytes() == manifest_bytes
+        and Path(manual_eval_path).read_bytes() == manual_bytes,
+        "Reviewed supplement inputs changed during validation.",
+    )
+    for record in actual_records:
+        require(
+            file_sha256(record["csv_path"]) == record["csv_sha256"]
+            and file_sha256(record["manifest_path"]) == record["manifest_sha256"],
+            "Protected evaluation changed during validation.",
+        )
+    supplement["y"] = 0
+    supplement.attrs["reviewed_provenance"] = {
+        "schema_version": REVIEWED_SUPPLEMENT_SCHEMA,
+        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "label_basis": basis,
+        "approval": approval,
+        "source": source,
+        "protected_evaluations": actual_records,
+        "current_safety_verified": False,
+    }
+    return supplement
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--csv-path", default="data/urldata.csv")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--split-groups")
     parser.add_argument("--supplemental-csv")
+    parser.add_argument(
+        "--supplemental-mode",
+        choices=("legacy-http-apex", "reviewed-new-domains"),
+        default="legacy-http-apex",
+    )
+    parser.add_argument("--supplemental-manifest")
     parser.add_argument("--variants",
         nargs="+",
         choices=("full", "no_scheme", "scheme_invariant"),
@@ -277,6 +531,14 @@ def main() -> None:
         default="data/manual_eval_urls.csv",
     )
     args = parser.parse_args()
+
+    if args.supplemental_mode == "reviewed-new-domains":
+        if not (args.supplemental_csv and args.supplemental_manifest and args.split_groups):
+            parser.error("reviewed-new-domains requires supplement CSV, manifest, and saved split.")
+        if args.variants != ["full"]:
+            parser.error("The first reviewed-new-domains experiment requires --variants full.")
+    elif args.supplemental_manifest:
+        parser.error("--supplemental-manifest requires reviewed-new-domains mode.")
 
     if args.supplemental_csv and not args.split_groups:
         parser.error("--supplemental-csv requires --split-groups.")
@@ -368,16 +630,32 @@ def main() -> None:
     supplemental_groups = 0
     supplemental_sha256 = None
     manual_eval_sha256 = None
+    reviewed_provenance = None
+    baseline_train_group_count = len(train_groups)
 
     if args.supplemental_csv:
-        supplement = load_supplement(
-            args.supplemental_csv,
-            df,
-            train_groups,
-            test_groups,
-            args.manual_eval_path,
-            suffixes,
-        )
+        if args.supplemental_mode == "reviewed-new-domains":
+            supplement = load_reviewed_supplement(
+                args.supplemental_csv,
+                args.supplemental_manifest,
+                df,
+                train_groups,
+                test_groups,
+                args.manual_eval_path,
+                suffixes,
+                baseline_csv_sha256=main_csv_sha256,
+                baseline_split_sha256=file_sha256(args.split_groups),
+            )
+            reviewed_provenance = supplement.attrs["reviewed_provenance"]
+        else:
+            supplement = load_supplement(
+                args.supplemental_csv,
+                df,
+                train_groups,
+                test_groups,
+                args.manual_eval_path,
+                suffixes,
+            )
         supplemental_rows = len(supplement)
         supplemental_groups = supplement["group"].nunique()
         supplemental_sha256 = file_sha256(args.supplemental_csv)
@@ -390,9 +668,8 @@ def main() -> None:
             np.arange(original_length, len(df)),
         ])
 
-    if not set(df.iloc[train_index]["group"]).isdisjoint(
-        set(df.iloc[test_index]["group"])
-    ):
+    train_groups = set(df.iloc[train_index]["group"])
+    if not train_groups.isdisjoint(set(df.iloc[test_index]["group"])):
         raise ValueError("Supplement introduced train/test group overlap.")
 
     if partition_sha256(df.iloc[test_index]) != test_partition_sha256:
@@ -454,7 +731,8 @@ def main() -> None:
         "supplemental_rows": supplemental_rows,
         "supplemental_groups": supplemental_groups,
         "supplemental_domain_cap": (
-            SUPPLEMENTAL_DOMAIN_CAP if args.supplemental_csv else None
+            (REVIEWED_SUPPLEMENT_DOMAIN_CAP if reviewed_provenance else SUPPLEMENTAL_DOMAIN_CAP)
+            if args.supplemental_csv else None
         ),
         "manual_eval_path": (
             args.manual_eval_path if args.supplemental_csv else None
@@ -463,6 +741,15 @@ def main() -> None:
         "scale_pos_weight": baseline_scale_pos_weight,
         "scale_pos_weight_basis": "baseline-training-class-ratio",
     }
+
+    if reviewed_provenance is not None:
+        manifest.update({
+            "supplemental_mode": "reviewed-new-domains",
+            "supplemental_manifest": args.supplemental_manifest,
+            "reviewed_supplement": reviewed_provenance,
+            "baseline_train_groups": baseline_train_group_count,
+            "new_training_groups": len(train_groups) - baseline_train_group_count,
+        })
 
     pd.DataFrame({
         "group": sorted(train_groups | test_groups),
