@@ -35,3 +35,19 @@ Thumbs.db
 .coverage
 htmlcov/
 coverage/
+
+# Local format-shortcut experiment artifacts
+# Generated local artifacts; preserve them in separate verified backups.
+# Reports, manifests, diagnostics, and evaluation inputs remain visible.
+# The three ignored split copies match the canonical recorded split.
+/docs/model_metrics/http_apex_supplement_baseline_v1/full_candidate.joblib
+/docs/model_metrics/http_apex_supplement_baseline_v1/no_scheme_candidate.joblib
+/docs/model_metrics/http_apex_supplement_augmented_v1/full_candidate.joblib
+/docs/model_metrics/http_apex_supplement_augmented_v1/no_scheme_candidate.joblib
+/docs/model_metrics/scheme_invariant_baseline_v1/scheme_invariant_candidate.joblib
+/docs/model_metrics/external_http_path_challenge_v1/scores_original_candidates_v1/predictions.csv
+/docs/model_metrics/external_http_path_challenge_v1/scores_augmented_candidates_v1/predictions.csv
+/docs/model_metrics/hannousse_external_scores_v1/predictions.csv
+/docs/model_metrics/http_apex_supplement_baseline_v1/split_groups.csv
+/docs/model_metrics/http_apex_supplement_augmented_v1/split_groups.csv
+/docs/model_metrics/scheme_invariant_baseline_v1/split_groups.csv
