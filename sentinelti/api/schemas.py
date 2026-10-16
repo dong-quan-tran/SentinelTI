@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal
+from typing import Annotated, Any, Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+MAX_URL_LENGTH = 4096
+MAX_URLS_PER_BATCH = 25
+URLString = Annotated[str, Field(min_length=1, max_length=MAX_URL_LENGTH)]
 
 
 AI_EXPLAIN_SCORE_REQUEST_EXAMPLES = {
@@ -143,7 +148,7 @@ class ScoreResponse(BaseModel):
 
 
 class ScoreUrlRequest(BaseModel):
-    url: str = Field(
+    url: URLString = Field(
         ...,
         examples=["https://example.com"],
         description="URL to score",
@@ -160,8 +165,10 @@ class ScoreUrlRequest(BaseModel):
 
 
 class ScoreUrlsRequest(BaseModel):
-    urls: List[str] = Field(
+    urls: List[URLString] = Field(
         ...,
+        min_length=1,
+        max_length=MAX_URLS_PER_BATCH,
         examples=[
             "https://example.com",
             "https://phishy.example/login",
@@ -237,13 +244,14 @@ class AIRewriteExplanation(BaseModel):
 
 
 class AIExplainScoreRequest(BaseModel):
-    url: str = Field(
+    url: URLString = Field(
         ...,
         examples=["https://example.com"],
         description="URL to score and rewrite with AI assistance.",
     )
     ai_model: str | None = Field(
         default=None,
+        max_length=128,
         examples=["llama3.1:8b", "deepseek-r1:1.5b"],
         description=(
             "Optional Ollama model override. If omitted, the configured default "

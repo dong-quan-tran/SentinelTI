@@ -1,0 +1,4 @@
+scope,bootstrap_replicates,bootstrap_seed,false_positive_rate_row_level_ci_low,false_positive_rate_row_level_ci_high,false_positive_rate_domain_macro_ci_low,false_positive_rate_domain_macro_ci_high,phishing_recall_row_level_ci_low,phishing_recall_row_level_ci_high,phishing_recall_domain_macro_ci_low,phishing_recall_domain_macro_ci_high
+original_saved_test,2000,42,0.00949112751232629,0.01601213090406524,0.021959608673400854,0.025843609912056083,-0.02672700685681069,-0.01980217080074614,-0.05077543976810139,-0.0430402049227677
+historical_hannousse,2000,42,-0.07336957311257043,-0.05012288648193942,-0.07738419449237609,-0.05219086291798467,0.0005767195600670655,0.024837936442345773,-0.018305985576725487,0.005026691227300134
+historical_http_apex_path_challenge,2000,42,-0.31061695812026635,-0.17924323539485645,-0.27483395454930126,-0.15201757675767577,,,,

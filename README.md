@@ -16,11 +16,11 @@ The deterministic scoring pipeline remains the source of truth. Optional AI summ
 ## Highlights
 
 - **Hybrid threat detection:** Combines XGBoost classification with deterministic lexical, structural, homoglyph, infrastructure, and reputation-based URL signals.
-- **Model quality:** XGBoost achieved **0.9991 ROC-AUC**, **0.9985 average precision**, **99.69% accuracy**, and **99.08% malicious-class recall** on a **135,053-URL held-out test set**.
+- **Historical in-dataset evaluation:** XGBoost achieved **0.9991 ROC-AUC**, **0.9985 average precision**, **99.69% accuracy**, and **99.08% malicious-class recall** on a **135,053-URL held-out test set**. These figures do not establish external URL-format generalization; see [evaluation limitations](#evaluation-limitations-and-format-shortcut-experiments).
 - **Training scale:** Evaluated Logistic Regression, XGBoost, and LightGBM using **450,175 labeled URLs** across training and held-out evaluation sets.
 - **Scoring performance:** A 500-iteration warmed benchmark measured **0.9 ms median** and **1.0 ms p95** core-scoring latency, sustaining **1,110 URLs/second**.
 - **End-to-end enrichment:** The complete deterministic path—including DNS resolution, local IP reputation checks, risk fusion, and explanation generation—measured **104.2 ms median** and **123.6 ms p95** latency.
-- **Reliability:** Includes **300+ production-style Pytest cases** across API, ML, scoring, CLI, AI-service, and model-metadata behavior.
+- **Reliability:** Includes **574 backend tests** across API, ML, scoring, CLI, AI-service, and model-metadata behavior, plus frontend linting, tests, and production builds in CI.
 
 ## Architecture
 
@@ -145,14 +145,15 @@ Typical local frontend URL:
 http://localhost:5173
 ```
 
-If needed, create `sentinelti/frontend/.env`:
+The frontend calls the same-origin `/api` gateway. During local development,
+Vite proxies those requests to `http://127.0.0.1:8000` and reads
+`SENTINELTI_API_KEY` from the Vite server process; do not put the key in a
+`VITE_` variable or browser code.
 
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-VITE_SENTINELTI_API_KEY=change-me
-```
-
-The frontend's `VITE_SENTINELTI_API_KEY` must match the backend's `SENTINELTI_API_KEY` for this local demo. Vite exposes `VITE_` values to browser users: this is not a secret or a suitable authentication design for a public deployment.
+For public deployment, use the server-side Vercel gateway and Render API
+configuration in [the Vercel/Render deployment guide](docs/VERCEL_RENDER_DEPLOYMENT.md).
+Keep production access restricted until Vercel edge rate limiting has been
+configured and verified as described in that guide.
 
 ## CLI usage
 
@@ -235,6 +236,7 @@ The API has no default key: set `SENTINELTI_API_KEY` before starting it. The qui
 | Method | Endpoint | Auth | Description |
 |---|---|---:|---|
 | `GET` | `/health` | No | Health and version status |
+| `GET` | `/health/ready` | No | Readiness check; returns 503 if the model cannot load |
 | `GET` | `/model-info` | Yes | Active model metadata, metrics, thresholds, and top features |
 | `POST` | `/score-url` | Yes | Score one URL |
 | `POST` | `/score-urls` | Yes | Score a batch of URLs |
@@ -364,7 +366,7 @@ SentinelTI combines model output and deterministic enrichment in one scoring pat
 
 SentinelTI supports Logistic Regression, XGBoost, and LightGBM classifiers.
 
-The latest evaluation used 450,175 labeled URLs:
+The historical in-dataset model comparison used 450,175 labeled URLs:
 
 - Training set: 315,122 URLs
 - Held-out test set: 135,053 URLs
@@ -375,13 +377,27 @@ The latest evaluation used 450,175 labeled URLs:
 | XGBoost | **0.9991** | **0.9985** | **99.69%** | **99.61%** | 99.08% | **99.34%** |
 | LightGBM | 0.9991 | 0.9985 | 99.69% | 99.50% | **99.14%** | 99.32% |
 
-XGBoost is the current preferred model because it achieved the strongest overall ROC-AUC, average precision, accuracy, and malicious-class F1. LightGBM achieved marginally higher malicious recall, so model selection can be revisited if recall becomes the primary operational requirement.
+XGBoost is the current preferred deployed model. In this historical comparison it achieved the strongest overall ROC-AUC, average precision, accuracy, and malicious-class F1; LightGBM achieved marginally higher malicious recall. This comparison alone does not establish robustness to new URL sources or formats.
 
 Evaluation artifacts are stored in:
 
 ```text
 docs/model_metrics/
 ```
+
+### Evaluation limitations and format-shortcut experiments
+
+The metrics above describe the historical in-dataset comparison, not an external
+generalization guarantee. Separate fixed-split candidate experiments exposed
+substantial format-associated errors on a historical external phishing dataset.
+The best overall candidate still flagged 24.86% of source-labeled benign URLs;
+severe apex errors remained. No candidate was promoted, and these are not new
+measurements of the deployed production artifact.
+
+See [the experiment results and limitations](docs/model_metrics/FORMAT_SHORTCUT_RESULTS.md)
+and [the artifact policy](docs/model_metrics/FORMAT_SHORTCUT_EXPERIMENTS.md).
+External labels are historical, current safety is unverified, and local-only
+artifacts limit reproduction from a fresh clone.
 
 ## Training
 
@@ -673,7 +689,9 @@ SentinelTI/
 
 ## Future improvements
 
-The current implementation is complete for its intended scope. Future iterations may explore:
+The core CLI, API, and frontend are implemented, but anonymous public deployment
+is not launch-ready until the edge abuse controls in the deployment guide have
+been configured and verified. Future iterations may explore:
 
 - Probability calibration and validation-derived threshold selection
 - Additional URL, host, DNS, and reputation features

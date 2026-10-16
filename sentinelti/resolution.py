@@ -1,24 +1,34 @@
 from __future__ import annotations
 
+import ipaddress
 from typing import Optional
-import socket
+
+import dns.exception
+import dns.resolver
 
 
 def resolve_hostname_to_ip(host: str, timeout: float = 0.5) -> Optional[str]:
     """
-    Best-effort resolver: returns a single IPv4 address for a hostname,
-    or None if resolution fails.
-
-    This is intentionally simple and conservative; upstream callers
-    must handle None safely.
+    Return one IPv4 address within a bounded DNS lifetime, or None on failure.
     """
     host = (host or "").strip()
     if not host:
         return None
 
     try:
-        # Simple IPv4 resolution; you can extend this later if needed.
-        return socket.gethostbyname(host)
-    except OSError:
-        # DNS failure, invalid name, etc.
+        return str(ipaddress.IPv4Address(host))
+    except ipaddress.AddressValueError:
+        pass
+
+    if timeout <= 0:
+        raise ValueError("DNS timeout must be greater than zero.")
+
+    try:
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = timeout
+        answers = resolver.resolve(host, "A", lifetime=timeout, search=False)
+        for answer in answers:
+            return str(ipaddress.IPv4Address(answer.address))
+    except (dns.exception.DNSException, OSError, ValueError):
         return None
+    return None

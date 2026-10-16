@@ -1,0 +1,2 @@
+variant,roc_auc,average_precision,rows,benign_rows,malicious_rows,false_positive_rate,malicious_recall,confusion_matrix
+scheme_invariant,0.9907379787974548,0.9820015477720103,140200,108148,32052,0.009098642600880275,0.9171970547859728,"[[107164, 984], [2654, 29398]]"

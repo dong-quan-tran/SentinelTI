@@ -6,6 +6,13 @@ import joblib
 from sentinelti.ml import predict
 
 
+@pytest.fixture(autouse=True)
+def clear_cached_model_artifacts():
+    predict._load_artifact_cached.cache_clear()
+    yield
+    predict._load_artifact_cached.cache_clear()
+
+
 class DummyModel:
     def __init__(self, prob: float):
         self.prob = prob

@@ -1,0 +1,31 @@
+{
+  "purpose": "exploratory_historical_benign_http_apex_path_challenge",
+  "not_for_training": true,
+  "not_an_untouched_final_benchmark": true,
+  "current_safety_verified": false,
+  "malicious_examples_included": false,
+  "root_only_examples_included": false,
+  "source_url": "https://raw.githubusercontent.com/shreyagopal/Phishing-Website-Detection-by-Machine-Learning-Techniques/master/DataFiles/1.Benign_list_big_final.csv",
+  "source_sha256": "07cd35b469ad2c1cbe8c4a56c59e76560b6253978e8e625e90286ff0f6bc18b2",
+  "retrieved_at_utc": "2026-10-14T20:54:01.951993+00:00",
+  "baseline_csv_sha256": "e40f2383fb3542b168087b96e43096de196e14ab049c49092771a31c244f3133",
+  "baseline_split_sha256": "046b5e55a61a6f41ee2de1238815eda4c4eade4a243be3932ba91eeffd38f871",
+  "manual_fixture_sha256": "1518c8a1c6a2544caf3d69576e39355fd414a3047334e04c0cc73d2c238fa77c",
+  "normalized_unique_source_urls": 35378,
+  "eligible_urls_before_cap": 13018,
+  "challenge_rows": 1350,
+  "challenge_domain_groups": 101,
+  "per_domain_cap": 20,
+  "selection": "sha256-order-with-fixed-prefix",
+  "saved_split_group_overlap": 0,
+  "manual_fixture_group_overlap": 0,
+  "diagnostic_group_overlap": 0,
+  "limitations": [
+    "Labels are inherited from a historical source, not newly verified.",
+    "The source has already been inspected during project development.",
+    "Supplemented candidates used other domains from the same source.",
+    "Only benign HTTP/apex path-bearing examples are included.",
+    "Results cannot establish malicious recall or root-only performance."
+  ],
+  "challenge_csv_sha256": "7f5e28c9f46a170ab6467a0d04a30f57bf57d6ab1d2549502b1bb65a60c2de89"
+}

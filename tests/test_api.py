@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sentinelti.api.dependencies as deps_module
 import sentinelti.services.scoring_service as scoring_service_module
+from sentinelti.ml import predict as predict_module
 
 
 def _mock_model_meta(monkeypatch, model_type: str = "xgb"):
@@ -39,6 +40,77 @@ def test_health_returns_ok(client):
     body = response.json()
     assert body["status"] == "ok"
     assert "version" in body
+
+
+def test_readiness_returns_available_when_model_loads(client, monkeypatch):
+    monkeypatch.setattr(
+        predict_module,
+        "get_loaded_model_metadata",
+        lambda: {"model_type": "xgb"},
+    )
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "checks": {"model": "available"},
+    }
+
+
+def test_readiness_returns_service_unavailable_when_model_fails(client, monkeypatch):
+    def fail_to_load_model():
+        raise FileNotFoundError("missing artifact")
+
+    monkeypatch.setattr(
+        predict_module,
+        "get_loaded_model_metadata",
+        fail_to_load_model,
+    )
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "checks": {"model": "unavailable"},
+    }
+
+
+def test_score_url_rejects_overlong_url(client, auth_headers):
+    response = client.post(
+        "/score-url",
+        headers=auth_headers,
+        json={"url": "x" * 4097},
+    )
+
+    assert response.status_code == 422
+
+
+def test_score_urls_rejects_empty_and_oversized_batches(client, auth_headers):
+    empty = client.post(
+        "/score-urls",
+        headers=auth_headers,
+        json={"urls": []},
+    )
+    oversized = client.post(
+        "/score-urls",
+        headers=auth_headers,
+        json={"urls": ["https://example.com"] * 26},
+    )
+
+    assert empty.status_code == 422
+    assert oversized.status_code == 422
+
+
+def test_api_rejects_request_bodies_over_limit(client, auth_headers):
+    response = client.post(
+        "/score-url",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        content=b"x" * (128 * 1024 + 1),
+    )
+
+    assert response.status_code == 413
 
 
 def test_score_url_requires_api_key(client):

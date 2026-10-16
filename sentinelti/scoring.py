@@ -199,10 +199,8 @@ def enrich_score(url: str) -> Dict[str, Any]:
             risk = "low"
 
     resolved_ip: str | None = None
-    try:
+    if host:
         resolved_ip = resolve_hostname_to_ip(host)
-    except Exception:
-        resolved_ip = None
 
     reasons: list[str] = []
 
@@ -231,6 +229,18 @@ def enrich_score(url: str) -> Dict[str, Any]:
     elif not heuristic_reasons and final_label != "benign":
         reasons.append(
             "Flagged primarily by the ML classifier score."
+        )
+
+    dns_resolution = (
+        "not_attempted"
+        if not host
+        else "resolved"
+        if resolved_ip
+        else "failed"
+    )
+    if dns_resolution == "failed":
+        reasons.append(
+            "DNS enrichment was unavailable; this verdict is based on URL and heuristic signals only."
         )
 
     ip_class = _classify_ip(resolved_ip)
@@ -286,6 +296,7 @@ def enrich_score(url: str) -> Dict[str, Any]:
 
     infra = {
         "ip": resolved_ip,
+        "dns_resolution": dns_resolution,
         "ip_class": ip_class,
         "is_internal": is_internal,
         "tld": heuristic_dict.get("features", {}).get("tld"),

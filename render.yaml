@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sentinelti-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn sentinelti.api.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health/ready
+    envVars:
+      - key: SENTINELTI_API_KEY
+        generateValue: true
+      - key: SENTINELTI_CORS_ORIGINS
+        value: ""
+      - key: SENTINELTI_ENV
+        value: production
+      - key: SENTINELTI_RATE_LIMIT_REQUESTS
+        value: "600"
+      - key: SENTINELTI_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"

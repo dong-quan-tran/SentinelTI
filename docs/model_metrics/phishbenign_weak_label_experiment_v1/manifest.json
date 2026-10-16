@@ -1,0 +1,254 @@
+{
+  "created_at_utc": "2026-10-15T23:17:19.163875+00:00",
+  "experiment": "phishbenign_weak_label_candidate_v1",
+  "approval": {
+    "status": "user_approved_for_isolated_weak_label_experiment",
+    "approved_at": "2026-10-15T16:30:31-05:00",
+    "label_policy": "Weak labels only: source label 0 is treated as pseudo-benign and source label 1 as pseudo-phishing. The source card does not document label origins, annotation method, or per-row observation dates. Neither class is treated as a current safety verdict.",
+    "current_safety_verification": false
+  },
+  "source": {
+    "name": "Mitake PhishingURLsANDBenignURLs",
+    "url": "https://huggingface.co/datasets/Mitake/PhishingURLsANDBenignURLs",
+    "revision": "1f939bad78f95b470c5d058dfb23c7fce35275b7",
+    "license_declared_by_host": "CC BY-SA 4.0",
+    "local_filename": "PhishBenignDataset.csv",
+    "sha256": "a1e3fc9df5b9068b2f28237af3fe605801165daf7d1c4cb41f10c372fb57321c",
+    "class_mapping": {
+      "0": "pseudo_benign",
+      "1": "pseudo_phishing"
+    },
+    "per_row_provenance_and_observation_dates_documented": false,
+    "scheme_coverage": "The source contains mostly scheme-unspecified URL strings. For feature parsing only, these strings receive the same fixed outer-scheme canonicalization used by the scheme-invariant candidate. No source row is asserted to be HTTP or HTTPS."
+  },
+  "source_audit": {
+    "source_rows": 886181,
+    "invalid_or_unsupported_url_rows": 6849,
+    "source_label_counts": {
+      "0": 610832,
+      "1": 275349
+    },
+    "normalized_url_conflict_groups": 10,
+    "rows_in_normalized_url_conflicts": 22,
+    "same_label_normalized_duplicate_rows_removed": 22465,
+    "mixed_label_domain_groups": 827,
+    "rows_in_mixed_label_domain_groups": 76242,
+    "protected_domain_overlap_groups": 123039,
+    "rows_in_protected_domain_overlaps": 462849,
+    "eligible_rows_before_one_per_domain_cap": 317754,
+    "eligible_domain_groups": 242348,
+    "selected_rows": 242348,
+    "selected_domain_groups": 242348,
+    "selected_pseudo_label_counts": {
+      "0": 130190,
+      "1": 112158
+    },
+    "selected_format_coverage": [
+      {
+        "source_scheme": "https",
+        "host_type": "apex",
+        "url_shape": "path_bearing",
+        "y": 1,
+        "rows": 1
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "apex",
+        "url_shape": "path_bearing",
+        "y": 0,
+        "rows": 2234
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "apex",
+        "url_shape": "path_bearing",
+        "y": 1,
+        "rows": 19690
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "apex",
+        "url_shape": "root_only",
+        "y": 0,
+        "rows": 108216
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "apex",
+        "url_shape": "root_only",
+        "y": 1,
+        "rows": 23127
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "apex",
+        "url_shape": "root_with_query_or_fragment",
+        "y": 0,
+        "rows": 41
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "apex",
+        "url_shape": "root_with_query_or_fragment",
+        "y": 1,
+        "rows": 1112
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "subdomain",
+        "url_shape": "path_bearing",
+        "y": 0,
+        "rows": 12994
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "subdomain",
+        "url_shape": "path_bearing",
+        "y": 1,
+        "rows": 23756
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "subdomain",
+        "url_shape": "root_only",
+        "y": 0,
+        "rows": 6637
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "subdomain",
+        "url_shape": "root_only",
+        "y": 1,
+        "rows": 42535
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "subdomain",
+        "url_shape": "root_with_query_or_fragment",
+        "y": 0,
+        "rows": 68
+      },
+      {
+        "source_scheme": "unspecified",
+        "host_type": "subdomain",
+        "url_shape": "root_with_query_or_fragment",
+        "y": 1,
+        "rows": 1937
+      }
+    ]
+  },
+  "input_fingerprints": {
+    "main_csv_sha256": "e40f2383fb3542b168087b96e43096de196e14ab049c49092771a31c244f3133",
+    "baseline_split_sha256": "046b5e55a61a6f41ee2de1238815eda4c4eade4a243be3932ba91eeffd38f871",
+    "manual_fixture_sha256": "1518c8a1c6a2544caf3d69576e39355fd414a3047334e04c0cc73d2c238fa77c",
+    "baseline_report_sha256": "aff1b716f9072471f89b4b6dc057249028e27a05272a69b79bc071cba1116056",
+    "baseline_artifact_sha256": "11df3f1cbb6893f43da0dedccf5a25fda443fe0d26a41b5b1c1baeab829bb4de",
+    "protected_inputs": [
+      {
+        "name": "manual_fixtures",
+        "csv_path": "data/manual_eval_urls.csv",
+        "csv_sha256": "1518c8a1c6a2544caf3d69576e39355fd414a3047334e04c0cc73d2c238fa77c",
+        "domain_groups": 70
+      },
+      {
+        "name": "historical_hannousse",
+        "csv_path": "docs/model_metrics/hannousse_external_eval_v1/urls.csv",
+        "csv_sha256": "c749f6cadbeb89b20cdbff4abb6c915496f9efe410a5c441ff53d3aba693c611",
+        "manifest_path": "docs/model_metrics/hannousse_external_eval_v1/manifest.json",
+        "manifest_sha256": "be12f2f44cf7302a2037e8f067aed2d7a29929a244ae0327fe8891ea817d3ef5",
+        "domain_groups": 5734
+      },
+      {
+        "name": "historical_http_apex_path_challenge",
+        "csv_path": "docs/model_metrics/external_http_path_challenge_v1/urls.csv",
+        "csv_sha256": "7f5e28c9f46a170ab6467a0d04a30f57bf57d6ab1d2549502b1bb65a60c2de89",
+        "manifest_path": "docs/model_metrics/external_http_path_challenge_v1/manifest.json",
+        "manifest_sha256": "c6fdaeed89e913faf1d05fa6fff21cd4645e3f20dedf2a1a0038268a1da1699c",
+        "domain_groups": 101
+      }
+    ],
+    "experiment_code_sha256": "5fe13ca3a5689fc58c97d802b1869ca486d3be6b4c28759254e76d409903495a",
+    "production_feature_code_sha256": "d75edcee9d59d49bf3ca9accdea01792921ccabdb4a1d07c15e72ec45e165299",
+    "experimental_feature_code_sha256": "95011a51d3f7e59497472a274d7234391bb3147d7bc3a6fcca937a57c9bc0093"
+  },
+  "baseline_split": {
+    "rows_after_normalization": 434949,
+    "invalid_rows": 48,
+    "diagnostic_domain_rows_excluded": 14940,
+    "baseline_train_rows": 294749,
+    "baseline_test_rows": 140200,
+    "baseline_train_groups": 98447,
+    "baseline_test_groups": 42192,
+    "baseline_train_partition_sha256": "5ea6b618fc6b7ab867256eaa2e7f0dc10c8c83256d778a4b49c1a961c3961004",
+    "test_partition_sha256": "7484ae896eadb3e0634940e0d2734301b8479367d64f6c61076b1b84979015ad"
+  },
+  "training": {
+    "baseline_train_rows": 294749,
+    "weak_label_rows": 242348,
+    "total_train_rows": 537097,
+    "baseline_train_domain_groups": 98447,
+    "new_weak_label_domain_groups": 242348,
+    "post_supplement_train_domain_groups": 340795,
+    "test_rows": 140200,
+    "test_domain_groups": 42192,
+    "train_test_group_overlap": 0,
+    "source_test_group_overlap": 0,
+    "baseline_class_counts": {
+      "0": 223810,
+      "1": 70939
+    },
+    "weak_pseudo_label_counts": {
+      "0": 130190,
+      "1": 112158
+    },
+    "total_train_class_counts": {
+      "0": 354000,
+      "1": 183097
+    },
+    "baseline_scale_pos_weight": 3.154964124106627,
+    "scale_pos_weight_preserved": true,
+    "threshold": 0.75,
+    "feature_representation": "fixed-http-outer-scheme-no-flags-v1",
+    "training_parameters": {
+      "n_estimators": 400,
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "objective": "binary:logistic",
+      "eval_metric": "logloss",
+      "random_state": 42
+    }
+  },
+  "evaluation_policy": {
+    "threshold_selection": "not_performed; fixed at 0.75",
+    "hannousse_status": "Previously examined during development; used only as a fixed-threshold exploratory external score, not as an untouched final benchmark.",
+    "historical_labels_are_current_safety_verification": false,
+    "test_partition_sha256": "7484ae896eadb3e0634940e0d2734301b8479367d64f6c61076b1b84979015ad",
+    "baseline_test_partition_unchanged": true
+  },
+  "candidate_artifact": {
+    "path": "phishbenign_weak_candidate.joblib",
+    "sha256": "60eb60e15046213302dba1e0385670dae10728ee2bca8a3eaa1f42b57da611db",
+    "candidate_only": true,
+    "production_artifacts_modified": false
+  },
+  "output_integrity": {
+    "metrics_scope_slice_candidate_rows_unique": true,
+    "paired_scope_slice_rows": 45,
+    "paired_scope_slice_rows_unique": true,
+    "duplicate_rows_removed": 20,
+    "correction_note": "The initial report writer appended each original-saved-test paired slice twice, once per candidate. Twenty byte-identical duplicate rows were removed; candidate model, predictions, and metric values were unchanged."
+  },
+  "regression_analysis": {
+    "method": "Re-scored the unchanged saved test with the saved scheme-invariant baseline and already-trained weak-label candidate; no training or threshold selection performed.",
+    "threshold": 0.75,
+    "test_partition_sha256": "7484ae896eadb3e0634940e0d2734301b8479367d64f6c61076b1b84979015ad",
+    "baseline_artifact_sha256": "11df3f1cbb6893f43da0dedccf5a25fda443fe0d26a41b5b1c1baeab829bb4de",
+    "weak_candidate_artifact_sha256": "60eb60e15046213302dba1e0385670dae10728ee2bca8a3eaa1f42b57da611db",
+    "summary_file": "root_only_regression_by_format.csv",
+    "summary_sha256": "0e030165c0705589936bb403bd2c295cca5a6a5919285905ce9d1efe456a7b1f",
+    "contains_row_level_urls_or_domain_names": false,
+    "pseudo_label_join_to_saved_test": "Not possible by design: source domains overlapping the main data and protected test domains were excluded; do not infer source pseudo-labels for test errors."
+  }
+}

@@ -1,0 +1,237 @@
+{
+  "created_at_utc": "2026-10-14T21:34:48.852510+00:00",
+  "purpose": "exploratory_external_evaluation_of_existing_candidates",
+  "not_for_training": true,
+  "not_an_untouched_final_benchmark": true,
+  "dataset_name": "Web page phishing detection",
+  "authors": [
+    "Abdelhakim Hannousse",
+    "Salima Yahiouche"
+  ],
+  "source_page": "https://data.mendeley.com/datasets/c2gw7fy2j4/3",
+  "mirror_repository": "https://github.com/LoayHalawani/Phishing-URL-Detection",
+  "mirror_commit": "f92216c53d3f72e14db46ad82315551a459b6056",
+  "source_csv_sha256": "21093e2902e5441c86a6daf95e86e7c332046e477fdf109a579d7bd81e586d6c",
+  "download_manifest_sha256": "7ba19555c6dd5756f9420a94f465784620047ef3bff93c28695a8369e395aee9",
+  "source_license": "CC BY 4.0",
+  "byte_identity_with_author_hosted_file_verified": false,
+  "current_safety_verified": false,
+  "label_mapping": {
+    "legitimate": "benign",
+    "phishing": "malicious"
+  },
+  "malicious_class_scope": "source-labeled phishing, not all malware categories",
+  "preprocessing": "http-empty-path-to-root-v1",
+  "grouping": "tldextract-with-private-suffixes",
+  "sampling": "all eligible normalized unique URLs; no balancing or domain cap",
+  "source_rows": 11430,
+  "same_label_normalized_duplicates_removed": 10,
+  "normalized_label_conflicts": 0,
+  "domain_excluded_rows": 3959,
+  "evaluation_rows": 7461,
+  "evaluation_domain_groups": 5734,
+  "class_counts": {
+    "malicious": 3824,
+    "benign": 3637
+  },
+  "baseline_csv_sha256": "e40f2383fb3542b168087b96e43096de196e14ab049c49092771a31c244f3133",
+  "baseline_split_sha256": "046b5e55a61a6f41ee2de1238815eda4c4eade4a243be3932ba91eeffd38f871",
+  "manual_fixture_sha256": "1518c8a1c6a2544caf3d69576e39355fd414a3047334e04c0cc73d2c238fa77c",
+  "saved_split_group_overlap": 0,
+  "manual_fixture_group_overlap": 0,
+  "diagnostic_group_overlap": 0,
+  "coverage": [
+    {
+      "scheme": "http",
+      "host_type": "apex",
+      "shape": "path_bearing",
+      "label": "benign",
+      "rows": 210,
+      "domain_groups": 191
+    },
+    {
+      "scheme": "http",
+      "host_type": "apex",
+      "shape": "path_bearing",
+      "label": "malicious",
+      "rows": 1042,
+      "domain_groups": 681
+    },
+    {
+      "scheme": "http",
+      "host_type": "apex",
+      "shape": "root_only",
+      "label": "benign",
+      "rows": 305,
+      "domain_groups": 305
+    },
+    {
+      "scheme": "http",
+      "host_type": "apex",
+      "shape": "root_only",
+      "label": "malicious",
+      "rows": 257,
+      "domain_groups": 257
+    },
+    {
+      "scheme": "http",
+      "host_type": "apex",
+      "shape": "root_with_query_or_fragment",
+      "label": "malicious",
+      "rows": 5,
+      "domain_groups": 4
+    },
+    {
+      "scheme": "http",
+      "host_type": "subdomain",
+      "shape": "path_bearing",
+      "label": "benign",
+      "rows": 926,
+      "domain_groups": 784
+    },
+    {
+      "scheme": "http",
+      "host_type": "subdomain",
+      "shape": "path_bearing",
+      "label": "malicious",
+      "rows": 964,
+      "domain_groups": 517
+    },
+    {
+      "scheme": "http",
+      "host_type": "subdomain",
+      "shape": "root_only",
+      "label": "benign",
+      "rows": 622,
+      "domain_groups": 616
+    },
+    {
+      "scheme": "http",
+      "host_type": "subdomain",
+      "shape": "root_only",
+      "label": "malicious",
+      "rows": 225,
+      "domain_groups": 196
+    },
+    {
+      "scheme": "http",
+      "host_type": "subdomain",
+      "shape": "root_with_query_or_fragment",
+      "label": "benign",
+      "rows": 1,
+      "domain_groups": 1
+    },
+    {
+      "scheme": "http",
+      "host_type": "subdomain",
+      "shape": "root_with_query_or_fragment",
+      "label": "malicious",
+      "rows": 14,
+      "domain_groups": 13
+    },
+    {
+      "scheme": "https",
+      "host_type": "apex",
+      "shape": "path_bearing",
+      "label": "benign",
+      "rows": 86,
+      "domain_groups": 78
+    },
+    {
+      "scheme": "https",
+      "host_type": "apex",
+      "shape": "path_bearing",
+      "label": "malicious",
+      "rows": 441,
+      "domain_groups": 342
+    },
+    {
+      "scheme": "https",
+      "host_type": "apex",
+      "shape": "root_only",
+      "label": "benign",
+      "rows": 141,
+      "domain_groups": 141
+    },
+    {
+      "scheme": "https",
+      "host_type": "apex",
+      "shape": "root_only",
+      "label": "malicious",
+      "rows": 219,
+      "domain_groups": 219
+    },
+    {
+      "scheme": "https",
+      "host_type": "apex",
+      "shape": "root_with_query_or_fragment",
+      "label": "benign",
+      "rows": 2,
+      "domain_groups": 2
+    },
+    {
+      "scheme": "https",
+      "host_type": "apex",
+      "shape": "root_with_query_or_fragment",
+      "label": "malicious",
+      "rows": 24,
+      "domain_groups": 21
+    },
+    {
+      "scheme": "https",
+      "host_type": "subdomain",
+      "shape": "path_bearing",
+      "label": "benign",
+      "rows": 419,
+      "domain_groups": 368
+    },
+    {
+      "scheme": "https",
+      "host_type": "subdomain",
+      "shape": "path_bearing",
+      "label": "malicious",
+      "rows": 549,
+      "domain_groups": 254
+    },
+    {
+      "scheme": "https",
+      "host_type": "subdomain",
+      "shape": "root_only",
+      "label": "benign",
+      "rows": 915,
+      "domain_groups": 913
+    },
+    {
+      "scheme": "https",
+      "host_type": "subdomain",
+      "shape": "root_only",
+      "label": "malicious",
+      "rows": 76,
+      "domain_groups": 54
+    },
+    {
+      "scheme": "https",
+      "host_type": "subdomain",
+      "shape": "root_with_query_or_fragment",
+      "label": "benign",
+      "rows": 10,
+      "domain_groups": 10
+    },
+    {
+      "scheme": "https",
+      "host_type": "subdomain",
+      "shape": "root_with_query_or_fragment",
+      "label": "malicious",
+      "rows": 8,
+      "domain_groups": 8
+    }
+  ],
+  "limitations": [
+    "Labels are inherited from a historical source, not newly verified.",
+    "Mirror integrity is verified; author-hosted byte identity is not.",
+    "Coverage has been inspected during experiment development.",
+    "The malicious class consists of source-labeled phishing examples.",
+    "Domain exclusion does not establish independence of all page content."
+  ],
+  "evaluation_csv_sha256": "c749f6cadbeb89b20cdbff4abb6c915496f9efe410a5c441ff53d3aba693c611"
+}

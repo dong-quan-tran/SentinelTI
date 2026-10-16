@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -13,8 +14,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from .dependencies import API_KEY, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW, _rate_limit_store
 from .routes import router
 from ..services.ai_explanations import AIExplanationError, AIModelNotAvailableError
+from ..ml import predict
 
-origins = [
+LOCAL_DEVELOPMENT_ORIGINS = [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:5173",
@@ -22,6 +24,15 @@ origins = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
 ]
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "SENTINELTI_CORS_ORIGINS",
+        ",".join(LOCAL_DEVELOPMENT_ORIGINS),
+    ).split(",")
+    if origin.strip()
+]
+MAX_REQUEST_BODY_BYTES = 128 * 1024
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,27 +49,87 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         import time
 
         start = time.time()
-        client_ip = request.client.host if request.client else "unknown"
         method = request.method
         path = request.url.path
 
-        logger.info("Request: %s %s from %s", method, path, client_ip)
+        logger.info("Request: %s %s", method, path)
         try:
             response = await call_next(request)
         except Exception:
-            logger.exception("Error handling request: %s %s from %s", method, path, client_ip)
+            logger.exception("Error handling request: %s %s", method, path)
             raise
 
         duration_ms = int((time.time() - start) * 1000)
         logger.info(
-            "Response: %s %s -> %s to %s in %sms",
+            "Response: %s %s -> %s in %sms",
             method,
             path,
             response.status_code,
-            client_ip,
             duration_ms,
         )
         return response
+
+
+class RequestBodyLimitMiddleware:
+    def __init__(self, app, max_bytes: int = MAX_REQUEST_BODY_BYTES):
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        raw_content_length = headers.get(b"content-length")
+        if raw_content_length:
+            try:
+                content_length = int(raw_content_length)
+            except ValueError:
+                response = JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid Content-Length header."},
+                )
+                await response(scope, receive, send)
+                return
+            if content_length < 0 or content_length > self.max_bytes:
+                await self._too_large(scope, receive, send)
+                return
+
+        messages = []
+        total_bytes = 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            total_bytes += len(message.get("body", b""))
+            if total_bytes > self.max_bytes:
+                await self._too_large(scope, receive, send)
+                return
+            messages.append(message)
+            if not message.get("more_body", False):
+                break
+
+        message_index = 0
+
+        async def replay_receive():
+            nonlocal message_index
+            if message_index < len(messages):
+                message = messages[message_index]
+                message_index += 1
+                return message
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, replay_receive, send)
+
+    async def _too_large(self, scope, receive, send):
+        response = JSONResponse(
+            status_code=413,
+            content={"detail": "Request body exceeds the allowed size."},
+        )
+        await response(scope, receive, send)
 
 
 class SPAStaticFiles(StaticFiles):
@@ -156,12 +227,13 @@ async def ai_explanation_error_handler(request: Request, exc: AIExplanationError
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-KEY"],
 )
 
+app.add_middleware(RequestBodyLimitMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(router)
 
@@ -179,4 +251,9 @@ else:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("sentinelti.api.app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "sentinelti.api.app:app",
+        host=os.getenv("SENTINELTI_HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "8000")),
+        reload=False,
+    )

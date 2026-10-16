@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import List
 
 from fastapi import APIRouter, Body, Depends, status
@@ -35,8 +36,10 @@ from ..services.scoring_service import (
     build_model_meta_response,
     build_score_response,
 )
+from ..ml import predict
 
 router = APIRouter()
+logger = logging.getLogger("sentinelti.api")
 
 
 def _build_ai_explain_public_response(result: dict) -> dict:
@@ -70,6 +73,20 @@ def _build_ai_explain_public_response(result: dict) -> dict:
 @router.get("/health", tags=["health"], summary="Health check")
 async def health():
     return {"status": "ok", "version": "0.1.0"}
+
+
+@router.get("/health/ready", tags=["health"], summary="Readiness check")
+async def readiness():
+    try:
+        predict.get_loaded_model_metadata()
+    except Exception:
+        logger.exception("Model readiness check failed.")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "not_ready", "checks": {"model": "unavailable"}},
+        )
+
+    return {"status": "ready", "checks": {"model": "available"}}
 
 
 @router.get(
