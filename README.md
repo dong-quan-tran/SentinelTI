@@ -20,7 +20,7 @@ The deterministic scoring pipeline remains the source of truth. Optional AI summ
 - **Training scale:** Evaluated Logistic Regression, XGBoost, and LightGBM using **450,175 labeled URLs** across training and held-out evaluation sets.
 - **Scoring performance:** A 500-iteration warmed benchmark measured **0.9 ms median** and **1.0 ms p95** core-scoring latency, sustaining **1,110 URLs/second**.
 - **End-to-end enrichment:** The complete deterministic path—including DNS resolution, local IP reputation checks, risk fusion, and explanation generation—measured **104.2 ms median** and **123.6 ms p95** latency.
-- **Reliability:** Includes **300+ production-style Pytest cases** across API, ML, scoring, CLI, AI-service, and model-metadata behavior.
+- **Reliability:** Includes **574 backend tests** across API, ML, scoring, CLI, AI-service, and model-metadata behavior, plus frontend linting, tests, and production builds in CI.
 
 ## Architecture
 
@@ -145,14 +145,15 @@ Typical local frontend URL:
 http://localhost:5173
 ```
 
-If needed, create `sentinelti/frontend/.env`:
+The frontend calls the same-origin `/api` gateway. During local development,
+Vite proxies those requests to `http://127.0.0.1:8000` and reads
+`SENTINELTI_API_KEY` from the Vite server process; do not put the key in a
+`VITE_` variable or browser code.
 
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-VITE_SENTINELTI_API_KEY=change-me
-```
-
-The frontend's `VITE_SENTINELTI_API_KEY` must match the backend's `SENTINELTI_API_KEY` for this local demo. Vite exposes `VITE_` values to browser users: this is not a secret or a suitable authentication design for a public deployment.
+For public deployment, use the server-side Vercel gateway and Render API
+configuration in [the Vercel/Render deployment guide](docs/VERCEL_RENDER_DEPLOYMENT.md).
+Keep production access restricted until Vercel edge rate limiting has been
+configured and verified as described in that guide.
 
 ## CLI usage
 
@@ -235,6 +236,7 @@ The API has no default key: set `SENTINELTI_API_KEY` before starting it. The qui
 | Method | Endpoint | Auth | Description |
 |---|---|---:|---|
 | `GET` | `/health` | No | Health and version status |
+| `GET` | `/health/ready` | No | Readiness check; returns 503 if the model cannot load |
 | `GET` | `/model-info` | Yes | Active model metadata, metrics, thresholds, and top features |
 | `POST` | `/score-url` | Yes | Score one URL |
 | `POST` | `/score-urls` | Yes | Score a batch of URLs |
@@ -687,7 +689,9 @@ SentinelTI/
 
 ## Future improvements
 
-The current implementation is complete for its intended scope. Future iterations may explore:
+The core CLI, API, and frontend are implemented, but anonymous public deployment
+is not launch-ready until the edge abuse controls in the deployment guide have
+been configured and verified. Future iterations may explore:
 
 - Probability calibration and validation-derived threshold selection
 - Additional URL, host, DNS, and reputation features

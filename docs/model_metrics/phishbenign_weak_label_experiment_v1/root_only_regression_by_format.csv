@@ -1,0 +1,6 @@
+slice,rows,domain_groups,benign_rows,phishing_rows,baseline_false_positives,candidate_false_positives,benign_fp_added,benign_fp_reduced,baseline_phishing_true_positives,candidate_phishing_true_positives,phishing_tp_lost,phishing_tp_gained,rows_correct_to_wrong,rows_wrong_to_correct,domains_net_worse,domains_net_better,domains_unchanged_error_count,domain_error_change_net
+all_root_only,16302,14351,13959,2343,139,921,879,97,2081,1274,899,92,1778,189,1526,142,12683,1589
+http_apex,1445,1441,0,1445,0,0,0,0,1424,706,721,3,721,3,721,3,717,718
+http_subdomain,686,389,0,686,0,0,0,0,487,451,107,71,107,71,59,46,284,36
+https_apex,209,209,110,99,101,14,0,87,98,39,59,0,59,87,59,87,63,-28
+https_subdomain,13962,12422,13849,113,38,907,879,10,72,78,12,18,891,28,721,14,11687,863

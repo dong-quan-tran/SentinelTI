@@ -2,12 +2,16 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Virtual env
 .venv/
 
 # SQLite DB
 sentinelti.db
+sentinelti.db-shm
+sentinelti.db-wal
 
 # VS Code
 .vscode/
@@ -16,6 +20,10 @@ sentinelti.db
 node_modules/
 dist/
 dist-ssr/
+.vercel/
+.render/
+.vite/
+coverage/
 
 # Environment files
 .env
@@ -33,8 +41,8 @@ Thumbs.db
 
 # Coverage
 .coverage
+.coverage.*
 htmlcov/
-coverage/
 
 # Local format-shortcut experiment artifacts
 # Generated local artifacts; preserve them in separate verified backups.
@@ -45,6 +53,7 @@ coverage/
 /docs/model_metrics/http_apex_supplement_augmented_v1/full_candidate.joblib
 /docs/model_metrics/http_apex_supplement_augmented_v1/no_scheme_candidate.joblib
 /docs/model_metrics/scheme_invariant_baseline_v1/scheme_invariant_candidate.joblib
+/docs/model_metrics/phishbenign_weak_label_experiment_v1/phishbenign_weak_candidate.joblib
 /docs/model_metrics/external_http_path_challenge_v1/scores_original_candidates_v1/predictions.csv
 /docs/model_metrics/external_http_path_challenge_v1/scores_augmented_candidates_v1/predictions.csv
 /docs/model_metrics/hannousse_external_scores_v1/predictions.csv

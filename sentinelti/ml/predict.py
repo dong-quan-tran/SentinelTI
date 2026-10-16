@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -129,6 +130,20 @@ def _preferred_model_order(prefer: str) -> list[str]:
     return ["xgb", "lgbm", "logreg"]
 
 
+@lru_cache(maxsize=3)
+def _load_artifact_cached(
+    model_name: str,
+    path_string: str,
+    modified_ns: int,
+    file_size: int,
+):
+    path = Path(path_string)
+    artifact = joblib.load(path)
+    _validate_artifact(artifact, path)
+    metadata = _normalize_metadata(artifact, model_name, path)
+    return artifact["model"], artifact["feature_names"], metadata
+
+
 def _load_artifact(prefer: str = "xgb"):
     order = _preferred_model_order(prefer)
 
@@ -140,16 +155,32 @@ def _load_artifact(prefer: str = "xgb"):
             continue
 
         try:
-            artifact = joblib.load(path)
+            stat = path.stat()
+            modified_ns = stat.st_mtime_ns
+            file_size = stat.st_size
+        except OSError:
+            try:
+                artifact = joblib.load(path)
+                _validate_artifact(artifact, path)
+                metadata = _normalize_metadata(artifact, model_name, path)
+                return artifact["model"], artifact["feature_names"], metadata
+            except Exception as exc:  # pragma: no cover - defensive
+                last_error = exc
+                continue
+
+        try:
+            return _load_artifact_cached(
+                model_name,
+                str(path.resolve()),
+                modified_ns,
+                file_size,
+            )
         except Exception as exc:  # pragma: no cover - defensive
             last_error = exc
-            continue
-
-        _validate_artifact(artifact, path)
-        metadata = _normalize_metadata(artifact, model_name, path)
-        return artifact["model"], artifact["feature_names"], metadata
 
     if last_error is not None:
+        if isinstance(last_error, RuntimeError):
+            raise last_error
         raise RuntimeError("Failed to load any trained URL model") from last_error
     raise FileNotFoundError("No trained URL model artifacts found")
 

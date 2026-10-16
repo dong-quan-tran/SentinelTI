@@ -22,6 +22,7 @@ export default function UrlForm({ onSubmit, loading }) {
           className="url-input"
           type="text"
           placeholder="https://example.com/login"
+          maxLength={4096}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoComplete="off"
@@ -33,7 +34,9 @@ export default function UrlForm({ onSubmit, loading }) {
       </div>
 
       <p className="helper-text">
-        Paste a suspicious link here instead of opening it directly.
+        Paste a suspicious link here instead of opening it directly. A benign
+        result is not a guarantee that a URL is safe. Do not submit links that
+        contain passwords, access tokens, or other private information.
       </p>
     </form>
   );

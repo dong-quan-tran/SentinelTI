@@ -74,6 +74,30 @@ def test_load_model_reads_new_metadata_artifact(temp_models_dir, monkeypatch):
     assert metadata["artifact_path"].endswith("url_classifier_xgb.joblib")
 
 
+def test_model_artifact_is_loaded_once_per_file_version(temp_models_dir, monkeypatch):
+    artifact = {
+        "model": DummyModel(0.8),
+        "feature_names": ["f1"],
+        "model_type": "xgb",
+    }
+    path = write_artifact(temp_models_dir, "xgb", artifact)
+    original_load = joblib.load
+    load_count = 0
+
+    def counted_load(file_path):
+        nonlocal load_count
+        load_count += 1
+        return original_load(file_path)
+
+    monkeypatch.setattr(predict_module.joblib, "load", counted_load)
+
+    predict_module.load_model()
+    predict_module.load_model()
+
+    assert load_count == 1
+    assert path.exists()
+
+
 def test_load_model_supports_legacy_artifact_shape(temp_models_dir):
     artifact = {
         "model_type": "logreg",

@@ -1,8 +1,4 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.trim() || "http://127.0.0.1:8000";
-
-const API_KEY =
-  import.meta.env.VITE_SENTINELTI_API_KEY?.trim() || "change-me";
+const API_BASE_PATH = "/api";
 
 async function parseJsonResponse(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -31,11 +27,14 @@ async function parseJsonResponse(response) {
 }
 
 export async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  if (!path.startsWith("/") || path.startsWith("//")) {
+    throw new Error("API path must be a same-origin absolute path.");
+  }
+
+  const response = await fetch(`${API_BASE_PATH}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-API-KEY": API_KEY,
       ...(options.headers || {}),
     },
   });

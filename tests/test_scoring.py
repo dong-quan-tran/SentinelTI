@@ -1,4 +1,3 @@
-import socket
 from typing import Iterable, Optional
 
 import pytest
@@ -7,6 +6,11 @@ from sentinelti import resolution, scoring
 from sentinelti.scoring import enrich_score
 from sentinelti.heuristics import analyze_url
 from sentinelti.reputation import IPReputationResult, ExternalIPReputationProvider
+
+
+@pytest.fixture(autouse=True)
+def prevent_external_dns_lookups(monkeypatch):
+    monkeypatch.setattr(scoring, "resolve_hostname_to_ip", lambda host: None)
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +70,8 @@ def test_enrich_score_includes_infrastructure_metadata(monkeypatch) -> None:
 
     assert infra["reputation"] in {"unknown", "suspicious"}
     assert infra["infra_flag"] in {"normal", "internal", "suspicious_infra"}
+    assert infra["dns_resolution"] == "failed"
+    assert any("DNS enrichment was unavailable" in reason for reason in result["reasons"])
 
 
 @pytest.mark.parametrize(
