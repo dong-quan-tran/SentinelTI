@@ -10,7 +10,7 @@ const ROUTES = {
 const MAX_BODY_BYTES = 128 * 1024;
 const MAX_URL_LENGTH = 4096;
 const MAX_URLS_PER_BATCH = 25;
-const UPSTREAM_TIMEOUT_MS = 10000;
+const UPSTREAM_TIMEOUT_MS = 90000;
 
 function sendJson(response, statusCode, payload) {
   response.statusCode = statusCode;
