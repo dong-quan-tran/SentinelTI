@@ -71,7 +71,7 @@ challenge and deny actions, but not rate-limit actions; adding a rule there
 does not satisfy this launch gate.
 
 Use an always-on Render instance for a public service. A sleeping instance may
-take longer to wake than the gateway's 10-second upstream timeout.
+take longer to wake than the gateway's 90-second upstream timeout.
 
 ## Pre-launch verification
 
